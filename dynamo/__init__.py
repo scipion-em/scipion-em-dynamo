@@ -27,7 +27,7 @@
 import pyworkflow.em
 
 _logo = "icon.png"
-_references = ['you2019']
+_references = ['CASTANODIEZ2012139']
 
 class Plugin(pyworkflow.em.Plugin):
     pass

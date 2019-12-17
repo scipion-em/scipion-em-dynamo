@@ -24,17 +24,17 @@ with open('requirements.txt') as f:
 # Fields marked as "Optional" may be commented out.
 
 setup(
-    name='scipion-em-template',  # Required
+    name='scipion-em-dynamo',  # Required
     version='0.1',  # Required
-    description='Scipion plugin template.',  # Required
+    description='Scipion plugin for dynamo.',  # Required
     long_description=long_description,  # Optional
-    url='https://github.com/scipion-em/scipion-em-template',  # Optional
+    url='https://github.com/scipion-em/scipion-em-dynamo',  # Optional
     author='you',  # Optional
     author_email='you@yourinstitution.email',  # Optional
     keywords='scipion cryoem imageprocessing scipion-2.0',  # Optional
     packages=find_packages(),
     install_requires=[requirements],
     package_data={  # Optional
-       'myplugin': ['icon.png', 'protocols.conf'],
+       'dynamo': ['icon.png', 'protocols.conf'],
     }
 )

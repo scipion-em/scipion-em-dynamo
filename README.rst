@@ -1,8 +1,8 @@
 =======================
-Scipion template plugin
+Scipion - Dynamo plugin
 =======================
 
-This is a template plugin for **scipion**
+This is a plugin for **scipion** and dynamo
 
 =====
 Setup
@@ -14,5 +14,5 @@ Using the command line:
 
 .. code-block::
 
-    scipion installp -p local/path/to/scipion-em-template --devel
+    scipion installp -p local/path/to/scipion-em-dynamo --devel
 
