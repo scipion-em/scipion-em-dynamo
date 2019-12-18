@@ -27,3 +27,6 @@
 
 from protocol_subtomo_MRA import DynamoSubTomoMRA
 from protocol_models import DynamoModels
+import pyworkflow
+emprotocol = pyworkflow.em.protocol.EMProtocol
+setattr(emprotocol, "_createSetOfMeshes", DynamoModels._createSetOfMeshes.__func__)

@@ -28,9 +28,16 @@
 import os
 
 from pyworkflow.em import ProtAnalysis3D
-from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam
+from pyworkflow.protocol.params import PointerParam
+from pyworkflow.utils import importFromPlugin, cleanPath
+from pyworkflow.mapper.sqlite_db import SqliteDb
+
+Mesh = importFromPlugin("tomo.objects", "Mesh")
+SetOfMeshes = importFromPlugin("tomo.objects", "SetOfMeshes")
+
+
 """
-Protocols to run Dynamo methods
+Protocols to create models in Dynamo
 """
 
 class DynamoModels(ProtAnalysis3D):
@@ -88,52 +95,42 @@ class DynamoModels(ProtAnalysis3D):
         dynamo = self.runJob(program, args)
 
     def createOutput(self):
-        pass
-        # self.subtomoSet = self._createSetOfSubTomograms()
-        # inputSet = self.inputVolumes.get()
-        # self.subtomoSet.copyInfo(inputSet)
-        # self.fnDoc = '%s/mltomo_it00000%d.doc' % (
-        # self._getExtraPath(), self.numberOfIters)
-        # self.docFile = open(self.fnDoc)
-        # self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
-        # self.docFile.close()
-        # classesSubtomoSet = self._createSetOfClassesSubTomograms(
-        #     self.subtomoSet)
-        # classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
-        # self._defineOutputs(outputSubtomograms=self.subtomoSet)
-        # self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
-        # self._defineOutputs(outputClassesSubtomo=classesSubtomoSet)
-        # self._defineSourceRelation(self.inputVolumes, classesSubtomoSet)
-        # self._cleanFiles()
+        # TODO
+        # Check of file corresponds to Tomo
+        outSet = self._createSetOfMeshes()
+        outFile = self._getExtraPath('extra.txt')
+        roi = Mesh(outFile)
+        for tomo in self.inputTomograms.get().iterItems():
+                roi.setVolume(tomo)
+        outSet.append(roi)
+        outSet.setVolumes(self.inputTomograms.get())
+        self._defineOutputs(outputMeshes=outSet)
+        self._defineSourceRelation(self.inputTomograms.get(), outSet)
+
+    def _createSetOfMeshes(self, suffix=''):
+        return self.__createSet(SetOfMeshes,
+                                'meshes%s.sqlite', suffix)
+
+    def __createSet(self, SetClass, template, suffix, **kwargs):
+        """ Create a set and set the filename using the suffix.
+        If the file exists, it will be delete. """
+        setFn = self._getPath(template % suffix)
+        # Close the connection to the database if
+        # it is open before deleting the file
+        cleanPath(setFn)
+
+        SqliteDb.closeConnection(setFn)
+        setObj = SetClass(filename=setFn, **kwargs)
+        return setObj
+
 
         # --------------------------- INFO functions --------------------------------
 
     def _summary(self):
         pass
-        # summary = []
-        # if hasattr(self, 'outputClassesSubtomo'):
-        #     summary.append(
-        #         "Input subtomograms: *%d* \nRequested classes: *%d*\nGenerated classes: *%d* in *%d* iterations\n"
-        #         % (self.inputVolumes.get().getSize(), self.numberOfReferences,
-        #            self.outputClassesSubtomo.getSize(), self.numberOfIters))
-        # else:
-        #     summary.append("Output classes not ready yet.")
-        # return summary
 
     def _methods(self):
         pass
-        # methods = []
-        # if hasattr(self, 'outputClassesSubtomo'):
-        #     methods.append(
-        #         'We classified %d subtomograms from %s into %d classes %s using *MLTomo*.'
-        #         % (self.inputVolumes.get().getSize(),
-        #            self.getObjectTag('inputVolumes'),
-        #            self.outputClassesSubtomo.getSize(),
-        #            self.getObjectTag('outputClassesSubtomo')))
-        # else:
-        #     methods.append("Output classes not ready yet.")
-        # return methods
 
     def _citations(self):
         pass
-        # return ['Scheres2009c']
