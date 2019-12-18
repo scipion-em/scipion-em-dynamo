@@ -34,4 +34,15 @@ def writeSetOfVolumes(setOfVolumes, outputFnRoot):
         ih.convert(volume, "%s%06d.mrc" % (outputFnRoot, i))
 
 def writeTable(fhTable, setOfSubtomograms):
-    pass
+    for subtomo in setOfSubtomograms.iterItems():
+        if subtomo.hasCoordinate3D():
+            x = subtomo.getCoordinate3D().getX()
+            y = subtomo.getCoordinate3D().getY()
+            z = subtomo.getCoordinate3D().getZ()
+        else:
+            x = 0
+            y = 0
+            z = 0
+        fhTable.write('%d 1 0 0 0 0 0 0 0 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
+                      % (subtomo.getObjId(), subtomo.getAcquisition().getAngleMin(),
+                         subtomo.getAcquisition().getAngleMax(), x, y, z))

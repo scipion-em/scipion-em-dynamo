@@ -92,6 +92,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       pointerClass='VolumeMask', allowsNull=True,
                       help='A direct space mask that will be imposed onto any couple of volumes when computing their FSC.')
 
+        # Add all numerical (and computational?) parameters of dynamo
+
         # --------------------------- INSERT steps functions --------------------------------------------
 
     def _insertAllSteps(self):
@@ -110,7 +112,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         writeSetOfVolumes(inputVols, fnRoot)
         fhTable = open(self._getExtraPath("initial.tbl"), 'w')
         writeTable(fhTable, inputVols)
+        fhTable.close()
         # MD from scipion objects should be converted to dynamo tables
+        # Generate "empty" table
+        # When it works, take table if exists as mltomo does with docfile
 
 
     def alignStep(self):
