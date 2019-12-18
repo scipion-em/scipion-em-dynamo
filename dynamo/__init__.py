@@ -23,13 +23,24 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-import pyworkflow.em
+import os
+import pyworkflow
+import pyworkflow.utils as pwutils
 
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
 class Plugin(pyworkflow.em.Plugin):
-    pass
+    @classmethod
+    def getEnviron(cls):
+        """ Create the needed environment for Dynamo programs. """
+        environ = pwutils.Environ(os.environ)
+        environ.update({
+            'PATH': '/home/davidh/dynamo_v1.146/matlab/bin:/home/davidh/dynamo_v1.146/matlab/src:/home/davidh/dynamo_v1.146/cuda/bin:/home/davidh/dynamo_v1.146/mpi:/home/davidh/dynamo_v1.146/examples:/home/davidh/dynamo_v1.146/doc${PATH}',
+            'LD_LIBRARY_PATH': '/home/davidh/dynamo_v1.146/MCRLinux/runtime/glnxa64:/home/davidh/dynamo_v1.146/MCRLinux/bin/glnxa64:/home/davidh/dynamo_v1.146/MCRLinux/sys/os/glnxa64:${LD_LIBRARY_PATH}',
+            'DYNAMO_ROOT': '/home/davidh/dynamo_v1.146/'
+        }, position=pwutils.Environ.BEGIN)
+
+        return environ
 
 pyworkflow.em.Domain.registerPlugin(__name__)
