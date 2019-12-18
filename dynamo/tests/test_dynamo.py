@@ -47,7 +47,7 @@ class TestSubTomogramsAlignment(BaseTest):
                                       filesPath=self.setOfSubtomograms,
                                       samplingRate=5)
         self.launchProtocol(protImport)
-        
+
         protMask = self.newProtocol(XmippProtCreateMask3D,
                                     inputVolume=protImport,
                                     source=0, volumeOperation=0,

@@ -25,14 +25,17 @@
 # *
 # **************************************************************************
 
+from os.path import join
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam
+from pyworkflow.utils.path import makePath
+
+from dynamo.convert import writeSetOfVolumes
 from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
-"""
-Protocols to run Dynamo methods
-"""
+
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
-    """ It will align subtomograms using Dynamo"""
+    """ It will align subtomograms using Dynamo MRA Subtomogram Averaging"""
+
     _label = 'MRA alignment'
 
     def __init__(self, **args):
@@ -99,45 +102,23 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         # --------------------------- STEPS functions -------------------------------
 
     def convertInputStep(self):
-        pass
+        # Put data in a folder
+        fnDir = self._getExtraPath("inputVolumes")
+        makePath(fnDir)
+        fnRoot = join(fnDir, "subtomo")
+        writeSetOfVolumes(self.inputVolumes.get(), fnRoot)
         # TODO: Add convertion of image files to a compatible with Dynamo
-        # fnDir = self._getExtraPath("inputVolumes")
-        # makePath(fnDir)
-        # fnRoot = os.path.join(fnDir, "subtomo")
-        # writeSetOfVolumes(self.inputVolumes.get(), fnRoot)
-        # self.fnSel = self._getExtraPath("subtomograms.sel")
-        # self.runJob("xmipp_selfile_create",
-        #             '"%s*.vol">%s' % (fnRoot, self.fnSel), numberOfMpi=1)
+        # MD from scipion objects should be converted to dynamo tables
+
 
     def alignStep(self):
-
-        pass
-        # fnIn = self._getExtraPath("subtomograms.sel")
-        # fnOut = self._getExtraPath("mltomo")
-        # self._createFilesForMLTomo()
-        # fhDoc = self._getExtraPath("subtomograms.doc")
-        # args = ' -i ' + fnIn + \
-        #        ' -o ' + fnOut + \
-        #        ' -nref ' + str(self.numberOfReferences.get()) + \
-        #        ' -doc ' + fhDoc + \
-        #        ' -iter ' + str(self.numberOfIters.get()) + \
-        #        ' -ang ' + str(self.angularSampling.get()) + \
-        #        ' -dim ' + str(self.downscDim.get()) + \
-        #        ' ' + self.extraParams.get()
-        # fhWedge = self._getExtraPath("wedge.doc")
-        # if exists(fhWedge):
-        #     args = args + ' -missing ' + fhWedge
-        # self.runJob("xmipp_ml_tomo", args, numberOfMpi=self.numberOfMpi.get())
+        fnDoc = self._getExtraPath('align.doc')  # File to write commands to be passed to Dynamo
 
     def createOutput(self):
         self.subtomoSet = self._createSetOfSubTomograms()
         inputSet = self.inputVolumes.get()
         self.subtomoSet.copyInfo(inputSet)
-        # self.fnDoc = '%s/mltomo_it00000%d.doc' % (
-        # self._getExtraPath(), self.numberOfIters)
-        # self.docFile = open(self.fnDoc)
         # self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
-        # self.docFile.close()
         classesSubtomoSet = self._createSetOfClassesSubTomograms(self.subtomoSet)
         # classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
         self._defineOutputs(outputSubtomograms=self.subtomoSet)
