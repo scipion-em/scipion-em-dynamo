@@ -29,7 +29,7 @@ from os.path import join
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam
 from pyworkflow.utils.path import makePath
 
-from dynamo.convert import writeSetOfVolumes
+from dynamo.convert import writeSetOfVolumes, writeTable
 from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
 
 
@@ -103,11 +103,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def convertInputStep(self):
         # Put data in a folder
+        inputVols = self.inputVolumes.get()
         fnDir = self._getExtraPath("inputVolumes")
         makePath(fnDir)
         fnRoot = join(fnDir, "subtomo")
-        writeSetOfVolumes(self.inputVolumes.get(), fnRoot)
-        # TODO: Add convertion of image files to a compatible with Dynamo
+        writeSetOfVolumes(inputVols, fnRoot)
+        fhTable = open(self._getExtraPath("initial.tbl"), 'w')
+        writeTable(fhTable, inputVols)
         # MD from scipion objects should be converted to dynamo tables
 
 

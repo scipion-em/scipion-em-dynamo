@@ -32,3 +32,6 @@ def writeSetOfVolumes(setOfVolumes, outputFnRoot):
     for volume in setOfVolumes:
         i = volume.getObjId()
         ih.convert(volume, "%s%06d.mrc" % (outputFnRoot, i))
+
+def writeTable(fhTable, setOfSubtomograms):
+    pass
