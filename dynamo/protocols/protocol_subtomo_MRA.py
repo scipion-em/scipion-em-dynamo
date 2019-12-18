@@ -130,26 +130,25 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _summary(self):
         summary = []
-        # if hasattr(self, 'outputClassesSubtomo'):
-        #     summary.append(
-        #         "Input subtomograms: *%d* \nRequested classes: *%d*\nGenerated classes: *%d* in *%d* iterations\n"
-        #         % (self.inputVolumes.get().getSize(), self.numberOfReferences,
-        #            self.outputClassesSubtomo.getSize(), self.numberOfIters))
-        # else:
-        #     summary.append("Output classes not ready yet.")
+        if hasattr(self, 'outputClassesSubtomo'):
+            summary.append(
+                "Input subtomograms: *%d* \nGenerated classes: *%d*"
+                % (self.inputVolumes.get().getSize(), self.outputClassesSubtomo.getSize()))
+        else:
+            summary.append("Output classes not ready yet.")
         return summary
 
     def _methods(self):
         methods = []
-        # if hasattr(self, 'outputClassesSubtomo'):
-        #     methods.append(
-        #         'We classified %d subtomograms from %s into %d classes %s using *MLTomo*.'
-        #         % (self.inputVolumes.get().getSize(),
-        #            self.getObjectTag('inputVolumes'),
-        #            self.outputClassesSubtomo.getSize(),
-        #            self.getObjectTag('outputClassesSubtomo')))
-        # else:
-        #     methods.append("Output classes not ready yet.")
+        if hasattr(self, 'outputClassesSubtomo'):
+            methods.append(
+                'We classified %d subtomograms from %s into %d classes %s using Dynamo *MRA* Subtomogram averaging.'
+                % (self.inputVolumes.get().getSize(),
+                   self.getObjectTag('inputVolumes'),
+                   self.outputClassesSubtomo.getSize(),
+                   self.getObjectTag('outputClassesSubtomo')))
+        else:
+            methods.append("Output classes not ready yet.")
         return methods
 
     def _citations(self):
