@@ -32,7 +32,7 @@ Protocols to run Dynamo methods
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     """ It will align subtomograms using Dynamo"""
-    _label = 'Subtomogram alignment'
+    _label = 'MRA alignment'
 
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)
@@ -72,20 +72,20 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addSection(label='Masks')
 
         form.addParam('alignmentMask', PointerParam, label="Alignment mask",
-                      pointerClass='Mask',
+                      pointerClass='VolumeMask',
                       help='Mask for the alignment')
 
         form.addParam('classificationMask', PointerParam, label="Classification mask",
-                      pointerClass='Mask', allowsNull=True,
+                      pointerClass='VolumeMask', allowsNull=True,
                       help='Mask for the classification steps')
 
         form.addParam('fourierMask', PointerParam, label="Fourier mask on template",
-                      pointerClass='Mask', allowsNull=True,
+                      pointerClass='VolumeMask', allowsNull=True,
                       help='A binary mask describing which fourier components of'
                            ' the initial average are known.')
 
         form.addParam('fscMask', PointerParam, label="FSC mask",
-                      pointerClass='Mask', allowsNull=True,
+                      pointerClass='VolumeMask', allowsNull=True,
                       help='a direct space mask that will be imposed onto any couple of volumes when computing their FSC.')
 
 

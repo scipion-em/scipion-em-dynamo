@@ -1,7 +1,7 @@
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from tomo.protocols import ProtImportSubTomograms
 from tomo.tests import DataSet
-
+from xmipp3.protocols import XmippProtCreateMask3D
 from dynamo.protocols import DynamoSubTomoMRA
 
 
@@ -21,6 +21,17 @@ class TestSubTomogramsAlignment(BaseTest):
                                       filesPath=self.setOfSubtomograms,
                                       samplingRate=5)
         self.launchProtocol(protImport)
+        # subtomos = ProtImportSubTomograms.outputSubTomograms
+
+        protMask = self.newProtocol(XmippProtCreateMask3D,
+                                    inputVolume=ProtImportSubTomograms,
+                                    source=0, volumeOperation=0,
+                                    threshold=0.4)
+        protMask.inputVolume.setExtended("outputSubTomograms.1")
+        protMask.setObjLabel('threshold mask')
+        self.launchProtocol(protMask)
+        self.assertIsNotNone(protMask.outputMask,
+                             "There was a problem with create mask from volume")
 
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                       inputVolumes=protImport.outputSubTomograms)
