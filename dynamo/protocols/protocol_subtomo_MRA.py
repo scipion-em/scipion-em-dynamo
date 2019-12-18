@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     you (you@yourinstitution.email)
+# * Authors:     Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es)
 # *
-# * your institution
+# *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 # *  e-mail address 'you@yourinstitution.email'
 # *
 # **************************************************************************
+
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam
 from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
 """
@@ -112,7 +113,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #             '"%s*.vol">%s' % (fnRoot, self.fnSel), numberOfMpi=1)
 
     def alignStep(self):
-
         pass
         # fnIn = self._getExtraPath("subtomograms.sel")
         # fnOut = self._getExtraPath("mltomo")
