@@ -64,16 +64,16 @@ class TestSubTomogramsAlignment(BaseTest):
                                       inputVolumes=protImport.outputSubTomograms,
                                       alignmentMask=protMask.outputMask)
         self.launchProtocol(alignment)
-        # self.assertIsNotNone(alignment.outputSubtomograms,
-        #                      "There was a problem with SetOfSubtomograms output")
-        # self.assertIsNotNone(alignment.outputClassesSubtomo,
-        #                      "There was a problem with outputClassesSubtomo output")
+        self.assertIsNotNone(alignment.outputSubtomograms,
+                             "There was a problem with SetOfSubtomograms output")
+        self.assertIsNotNone(alignment.outputClassesSubtomo,
+                             "There was a problem with outputClassesSubtomo output")
         return alignment
 
     def test_outputMRA(self):
         dynamoAlignment = self._runAlignment()
-        # outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
-        # outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
+        outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
+        outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
         # self.assertTrue(outputSubtomos)
         # self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
         # self.assertTrue(outputClasses)

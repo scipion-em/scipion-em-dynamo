@@ -87,10 +87,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
         form.addParam('fscMask', PointerParam, label="FSC mask",
                       pointerClass='VolumeMask', allowsNull=True,
-                      help='a direct space mask that will be imposed onto any couple of volumes when computing their FSC.')
-
-
-        # form.addParallelSection(threads=0, mpi=8)
+                      help='A direct space mask that will be imposed onto any couple of volumes when computing their FSC.')
 
         # --------------------------- INSERT steps functions --------------------------------------------
 
@@ -113,6 +110,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #             '"%s*.vol">%s' % (fnRoot, self.fnSel), numberOfMpi=1)
 
     def alignStep(self):
+
         pass
         # fnIn = self._getExtraPath("subtomograms.sel")
         # fnOut = self._getExtraPath("mltomo")
@@ -132,29 +130,25 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         # self.runJob("xmipp_ml_tomo", args, numberOfMpi=self.numberOfMpi.get())
 
     def createOutput(self):
-        pass
-        # self.subtomoSet = self._createSetOfSubTomograms()
-        # inputSet = self.inputVolumes.get()
-        # self.subtomoSet.copyInfo(inputSet)
+        self.subtomoSet = self._createSetOfSubTomograms()
+        inputSet = self.inputVolumes.get()
+        self.subtomoSet.copyInfo(inputSet)
         # self.fnDoc = '%s/mltomo_it00000%d.doc' % (
         # self._getExtraPath(), self.numberOfIters)
         # self.docFile = open(self.fnDoc)
         # self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
         # self.docFile.close()
-        # classesSubtomoSet = self._createSetOfClassesSubTomograms(
-        #     self.subtomoSet)
+        classesSubtomoSet = self._createSetOfClassesSubTomograms(self.subtomoSet)
         # classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
-        # self._defineOutputs(outputSubtomograms=self.subtomoSet)
-        # self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
-        # self._defineOutputs(outputClassesSubtomo=classesSubtomoSet)
-        # self._defineSourceRelation(self.inputVolumes, classesSubtomoSet)
-        # self._cleanFiles()
+        self._defineOutputs(outputSubtomograms=self.subtomoSet)
+        self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
+        self._defineOutputs(outputClassesSubtomo=classesSubtomoSet)
+        self._defineSourceRelation(self.inputVolumes, classesSubtomoSet)
 
         # --------------------------- INFO functions --------------------------------
 
     def _summary(self):
-        pass
-        # summary = []
+        summary = []
         # if hasattr(self, 'outputClassesSubtomo'):
         #     summary.append(
         #         "Input subtomograms: *%d* \nRequested classes: *%d*\nGenerated classes: *%d* in *%d* iterations\n"
@@ -162,11 +156,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #            self.outputClassesSubtomo.getSize(), self.numberOfIters))
         # else:
         #     summary.append("Output classes not ready yet.")
-        # return summary
+        return summary
 
     def _methods(self):
-        pass
-        # methods = []
+        methods = []
         # if hasattr(self, 'outputClassesSubtomo'):
         #     methods.append(
         #         'We classified %d subtomograms from %s into %d classes %s using *MLTomo*.'
@@ -176,8 +169,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #            self.getObjectTag('outputClassesSubtomo')))
         # else:
         #     methods.append("Output classes not ready yet.")
-        # return methods
+        return methods
 
     def _citations(self):
-        pass
-        # return ['Scheres2009c']
+        return ['CASTANODIEZ2012139']
