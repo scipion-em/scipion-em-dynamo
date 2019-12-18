@@ -42,14 +42,12 @@ class TestSubTomogramsAlignment(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
 
-    def _runAlignment(self, randomInitialization=True, numberOfReferences=2,
-                      numberOfIters=3, angularSampling=15):
+    def _runAlignment(self):
         protImport = self.newProtocol(ProtImportSubTomograms,
                                       filesPath=self.setOfSubtomograms,
                                       samplingRate=5)
         self.launchProtocol(protImport)
-        subtomos = protImport.outputSubTomograms
-
+        
         protMask = self.newProtocol(XmippProtCreateMask3D,
                                     inputVolume=protImport,
                                     source=0, volumeOperation=0,
