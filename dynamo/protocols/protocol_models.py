@@ -31,6 +31,8 @@ from pyworkflow.em import ProtAnalysis3D
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.utils import importFromPlugin
 
+from dynamo import Plugin
+
 Mesh = importFromPlugin("tomo.objects", "Mesh")
 SetOfMeshes = importFromPlugin("tomo.objects", "SetOfMeshes")
 ProtTomoBase = importFromPlugin("tomo.protocols", "ProtTomoBase")
@@ -90,7 +92,7 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
 
 
     def modelStep(self):
-        program = '/home/davidh/dynamo_v1.146/matlab/bin/dynamo'
+        program = Plugin.getDynamoProgram()
         args = ' %s' % self.inputFilePath
         dynamo = self.runJob(program, args)
 
