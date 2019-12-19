@@ -82,17 +82,19 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         tomoFid.close()
         inputFid = open(self.inputFilePath, 'w')
         content = 'dcm -create %s -fromvll %s \n' \
-                  'm = dmodels.membraneByLevels();' \
-                  'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1);' \
-                  'm.saveInCatalogue();' \
+                  'm = dmodels.membraneByLevels();\n' \
+                  'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1);\n' \
+                  'm.saveInCatalogue();\n' \
                   'dtmslice %s -c %s \n' \
-                  'modeltrack.addOne(\'model\',m);' \
-                  'modeltrack.setActiveModel(1);' \
+                  'modeltrack.addOne(\'model\',m);\n' \
+                  'modeltrack.setActiveModel(1);\n' \
                   'uiwait(dpkslicer.getHandles().figure_fastslicer); \n' \
                   'm = dread(dcmodels(\'%s\',\'i\',1)); \n' \
-                  'writematrix(m.points, \'%s\'); \n' \
+                  'writematrix([m.points m.group_labels\'], \'%s\'); \n' \
+                  'writematrix(m.mesh.tr.ConnectivityList, \'%s\'); \n' \
                   'exit' % (catalogue, tomoFile, catalogue, tomoFile, catalogue,
-                            catalogue, self._getExtraPath(tomoName + '.txt'))
+                            catalogue, self._getExtraPath(tomoName + '.txt'),
+                            self._getExtraPath(tomoName + '_connectivity.txt'))
         inputFid.write(content)
         inputFid.close()
 
