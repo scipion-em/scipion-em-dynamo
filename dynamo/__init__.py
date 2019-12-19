@@ -47,10 +47,9 @@ class Plugin(pwem.Plugin):
         environ = pwutils.Environ(os.environ)
         dyn_home = cls.getHome()
         environ.update({
-            'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home +
-                    '/mpi:${PATH}',
+            'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
             'LD_LIBRARY_PATH': dyn_home + '/MCRLinux/runtime/glnxa64:' + dyn_home + '/MCRLinux/bin/glnxa64:' +
-                               dyn_home + '/MCRLinux/sys/os/glnxa64:${LD_LIBRARY_PATH}',
+                               dyn_home + '/MCRLinux/sys/os/glnxa64',
             'DYNAMO_ROOT': dyn_home
         }, position=pwutils.Environ.BEGIN)
         return environ
@@ -58,6 +57,13 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getDynamoProgram(cls):
         return join(cls.getHome(), 'matlab', 'bin', DYNAMO_PROGRAM)
+
+    @classmethod
+    def runDynamo(cls, protocol, args, cwd=None):
+        """ Run Dynamo command from a given protocol. """
+        # args will be the .doc file which contains the MATLAB code
+        program = cls.getDynamoProgram()
+        protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
 
 
     # @classmethod
