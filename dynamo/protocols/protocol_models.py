@@ -29,18 +29,18 @@ import os
 
 from pyworkflow.em import ProtAnalysis3D
 from pyworkflow.protocol.params import PointerParam
-from pyworkflow.utils import importFromPlugin, cleanPath
-from pyworkflow.mapper.sqlite_db import SqliteDb
+from pyworkflow.utils import importFromPlugin
 
 Mesh = importFromPlugin("tomo.objects", "Mesh")
 SetOfMeshes = importFromPlugin("tomo.objects", "SetOfMeshes")
+ProtTomoBase = importFromPlugin("tomo.protocols", "ProtTomoBase")
 
 
 """
 Protocols to create models in Dynamo
 """
 
-class DynamoModels(ProtAnalysis3D):
+class DynamoModels(ProtAnalysis3D, ProtTomoBase):
     """ It will align subtomograms using Dynamo"""
     _label = 'model manager'
 
@@ -106,22 +106,6 @@ class DynamoModels(ProtAnalysis3D):
         outSet.setVolumes(self.inputTomograms.get())
         self._defineOutputs(outputMeshes=outSet)
         self._defineSourceRelation(self.inputTomograms.get(), outSet)
-
-    def _createSetOfMeshes(self, suffix=''):
-        return self.__createSet(SetOfMeshes,
-                                'meshes%s.sqlite', suffix)
-
-    def __createSet(self, SetClass, template, suffix, **kwargs):
-        """ Create a set and set the filename using the suffix.
-        If the file exists, it will be delete. """
-        setFn = self._getPath(template % suffix)
-        # Close the connection to the database if
-        # it is open before deleting the file
-        cleanPath(setFn)
-
-        SqliteDb.closeConnection(setFn)
-        setObj = SetClass(filename=setFn, **kwargs)
-        return setObj
 
 
         # --------------------------- INFO functions --------------------------------
