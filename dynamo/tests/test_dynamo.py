@@ -72,8 +72,8 @@ class TestSubTomogramsAlignment(BaseTest):
         dynamoAlignment = self._runAlignment()
         outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
         outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
-        # self.assertTrue(outputSubtomos)
-        # self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
-        # self.assertTrue(outputClasses)
+        self.assertTrue(outputSubtomos)
+        self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
+        self.assertTrue(outputClasses)
         # self.assertTrue(outputClasses.hasRepresentatives())
         return dynamoAlignment

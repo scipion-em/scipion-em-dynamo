@@ -50,7 +50,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
         if subtomo.hasTransform():
             matrix = subtomo.getTransform().getMatrix()
             rot, tilt, psi, shiftx, shifty, shiftz = matrix2eulerAngles(matrix)
-            # # Check if they are really the same angels (zxz in dynamo and zyz in scipion??)
+            # Check if they are really the same angels (zxz in dynamo and zyz in scipion??)
         else:
             rot = 0
             tilt = 0
@@ -61,6 +61,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
         fhTable.write('%d 1 0 %d %d %d %d %d %d 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
                       % (subtomo.getObjId(), rot, tilt, psi, shiftx, shifty, shiftz,
                          subtomo.getAcquisition().getAngleMin(), subtomo.getAcquisition().getAngleMax(), x, y, z))
+
 
 def readDynTable(self, item):
     nline = self.fhTable.next()
