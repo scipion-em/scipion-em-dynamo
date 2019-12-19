@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es)
+# *  Authors:
 # *
-# *  BCU, Centro Nacional de Biotecnologia, CSIC
+# * MRC Laboratory of Molecular Biology (MRC-LMB)
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -21,8 +20,16 @@
 # * 02111-1307  USA
 # *
 # *  All comments concerning this program package may be sent to the
-# *  e-mail address 'you@yourinstitution.email'
+# *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+"""
+This file contains constants related to scipion-em-dynamo protocols
+"""
 
-import test_dynamo
+import os
+
+DYNAMO_PROGRAM = 'dynamo'
+DYNAMO_HOME = 'DYNAMO_HOME'
+DYNAMO_VERSION = '1.1.471'
+DYNAMO_SHIPPED_MCR = 'dynamo_activate_linux_shipped_MCR.sh'

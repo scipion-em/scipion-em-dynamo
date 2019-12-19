@@ -25,4 +25,4 @@
 # *
 # **************************************************************************
 
-import test_dynamo
+from protocol_subtomo_MRA import DynamoSubTomoMRA

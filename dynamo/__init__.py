@@ -24,12 +24,56 @@
 # *
 # **************************************************************************
 
-import pyworkflow.em
+from os.path import join
+import pyworkflow.em as pwem
+import pyworkflow.utils as pwutils
+from .constants import *
 
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
-class Plugin(pyworkflow.em.Plugin):
-    pass
+class Plugin(pwem.Plugin):
+    _homeVar = DYNAMO_HOME
+    _pathVars = [DYNAMO_HOME]
+    # _supportedVersions =
 
-pyworkflow.em.Domain.registerPlugin(__name__)
+    @classmethod
+    def _defineVariables(cls):
+        cls._defineEmVar(DYNAMO_HOME, 'dynamo-{}'.format(DYNAMO_VERSION))
+
+    @classmethod
+    def getEnviron(cls):
+        """ Create the needed environment for Dynamo programs. """
+        environ = pwutils.Environ(os.environ)
+        dyn_home = cls.getHome()
+        environ.update({
+            'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
+            'LD_LIBRARY_PATH': dyn_home + '/MCRLinux/runtime/glnxa64:' + dyn_home + '/MCRLinux/bin/glnxa64:' +
+                               dyn_home + '/MCRLinux/sys/os/glnxa64',
+            'DYNAMO_ROOT': dyn_home
+        }, position=pwutils.Environ.BEGIN)
+        return environ
+
+    @classmethod
+    def getDynamoProgram(cls):
+        return join(cls.getHome(), 'matlab', 'bin', DYNAMO_PROGRAM)
+
+    @classmethod
+    def runDynamo(cls, protocol, args, cwd=None):
+        """ Run Dynamo command from a given protocol. """
+        # args will be the .doc file which contains the MATLAB code
+        program = cls.getDynamoProgram()
+        protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+
+
+    # @classmethod
+    # def defineBinaries(cls, env):
+    #     env.addPackage(JANNI_GENMOD,
+    #                    version=JANNI_GENMOD_20190703,
+    #                    tar='void.tgz',
+    #                    commands=[("wget https://github.com/MPI-Dortmund/sphire-janni/raw/master/janni_general_models/"
+    #                               + JANNI_GENMOD_20190703_FN, JANNI_GENMOD_20190703_FN)],
+    #                    neededProgs=["wget"],
+    #                    default=True)
+
+pwem.Domain.registerPlugin(__name__)
