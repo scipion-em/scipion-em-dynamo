@@ -47,10 +47,20 @@ def writeDynTable(fhTable, setOfSubtomograms):
             x = 0
             y = 0
             z = 0
-        fhTable.write('%d 1 0 0 0 0 0 0 0 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
-                      % (subtomo.getObjId(), subtomo.getAcquisition().getAngleMin(),
-                         subtomo.getAcquisition().getAngleMax(), x, y, z))
-
+        if subtomo.hasTransform():
+            matrix = subtomo.getTransform().getMatrix()
+            rot, tilt, psi, shiftx, shifty, shiftz = matrix2eulerAngles(matrix)
+            # # Check if they are really the same angels (zxz in dynamo and zyz in scipion??)
+        else:
+            rot = 0
+            tilt = 0
+            psi = 0
+            shiftx = 0
+            shifty = 0
+            shiftz = 0
+        fhTable.write('%d 1 0 %d %d %d %d %d %d 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
+                      % (subtomo.getObjId(), rot, tilt, psi, shiftx, shifty, shiftz,
+                         subtomo.getAcquisition().getAngleMin(), subtomo.getAcquisition().getAngleMax(), x, y, z))
 
 def readDynTable(self, item):
     nline = self.fhTable.next()
@@ -87,7 +97,8 @@ def readDynTable(self, item):
     item.setClassId(classId)
 
 
-def eulerAngles2matrix(alpha, beta, gamma, shiftx, shifty, shiftz):  # Check func in dynamo
+# Convert function euler angles (scipion) to matrix (scipion)
+def eulerAngles2matrix(alpha, beta, gamma, shiftx, shifty, shiftz):
     A = np.empty([4, 4])
     A.fill(2)
     A[3, 3] = 1
@@ -120,7 +131,8 @@ def eulerAngles2matrix(alpha, beta, gamma, shiftx, shifty, shiftz):  # Check fun
     return A
 
 
-def matrix2eulerAngles(A):  # Check func in dynamo
+# Convert function matrix (scipion) to angles (scipion)
+def matrix2eulerAngles(A):
     abs_sb = np.sqrt(A[0, 2] * A[0, 2] + A[1, 2] * A[1, 2])
     if abs_sb > 16 * np.exp(-5):
         gamma = math.atan2(A[1, 2], -A[0, 2])

@@ -122,7 +122,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         pass
 
     def createOutput(self):
-        self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')
+        self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')  # Change to "real.tbl"
         self.subtomoSet = self._createSetOfSubTomograms()
         inputSet = self.inputVolumes.get()
         self.subtomoSet.copyInfo(inputSet)
