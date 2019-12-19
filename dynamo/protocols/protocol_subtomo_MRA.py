@@ -142,7 +142,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         self.subtomoSet.copyInfo(inputSet)
         self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
         classesSubtomoSet = self._createSetOfClassesSubTomograms(self.subtomoSet)
-        # classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
+        classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
         self.fhTable.close()
         self._defineOutputs(outputSubtomograms=self.subtomoSet)
         self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
@@ -181,3 +181,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _updateItem(self, item, row):
         readDynTable(self, item)
+
+    def _updateClass(self, item):
+        pass
+        # update class info (setRepresentative), see mltomo
