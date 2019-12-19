@@ -82,27 +82,31 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         tomoFid.close()
         inputFid = open(self.inputFilePath, 'w')
         content = 'dcm -create %s -fromvll %s \n' \
+                  'm = dmodels.membraneByLevels();' \
+                  'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1);' \
+                  'm.saveInCatalogue();' \
                   'dtmslice %s -c %s \n' \
-                  'uiwait(msgbox(\'Click Ok when done\')) \n' \
+                  'modeltrack.addOne(\'model\',m);' \
+                  'modeltrack.setActiveModel(1);' \
+                  'uiwait(dpkslicer.getHandles().figure_fastslicer); \n' \
                   'm = dread(dcmodels(\'%s\',\'i\',1)); \n' \
                   'writematrix(m.points, \'%s\'); \n' \
-                  'exit' % (catalogue, tomoFile, tomoFile, catalogue, catalogue, self._getExtraPath('extra.txt'))
+                  'exit' % (catalogue, tomoFile, catalogue, tomoFile, catalogue,
+                            catalogue, self._getExtraPath(tomoName + '.txt'))
         inputFid.write(content)
         inputFid.close()
 
 
     def modelStep(self):
-        program = Plugin.getDynamoProgram()
         args = ' %s' % self.inputFilePath
-        dynamo = self.runJob(program, args)
+        dynamo = Plugin.runDynamo(self, args)
 
     def createOutput(self):
-        # TODO
-        # Check of file corresponds to Tomo
         outSet = self._createSetOfMeshes()
-        outFile = self._getExtraPath('extra.txt')
-        roi = Mesh(outFile)
         for tomo in self.inputTomograms.get().iterItems():
+                tomoName = os.path.basename(tomo.getFileName())
+                outFile = self._getExtraPath(tomoName + '.txt')
+                roi = Mesh(outFile)
                 roi.setVolume(tomo)
         outSet.append(roi)
         outSet.setVolumes(self.inputTomograms.get())
