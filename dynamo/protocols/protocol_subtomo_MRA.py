@@ -25,11 +25,12 @@
 # *
 # **************************************************************************
 
-from os.path import join
+from os.path import join, basename
+from os import environ
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam
 from pyworkflow.utils.path import makePath
 
-from dynamo.convert import writeSetOfVolumes, writeTable
+from dynamo.convert import writeSetOfVolumes, writeDynTable, readDynTable
 from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
 
 
@@ -41,7 +42,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)
 
-        # --------------------------- DEFINE param functions ------------------------
+    # --------------------------- DEFINE param functions ------------------------
 
     def _defineParams(self, form):
         form.addSection(label='Input subtomograms')
@@ -94,46 +95,48 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
         # Add all numerical (and computational?) parameters of dynamo
 
-        # --------------------------- INSERT steps functions --------------------------------------------
+    # --------------------------- INSERT steps functions --------------------------------------------
 
     def _insertAllSteps(self):
         self._insertFunctionStep('convertInputStep')
         self._insertFunctionStep('alignStep')
         self._insertFunctionStep('createOutput')
 
-        # --------------------------- STEPS functions -------------------------------
+    # --------------------------- STEPS functions -------------------------------
 
     def convertInputStep(self):
         # Put data in a folder
         inputVols = self.inputVolumes.get()
-        fnDir = self._getExtraPath("inputVolumes")
+        fnDir = self._getExtraPath("data")
         makePath(fnDir)
         fnRoot = join(fnDir, "subtomo")
         writeSetOfVolumes(inputVols, fnRoot)
         fhTable = open(self._getExtraPath("initial.tbl"), 'w')
-        writeTable(fhTable, inputVols)
+        writeDynTable(fhTable, inputVols)
         fhTable.close()
-        # MD from scipion objects should be converted to dynamo tables
         # Generate "empty" table
         # When it works, take table if exists as mltomo does with docfile
 
 
     def alignStep(self):
-        fnDoc = self._getExtraPath('align.doc')  # File to write commands to be passed to Dynamo
+        pass
 
     def createOutput(self):
+        self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')
         self.subtomoSet = self._createSetOfSubTomograms()
         inputSet = self.inputVolumes.get()
         self.subtomoSet.copyInfo(inputSet)
-        # self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
+        self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
+        # read dynamo table (convert)
         classesSubtomoSet = self._createSetOfClassesSubTomograms(self.subtomoSet)
         # classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
+        self.fhTable.close()
         self._defineOutputs(outputSubtomograms=self.subtomoSet)
         self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
         self._defineOutputs(outputClassesSubtomo=classesSubtomoSet)
         self._defineSourceRelation(self.inputVolumes, classesSubtomoSet)
 
-        # --------------------------- INFO functions --------------------------------
+    # --------------------------- INFO functions --------------------------------
 
     def _summary(self):
         summary = []
@@ -160,3 +163,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _citations(self):
         return ['CASTANODIEZ2012139']
+
+    # --------------------------- UTILS functions ----------------------------------
+
+    def _updateItem(self, item, row):
+        readDynTable(self, item)
