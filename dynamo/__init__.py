@@ -45,16 +45,19 @@ class Plugin(pwem.Plugin):
     def getEnviron(cls):
         """ Create the needed environment for Dynamo programs. """
         environ = pwutils.Environ(os.environ)
+        dyn_home = cls.getHome()
         environ.update({
-            'PATH': DYNAMO_HOME + '/matlab/bin:' + DYNAMO_HOME + '/matlab/src:' + DYNAMO_HOME + '/cuda/bin:' + DYNAMO_HOME + '/mpi:${PATH}',
-            'LD_LIBRARY_PATH': DYNAMO_HOME + '/MCRLinux/runtime/glnxa64:' + DYNAMO_HOME + '/MCRLinux/bin/glnxa64:' + DYNAMO_HOME + '/MCRLinux/sys/os/glnxa64:${LD_LIBRARY_PATH}',
-            'DYNAMO_ROOT': DYNAMO_HOME
+            'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home +
+                    '/mpi:${PATH}',
+            'LD_LIBRARY_PATH': dyn_home + '/MCRLinux/runtime/glnxa64:' + dyn_home + '/MCRLinux/bin/glnxa64:' +
+                               dyn_home + '/MCRLinux/sys/os/glnxa64:${LD_LIBRARY_PATH}',
+            'DYNAMO_ROOT': dyn_home
         }, position=pwutils.Environ.BEGIN)
         return environ
 
     @classmethod
     def getDynamoProgram(cls):
-        return join(DYNAMO_HOME, 'matlab', 'bin', DYNAMO_PROGRAM)
+        return join(cls.getHome(), 'matlab', 'bin', DYNAMO_PROGRAM)
 
 
     # @classmethod
