@@ -49,17 +49,17 @@ def writeDynTable(fhTable, setOfSubtomograms):
             z = 0
         if subtomo.hasTransform():
             matrix = subtomo.getTransform().getMatrix()
-            rot, tilt, psi, shiftx, shifty, shiftz = matrix2eulerAngles(matrix)
+            tilt, narot, tdrot, shiftx, shifty, shiftz = matrix2eulerAngles(matrix)
             # Check if they are really the same angels (zxz in dynamo and zyz in scipion??)
         else:
-            rot = 0
             tilt = 0
-            psi = 0
+            narot = 0
+            tdrot = 0
             shiftx = 0
             shifty = 0
             shiftz = 0
         fhTable.write('%d 1 0 %d %d %d %d %d %d 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
-                      % (subtomo.getObjId(), rot, tilt, psi, shiftx, shifty, shiftz,
+                      % (subtomo.getObjId(), tilt, narot, tdrot, shiftx, shifty, shiftz,
                          subtomo.getAcquisition().getAngleMin(), subtomo.getAcquisition().getAngleMax(), x, y, z))
 
 
@@ -133,32 +133,86 @@ def eulerAngles2matrix(alpha, beta, gamma, shiftx, shifty, shiftz):
 
 
 # Convert function matrix (scipion) to angles (scipion)
+# def matrix2eulerAngles(A):
+#     abs_sb = np.sqrt(A[0, 2] * A[0, 2] + A[1, 2] * A[1, 2])
+#     if abs_sb > 16 * np.exp(-5):
+#         gamma = math.atan2(A[1, 2], -A[0, 2])
+#         alpha = math.atan2(A[2, 1], A[2, 0])
+#         if abs(np.sin(gamma)) < np.exp(-5):
+#             sign_sb = np.sign(-A[0, 2] / np.cos(gamma))
+#         else:
+#             if np.sin(gamma) > 0:
+#                 sign_sb = np.sign(A[1, 2])
+#             else:
+#                 sign_sb = -np.sign(A[1, 2])
+#         beta = math.atan2(sign_sb * abs_sb, A[2, 2])
+#     else:
+#         if np.sign(A[2, 2]) > 0:
+#             alpha = 0
+#             beta = 0
+#             gamma = math.atan2(-A[1, 0], A[0, 0])
+#         else:
+#             alpha = 0
+#             beta = np.pi
+#             gamma = math.atan2(A[1, 0], -A[0, 0])
+#     gamma = np.rad2deg(gamma)
+#     beta = np.rad2deg(beta)
+#     alpha = np.rad2deg(alpha)
+#     return alpha, beta, gamma, A[0, 3], A[1, 3], A[2, 3]
+
+
+# matrix2euler dynamo
 def matrix2eulerAngles(A):
-    abs_sb = np.sqrt(A[0, 2] * A[0, 2] + A[1, 2] * A[1, 2])
-    if abs_sb > 16 * np.exp(-5):
-        gamma = math.atan2(A[1, 2], -A[0, 2])
-        alpha = math.atan2(A[2, 1], A[2, 0])
-        if abs(np.sin(gamma)) < np.exp(-5):
-            sign_sb = np.sign(-A[0, 2] / np.cos(gamma))
-        else:
-            if np.sin(gamma) > 0:
-                sign_sb = np.sign(A[1, 2])
-            else:
-                sign_sb = -np.sign(A[1, 2])
-        beta = math.atan2(sign_sb * abs_sb, A[2, 2])
-    else:
-        if np.sign(A[2, 2]) > 0:
-            alpha = 0
-            beta = 0
-            gamma = math.atan2(-A[1, 0], A[0, 0])
-        else:
-            alpha = 0
-            beta = np.pi
-            gamma = math.atan2(A[1, 0], -A[0, 0])
-    gamma = np.rad2deg(gamma)
-    beta = np.rad2deg(beta)
-    alpha = np.rad2deg(alpha)
-    return alpha, beta, gamma, A[0, 3], A[1, 3], A[2, 3]
+    tol = 1e-4
+    if abs(A[3, 3] - 1) < tol:
+        tilt = 0
+        narot = math.atan2(A[2, 1], A[1, 1]) * 180 / math.pi
+        tdrot = 0
+    elif abs(A[3, 3] + 1) < tol:
+        tdrot = 0
+        tilt = 180
+        narot = math.atan2(A[2, 1], A[1, 1]) * 180 / math.pi
+    else:   # General case
+        tdrot = math.atan2(A[3, 1], A[3, 2])
+        tilt = math.acos(A[3, 3])
+        narot = math.atan2(A[1, 3], -A[2, 3])
+    # convert to degrees
+    tilt = tilt * 180 / math.pi
+    narot = narot * 180 / math.pi
+    tdrot = tdrot * 180 / math.pi
+    return tilt, narot, tdrot, A[0, 3], A[1, 3], A[2, 3]
 
 
+# euler2matrix dynamo
+# def eulerAngles2matrix(alpha, beta, gamma, shiftx, shifty, shiftz):
+#     pass
 
+# TRANSLATE TO PYTHON
+# tol = 1e-4
+#
+# # warning('indetermination in defining narot and tdrot: rotation about z')
+#
+# # rm(3, 3)
+# ~ = -1
+# if abs(rm(3, 3) - 1) < tol
+# tilt = 0
+# narot = math.atan2(rm(2, 1), rm(1, 1)) * 180 / math.pi
+# tdrot = 0
+#
+# # rm(3, 3)
+# ~ = -1
+# if abs(rm(3, 3) + 1) < tol
+# tdrot = 0
+# tilt = 180
+# narot = math.atan2(rm(2, 1), rm(1, 1)) * 180 / math.pi
+#
+# # General case
+# tdrot = math.atan2(rm(3, 1), rm(3, 2))
+# tilt = acos(rm(3, 3))
+# narot = math.atan2(rm(1, 3), -rm(2, 3))
+#
+# # convert to degrees
+# tilt = tilt * 180 / math.pi
+# narot = narot * 180 / math.pi
+# tdrot = tdrot * 180 / math.pi
+#
