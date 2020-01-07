@@ -28,10 +28,11 @@
 from os.path import join, basename
 from os import environ
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.utils import importFromPlugin
 from pyworkflow.utils.path import makePath
-
+from dynamo import Plugin
 from dynamo.convert import writeSetOfVolumes, writeDynTable, readDynTable
-from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
+ProtTomoSubtomogramAveraging = importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
@@ -122,18 +123,52 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     def convertInputStep(self):
         inputVols = self.inputVolumes.get()
         fnDir = self._getExtraPath("data")
+        fnTable = self._getExtraPath("initial.tbl")
         makePath(fnDir)
-        fnRoot = join(fnDir, "subtomo")
+        fnRoot = join(fnDir, "particle_")
         writeSetOfVolumes(inputVols, fnRoot)
-        fhTable = open(self._getExtraPath("initial.tbl"), 'w')
+        fhTable = open(fnTable, 'w')
         writeDynTable(fhTable, inputVols)
         fhTable.close()
-        # Generate "empty"/basic table
-        # When it works, take table if exists as mltomo does with docfile
+        # TODO: take table if exists as mltomo does with docfile
+        self.dynamoCommands = self._getExtraPath("commands.doc")
+        fhCommands = open(self.dynamoCommands, 'w')
+        content = "dcp.new('projectMRA','table','%s','data','%s','masks','default','gui',0);" % (fnTable, fnDir)
+
+        # Execute project
+        # + "dvcheck('projectMRA');dvunfold('projectMRA');('projectMRA')"
+
+        # Change default template and mask:
+        # 'mask', 'seed1/settings/editorMaskEllipsoid.em', 'cmask', 'my_mask.em', 'fmask', 'seed1_c57_Zfilt_eo/settings', 'smask', 'seed1/settings/smoothingMaskOnes.em'
+        # 'mask', 'seed1/settings/editorMaskEllipsoid.em', 'cmask', 'default', 'fmask', 'default', 'smask', 'default'
+
+        # # Alignment params (from form) + boxSize
+        # dvput(projectName, 'nref_r1', 2);
+        # dvput(projectName, 'mra_r1', 1);
+        # dvput(projectName, 'mask', 1);
+        # dvput(projectName, 'ite_r1', 5);
+        # dvput(projectName, 'cr', 60);
+        # dvput(projectName, 'cs', 20);
+        # dvput(projectName, 'inplane_range', 0);
+        # dvput(projectName, 'inplane_sampling', 1);
+        # dvput(projectName, 'refine', 5);
+        # dvput(projectName, 'low', 10);
+        # dvput(projectName, 'sym', 'c57');
+        # dvput(projectName, 'dim', 64);
+        # dvput(projectName, 'area_search', 10);
+        # dvput(projectName, 'area_search_modus', 1);
+        #
+        # # System Parameters
+        # dvput(projectName, 'destination', 'matlab_gpu');
+        # dvput(projectName, 'cores', 1);
+        # dvput(projectName, 'matlab_workers_average', 6);
+
+        fhCommands.write(content)
+        fhCommands.close()
 
     def alignStep(self):
-        pass
-        # pass as params to the commands all in the formulary + subtomo box size
+        args = ' %s' % self.dynamoCommands
+        Plugin.runDynamo(self, args)
 
     def createOutput(self):
         self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')  # Change to "real.tbl"
