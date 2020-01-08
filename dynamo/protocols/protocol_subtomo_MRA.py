@@ -31,14 +31,14 @@ from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, Str
 from pyworkflow.utils import importFromPlugin
 from pyworkflow.utils.path import makePath
 from dynamo import Plugin
-from dynamo.convert import writeSetOfVolumes, writeDynTable, readDynTable
+from dynamo.convert import writeVolume, writeSetOfVolumes, writeDynTable, readDynTable
 ProtTomoSubtomogramAveraging = importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     """ This protocol will align subtomograms using Dynamo MRA Subtomogram Averaging"""
 
-    _label = 'MRA alignment'
+    _label = 'Subtomogram alignment'
 
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)
@@ -136,16 +136,25 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         writeDynTable(fhTable, inputVols)
         fhTable.close()
         pcaInt = int(self.pca.get())
+        dim, _, _ = self.inputVolumes.get().getDimensions()
+        if self.templateRef.get() is not None:
+            writeVolume(self.templateRef.get(), join(self._getExtraPath(), 'template'))
         fhCommands = open(self._getExtraPath("commands.doc"), 'w')
-        content = "dcp.new('%s','table','initial.tbl','data','data','masks','default','gui',0);" % self.projName + \
+        content = "dcp.new('%s','table','initial.tbl','data','data','gui',0);" % self.projName + \
+                  "dvput('%s', 'dim_r1', '%s');" % (self.projName, dim) + \
                   "dvput('%s', 'ite_r1', '%s');" % (self.projName, self.numberOfIters) + \
-                  "dvput('%s', 'mra', %s);" % (self.projName, self.numberOfRefs) + \
                   "dvput('%s', 'pcas', %d);" % (self.projName, pcaInt) + \
-                  "dvput('%s', 'template', '%s');" % (self.projName, self.templateRef) + \
-                  "dvcheck('%s');" % self.projName
+                  "dvput('%s', 'template', 'template.mrc');" % self.projName + \
+                  "dvcheck('%s');dvunfold('%s');('%s')" % (self.projName, self.projName, self.projName)
+
+                # if template file, pass it, if not, generate it
+                # if masks files, pass them, if not, defaults
+
+                  # "dvput('%s', 'mask', %s);" % (self.projName, self.alignmentMask) + \
                   # "dvput('%s', 'template', '%s');" % (self.projName, self.templateRef) + \
                   # "dvput('%s', 'nref_r1', '%s');" % (self.projName, self.numberOfRefs) + \
-                  # "dvput('%s', 'mask', 1);" % self.projName + \
+                  # "dvput('%s', 'mra', %s);" % (self.projName, self.numberOfRefs) + \
+
                   # "dvput('%s', 'cr', '%s');" % (self.projName, self.coneAperture) + \
                   # "dvput('%s', 'cs', '%s');" % (self.projName, self.coneSampling) + \
                   # "dvput('%s', 'inplane_range', 0);" % self.projName + \
@@ -156,7 +165,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                   # "dvput('%s', 'dim', '%s');" % (self.projName, self.inputVolumes.get().getDimensions()) + \
                   # "dvput('%s', 'area_search', 10);" % self.projName + \
                   # "dvput('%s', 'area_search_modus', 1);" % self.projName + \
-                  # "dvcheck('%s');dvunfold('%s');('%s')" % (self.projName, projName, projName)
+                  # "dvcheck('%s');dvunfold('%s');('%s')" % (self.projName, self.projName, self.projName)
         fhCommands.write(content)
         fhCommands.close()
         # # dvunfold fails because template and data dimensions and more things detected by dvcheck fails
