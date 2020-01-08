@@ -25,8 +25,7 @@
 # *
 # **************************************************************************
 
-from os.path import join, basename
-from os import environ
+from os.path import join
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils import importFromPlugin
 from pyworkflow.utils.path import makePath
@@ -55,9 +54,11 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       help="Number of rounds (from 1 to 8). Each round consists in X iterations with the same "
                            "parameters, but parameters could vary in different rounds")
         form.addParam('numberOfIters', IntParam, label='Iterations', default=5, help="Number of iterations per round")
-        form.addParam('numberOfRefs', IntParam, label='Number of references for MRA', default=1,
+        form.addParam('mra', BooleanParam, label='Perform MRA', default=False,
+                      help="If selected, multi-reference alignment (MRA) is performed")
+        form.addParam('numberOfRefs', IntParam, label='Number of references for MRA', default=1, condition="mra",
                       help="Number of references for multi-reference alignment(MRA)")
-        form.addParam('pca', BooleanParam, label='Perform PCA', default=False, expertLevel=LEVEL_ADVANCED,
+        form.addParam('pca', BooleanParam, label='Perform PCA', default=False,
                       help="If selected, principal component analysis alignment is performed")
 
         form.addSection(label='Templates')
@@ -69,9 +70,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addParam('useChosenSoP', BooleanParam, label='Use random chosen set of particles', default=False,
                       condition="generateTemplate", help="Use a random set of particles")
         form.addParam('numberOfParticles', IntParam, label='Number of references', default=50,
-                      condition="generateTemplate and useChosenSoP", help="Number of references to generate automatically")
-        form.addParam('useRandomTable', BooleanParam, label='Use a random table (rotate particles randomly)', default=False,
-                      condition="generateTemplate", help="")
+                      condition="generateTemplate and useChosenSoP",
+                      help="Number of references to generate automatically")
+        form.addParam('useRandomTable', BooleanParam, label='Use a random table (rotate particles randomly)',
+                      default=False, condition="generateTemplate", help="")
         form.addParam('compensateMissingWedge', BooleanParam, label='Compensate for missing wedge', default=False,
                       condition="generateTemplate", help="")
 
@@ -136,50 +138,55 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         writeDynTable(fhTable, inputVols)
         fhTable.close()
         pcaInt = int(self.pca.get())
+        # mraInt = int(self.mra.get())
         dim, _, _ = self.inputVolumes.get().getDimensions()
-        if self.templateRef.get() is not None:
-            writeVolume(self.templateRef.get(), join(self._getExtraPath(), 'template'))
+
         fhCommands = open(self._getExtraPath("commands.doc"), 'w')
         content = "dcp.new('%s','table','initial.tbl','data','data','gui',0);" % self.projName + \
                   "dvput('%s', 'dim_r1', '%s');" % (self.projName, dim) + \
                   "dvput('%s', 'ite_r1', '%s');" % (self.projName, self.numberOfIters) + \
                   "dvput('%s', 'pcas', %d);" % (self.projName, pcaInt) + \
-                  "dvput('%s', 'template', 'template.mrc');" % self.projName + \
-                  "dvcheck('%s');dvunfold('%s');('%s')" % (self.projName, self.projName, self.projName)
+                  "dvput('%s', 'cr', '%s');" % (self.projName, self.coneAperture) + \
+                  "dvput('%s', 'cs', '%s');" % (self.projName, self.coneSampling)
 
-                # if template file, pass it, if not, generate it
-                # if masks files, pass them, if not, defaults
+        # "dvput('%s', 'nref_r1', '%s');" % (self.projName, self.numberOfRefs) + \
+        # "dvput('%s', 'mra', %d);" % (self.projName, self.mra) + \
 
-                  # "dvput('%s', 'mask', %s);" % (self.projName, self.alignmentMask) + \
-                  # "dvput('%s', 'template', '%s');" % (self.projName, self.templateRef) + \
-                  # "dvput('%s', 'nref_r1', '%s');" % (self.projName, self.numberOfRefs) + \
-                  # "dvput('%s', 'mra', %s);" % (self.projName, self.numberOfRefs) + \
+        # "dvput('%s', 'inplane_range', 0);" % self.projName + \
+        # "dvput('%s', 'inplane_sampling', 1);" % vprojName + \
+        # "dvput('%s', 'refine', '%s');" % (self.projName, self.refine) + \
+        # "dvput('%s', 'low', 10);" % self.projName + \
+        # "dvput('%s', 'sym', 'c57');" % self.projName + \
+        # "dvput('%s', 'dim', '%s');" % (self.projName, self.inputVolumes.get().getDimensions()) + \
+        # "dvput('%s', 'area_search', 10);" % self.projName + \
+        # "dvput('%s', 'area_search_modus', 1);" % self.projName + \
 
-                  # "dvput('%s', 'cr', '%s');" % (self.projName, self.coneAperture) + \
-                  # "dvput('%s', 'cs', '%s');" % (self.projName, self.coneSampling) + \
-                  # "dvput('%s', 'inplane_range', 0);" % self.projName + \
-                  # "dvput('%s', 'inplane_sampling', 1);" % vprojName + \
-                  # "dvput('%s', 'refine', '%s');" % (self.projName, self.refine) + \
-                  # "dvput('%s', 'low', 10);" % self.projName + \
-                  # "dvput('%s', 'sym', 'c57');" % self.projName + \
-                  # "dvput('%s', 'dim', '%s');" % (self.projName, self.inputVolumes.get().getDimensions()) + \
-                  # "dvput('%s', 'area_search', 10);" % self.projName + \
-                  # "dvput('%s', 'area_search_modus', 1);" % self.projName + \
-                  # "dvcheck('%s');dvunfold('%s');('%s')" % (self.projName, self.projName, self.projName)
-        fhCommands.write(content)
-        fhCommands.close()
-        # # dvunfold fails because template and data dimensions and more things detected by dvcheck fails
-        # => it should work when all the correct parameters are set
+        if self.templateRef.get() is not None:
+            writeVolume(self.templateRef.get(), join(self._getExtraPath(), 'template'))
+            content += "dvput('%s', 'template', 'template.mrc');" % self.projName
+        else:
+            pass
+            # command for generating template with parameters in the form
+            # content += ...
 
-        # Change default template and mask:
-        # 'mask', 'seed1/settings/editorMaskEllipsoid.em', 'cmask', 'my_mask.em', 'fmask', 'seed1_c57_Zfilt_eo/settings', 'smask', 'seed1/settings/smoothingMaskOnes.em'
-        # 'mask', 'seed1/settings/editorMaskEllipsoid.em', 'cmask', 'default', 'fmask', 'default', 'smask', 'default'
+        if self.alignmentMask.get() is not None:
+            writeVolume(self.alignmentMask.get(), join(self._getExtraPath(), 'alignMask'))
+            content += "dvput('%s', 'mask', 'alignMask.mrc');" % self.projName
+        else:
+            pass
+            # default mask (there are 3 masks!!, if for each one?)
+            # content += ...
 
-        # # Alignment params (from form) + boxSize (see dvhelp in Dynamo) (all of them should go before dvcheck)
+            # 'mask', 'Ellipsoid.em', 'cmask', 'my_mask.em', 'fmask', 'settings', 'smask', 'smoothingMaskOnes.em'
+            # 'mask', 'Ellipsoid.em', 'cmask', 'default', 'fmask', 'default', 'smask', 'default'
+            
         # # System Parameters
         # dvput('%s', 'destination', 'matlab_gpu');
         # dvput('%s', 'cores', 1);
         # dvput('%s', 'matlab_workers_average', 6);
+        content += "dvcheck('%s');dvunfold('%s');('%s')" % (self.projName, self.projName, self.projName)
+        fhCommands.write(content)
+        fhCommands.close()
 
     def alignStep(self):
         Plugin.runDynamo(self, 'commands.doc', cwd=self._getExtraPath())
