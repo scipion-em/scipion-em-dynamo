@@ -27,7 +27,14 @@ import math
 import numpy as np
 from pyworkflow.em.convert import ImageHandler
 from pyworkflow.em.data import Transform
-from tomo.objects import TomoAcquisition, Coordinate3D
+from pyworkflow.utils import importFromPlugin
+Coordinate3D = importFromPlugin("tomo.objects", "Coordinate3D")
+TomoAcquisition = importFromPlugin("tomo.objects", "TomoAcquisition")
+
+
+def writeVolume(volume, outputFn):
+    ih = ImageHandler()
+    ih.convert(volume, "%s.mrc" % outputFn)
 
 
 def writeSetOfVolumes(setOfVolumes, outputFnRoot):
