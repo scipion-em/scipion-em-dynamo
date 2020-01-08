@@ -57,10 +57,11 @@ class TestSubTomogramsAlignment(BaseTest):
         self.launchProtocol(protMask)
         self.assertIsNotNone(protMask.outputMask,
                              "There was a problem with create mask from volume")
-
+        import time
         alignment = self.newProtocol(DynamoSubTomoMRA,
-                                      inputVolumes=protImport.outputSubTomograms,
-                                      alignmentMask=protMask.outputMask)
+                                     projName=time.time(),
+                                     inputVolumes=protImport.outputSubTomograms,
+                                     alignmentMask=protMask.outputMask)
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.outputSubtomograms,
                              "There was a problem with SetOfSubtomograms output")

@@ -36,7 +36,7 @@ ProtTomoSubtomogramAveraging = importFromPlugin("tomo.protocols.protocol_base", 
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
-    """ It will align subtomograms using Dynamo MRA Subtomogram Averaging"""
+    """ This protocol will align subtomograms using Dynamo MRA Subtomogram Averaging"""
 
     _label = 'MRA alignment'
 
@@ -47,9 +47,9 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _defineParams(self, form):
         form.addSection(label='Input subtomograms')
-        form.addParam('inputVolumes', PointerParam,
-                      pointerClass="SetOfSubTomograms",
-                      label='Set of volumes',
+        form.addParam('projName', StringParam, label='Project Name',
+                      help='Name for the dynamo align project that will be generated')
+        form.addParam('inputVolumes', PointerParam, pointerClass="SetOfSubTomograms", label='Set of volumes',
                       help="Set of subtomograms to align with dynamo")
         form.addParam('numberOfRounds', IntParam, label='Rounds', default=3, help="Number of rounds (from 1 to 8)")
         form.addParam('numberOfIters', IntParam, label='Iterations', default=1, help="Number of iterations per round")
@@ -94,7 +94,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addParam('azymuthSampling', IntParam, label='Azimuth rotation sampling', default=1, help=" ")
         form.addParam('azymuthFlip', IntParam, label='Azymuth flip', default=0, expertLevel=LEVEL_ADVANCED, help=" ")
         form.addParam('azymuthFreeze', IntParam, label='Freeze azymuth reference', default=0, expertLevel=LEVEL_ADVANCED, help=" ")
-        form.addParam('refine', IntParam, label='Refine', default=6, help=" ")
+        form.addParam('refine', IntParam, label='Refine', default=5, help=" ")
         form.addParam('refineFactor', IntParam, label='Refine factor', default=2, help=" ")
 
         form.addSection(label='Shift/Threshold')
@@ -133,38 +133,37 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         # TODO: take table if exists as mltomo does with docfile
         self.dynamoCommands = self._getExtraPath("commands.doc")
         fhCommands = open(self.dynamoCommands, 'w')
-        content = "dcp.new('projectMRA','table','%s','data','%s','masks','default','gui',0);" % (fnTable, fnDir)
-
-        # Execute project
-        # + "dvcheck('projectMRA');dvunfold('projectMRA');('projectMRA')"
+        content = "dcp.new('%s','table','%s','data','%s','masks','default','gui',0);" % (self.projName, fnTable, fnDir) \
+                  + "dvcheck('%s');" % self.projName
+                  # "dvput('%s', 'nref_r1', '%s');" % (self.projName, self.numberOfRefs) #+ \
+                  # "dvput('%s', 'mra_r1', 1);" % self.projName + \
+                  # "dvput('%s', 'mask', 1);" % self.projName + \
+                  # "dvput('%s', 'ite_r1', '%s');" % (self.projName, self.numberOfIters) + \
+                  # "dvput('%s', 'cr', '%s');" % (self.projName, self.coneAperture) + \
+                  # "dvput('%s', 'cs', '%s');" % (self.projName, self.coneSampling) + \
+                  # "dvput('%s', 'inplane_range', 0);" % self.projName + \
+                  # "dvput('%s', 'inplane_sampling', 1);" % vprojName + \
+                  # "dvput('%s', 'refine', '%s');" % (self.projName, self.refine) + \
+                  # "dvput('%s', 'low', 10);" % self.projName + \
+                  # "dvput('%s', 'sym', 'c57');" % self.projName + \
+                  # "dvput('%s', 'dim', '%s');" % (self.projName, self.inputVolumes.get().getDimensions()) + \
+                  # "dvput('%s', 'area_search', 10);" % self.projName + \
+                  # "dvput('%s', 'area_search_modus', 1);" % self.projName + \
+                  # "dvcheck('%s');dvunfold('%s');('%s')" % (self.projName, projName, projName)
+        fhCommands.write(content)
+        fhCommands.close()
+        # # dvunfold fails because template and data dimensions and more things detected by dvcheck fails
+        # => it should work when all the correct parameters are set
 
         # Change default template and mask:
         # 'mask', 'seed1/settings/editorMaskEllipsoid.em', 'cmask', 'my_mask.em', 'fmask', 'seed1_c57_Zfilt_eo/settings', 'smask', 'seed1/settings/smoothingMaskOnes.em'
         # 'mask', 'seed1/settings/editorMaskEllipsoid.em', 'cmask', 'default', 'fmask', 'default', 'smask', 'default'
 
-        # # Alignment params (from form) + boxSize
-        # dvput(projectName, 'nref_r1', 2);
-        # dvput(projectName, 'mra_r1', 1);
-        # dvput(projectName, 'mask', 1);
-        # dvput(projectName, 'ite_r1', 5);
-        # dvput(projectName, 'cr', 60);
-        # dvput(projectName, 'cs', 20);
-        # dvput(projectName, 'inplane_range', 0);
-        # dvput(projectName, 'inplane_sampling', 1);
-        # dvput(projectName, 'refine', 5);
-        # dvput(projectName, 'low', 10);
-        # dvput(projectName, 'sym', 'c57');
-        # dvput(projectName, 'dim', 64);
-        # dvput(projectName, 'area_search', 10);
-        # dvput(projectName, 'area_search_modus', 1);
-        #
+        # # Alignment params (from form) + boxSize (see dvhelp in Dynamo) (all of them should go before dvcheck)
         # # System Parameters
-        # dvput(projectName, 'destination', 'matlab_gpu');
-        # dvput(projectName, 'cores', 1);
-        # dvput(projectName, 'matlab_workers_average', 6);
-
-        fhCommands.write(content)
-        fhCommands.close()
+        # dvput('%s', 'destination', 'matlab_gpu');
+        # dvput('%s', 'cores', 1);
+        # dvput('%s', 'matlab_workers_average', 6);
 
     def alignStep(self):
         args = ' %s' % self.dynamoCommands
