@@ -51,13 +51,18 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       help='Name for the dynamo align project that will be generated')
         form.addParam('inputVolumes', PointerParam, pointerClass="SetOfSubTomograms", label='Set of volumes',
                       help="Set of subtomograms to align with dynamo")
-        form.addParam('numberOfRounds', IntParam, label='Rounds', default=3, help="Number of rounds (from 1 to 8)")
-        form.addParam('numberOfIters', IntParam, label='Iterations', default=1, help="Number of iterations per round")
-        form.addParam('numberOfRefs', IntParam, label='References', default=1, help="Number of references")
+        form.addParam('numberOfRounds', IntParam, label='Rounds', default=1, expertLevel=LEVEL_ADVANCED,
+                      help="Number of rounds (from 1 to 8). Each round consists in X iterations with the same "
+                           "parameters, but parameters could vary in different rounds")
+        form.addParam('numberOfIters', IntParam, label='Iterations', default=5, help="Number of iterations per round")
+        form.addParam('numberOfRefs', IntParam, label='Number of references for MRA', default=1,
+                      help="Number of references for multi-reference alignment(MRA)")
+        form.addParam('pca', BooleanParam, label='Perform PCA', default=False, expertLevel=LEVEL_ADVANCED,
+                      help="If selected, principal component analysis alignment is performed")
 
         form.addSection(label='Templates')
-        form.addParam('generateTemplate', BooleanParam, default=True,
-                      label='Generate a template reference:', help="Generate a reference template based on parameters")
+        form.addParam('generateTemplate', BooleanParam, default=False,
+                      label='Generate reference templates:', help="Generate a reference template based on parameters")
         form.addParam('templateRef', PointerParam, label="Template",
                       condition="not generateTemplate", pointerClass='Volume',
                       help='Template to be used')
@@ -130,15 +135,17 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         fhTable = open(fnTable, 'w')
         writeDynTable(fhTable, inputVols)
         fhTable.close()
-        # TODO: take table if exists as mltomo does with docfile
-        self.dynamoCommands = self._getExtraPath("commands.doc")
-        fhCommands = open(self.dynamoCommands, 'w')
-        content = "dcp.new('%s','table','%s','data','%s','masks','default','gui',0);" % (self.projName, fnTable, fnDir) \
-                  + "dvcheck('%s');" % self.projName
-                  # "dvput('%s', 'nref_r1', '%s');" % (self.projName, self.numberOfRefs) #+ \
-                  # "dvput('%s', 'mra_r1', 1);" % self.projName + \
+        pcaInt = int(self.pca.get())
+        fhCommands = open(self._getExtraPath("commands.doc"), 'w')
+        content = "dcp.new('%s','table','initial.tbl','data','data','masks','default','gui',0);" % self.projName + \
+                  "dvput('%s', 'ite_r1', '%s');" % (self.projName, self.numberOfIters) + \
+                  "dvput('%s', 'mra', %s);" % (self.projName, self.numberOfRefs) + \
+                  "dvput('%s', 'pcas', %d);" % (self.projName, pcaInt) + \
+                  "dvput('%s', 'template', '%s');" % (self.projName, self.templateRef) + \
+                  "dvcheck('%s');" % self.projName
+                  # "dvput('%s', 'template', '%s');" % (self.projName, self.templateRef) + \
+                  # "dvput('%s', 'nref_r1', '%s');" % (self.projName, self.numberOfRefs) + \
                   # "dvput('%s', 'mask', 1);" % self.projName + \
-                  # "dvput('%s', 'ite_r1', '%s');" % (self.projName, self.numberOfIters) + \
                   # "dvput('%s', 'cr', '%s');" % (self.projName, self.coneAperture) + \
                   # "dvput('%s', 'cs', '%s');" % (self.projName, self.coneSampling) + \
                   # "dvput('%s', 'inplane_range', 0);" % self.projName + \
@@ -166,8 +173,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         # dvput('%s', 'matlab_workers_average', 6);
 
     def alignStep(self):
-        args = ' %s' % self.dynamoCommands
-        Plugin.runDynamo(self, args)
+        Plugin.runDynamo(self, 'commands.doc', cwd=self._getExtraPath())
 
     def createOutput(self):
         self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')  # Change to "real.tbl"

@@ -48,6 +48,8 @@ class TestSubTomogramsAlignment(BaseTest):
                                       samplingRate=5)
         self.launchProtocol(protImport)
 
+        particles = protImport.outputSubTomograms
+
         protMask = self.newProtocol(XmippProtCreateMask3D,
                                     inputVolume=protImport,
                                     source=0, volumeOperation=0,
@@ -60,8 +62,11 @@ class TestSubTomogramsAlignment(BaseTest):
         import time
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      projName=time.time(),
-                                     inputVolumes=protImport.outputSubTomograms,
+                                     inputVolumes=particles,
+                                     numberOfIters=1,
+                                     templateRef=protImport,
                                      alignmentMask=protMask.outputMask)
+        alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.outputSubtomograms,
                              "There was a problem with SetOfSubtomograms output")
