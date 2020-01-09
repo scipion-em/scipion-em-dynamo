@@ -62,35 +62,31 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       help="If selected, principal component analysis alignment is performed")
 
         form.addSection(label='Templates')
-        form.addParam('generateTemplate', BooleanParam, default=False,
-                      label='Generate reference templates:', help="Generate a reference template based on parameters")
-        form.addParam('templateRef', PointerParam, label="Template",
-                      condition="not generateTemplate", pointerClass='Volume',
-                      help='Template to be used')
+        form.addParam('generateTemplate', BooleanParam, default=False, label='Generate reference templates:',
+                      help="Generate a reference template based on parameters")
+        form.addParam('templateRef', PointerParam, label="Template", condition="not generateTemplate",
+                      pointerClass='Volume', allowsNull=True, help='Template to be used')
         form.addParam('useChosenSoP', BooleanParam, label='Use random chosen set of particles', default=False,
                       condition="generateTemplate", help="Use a random set of particles")
         form.addParam('numberOfParticles', IntParam, label='Number of references', default=50,
-                      condition="generateTemplate and useChosenSoP",
-                      help="Number of references to generate automatically")
+                      condition="generateTemplate and useChosenSoP", help="Number of references to generate "
+                                                                          "automatically")
         form.addParam('useRandomTable', BooleanParam, label='Use a random table (rotate particles randomly)',
                       default=False, condition="generateTemplate", help="")
         form.addParam('compensateMissingWedge', BooleanParam, label='Compensate for missing wedge', default=False,
                       condition="generateTemplate", help="")
 
         form.addSection(label='Masks')
-        form.addParam('alignmentMask', PointerParam, label="Alignment mask",
-                      pointerClass='VolumeMask',
-                      help='Mask for the alignment')
-        form.addParam('classificationMask', PointerParam, label="Classification mask",
-                      pointerClass='VolumeMask', allowsNull=True,
-                      help='Mask for the classification steps')
-        form.addParam('fourierMask', PointerParam, label="Fourier mask on template",
-                      pointerClass='VolumeMask', allowsNull=True,
-                      help='A binary mask describing which fourier components of'
-                           ' the initial average are known.')
-        form.addParam('fscMask', PointerParam, label="FSC mask",
-                      pointerClass='VolumeMask', allowsNull=True, help='A direct space mask that will be imposed onto '
-                                                                       'any couple of volumes when computing their FSC.')
+        form.addParam('mask', PointerParam, label="Alignment mask", pointerClass='VolumeMask', allowsNull=True,
+                      help='Mask for the alignment (mask)')
+        form.addParam('cmask', PointerParam, label="Classification mask", pointerClass='VolumeMask', allowsNull=True,
+                      help='Mask for the classification steps (cmask)')
+        form.addParam('fmask', PointerParam, label="Fourier mask on template", pointerClass='VolumeMask',
+                      allowsNull=True, help='A binary mask describing which fourier components of the initial average '
+                                            'are known (fmask)')
+        form.addParam('smask', PointerParam, label="FSC mask", pointerClass='VolumeMask', allowsNull=True,
+                      help='A direct space mask that will be imposed onto any couple of volumes when computing their '
+                           'FSC (smask)')
 
         form.addSection(label='Angular scanning')
         form.addParam('coneAperture', IntParam, label='Cone aperture', default=360, help=" ")
@@ -116,7 +112,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addSection(label='Classification')
         form.addParam('ccmatrix', BooleanParam, label='Compute  cross-correlation matrix', default=False, help=" ")
         form.addParam('ccmatrixType', StringParam, label='Cross-correlation matrix type', default='bin 1; sym c1;', help=" ")
-        form.addParam('ccmatrixBatch', IntParam, label='Cross-correlation matrix batch', default=10, expertLevel=LEVEL_ADVANCED, help=" ")
+        form.addParam('ccmatrixBatch', IntParam, label='Cross-correlation matrix batch', default=10,
+                      expertLevel=LEVEL_ADVANCED, help=" ")
 
     # --------------------------- INSERT steps functions --------------------------------------------
 
@@ -165,21 +162,27 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             writeVolume(self.templateRef.get(), join(self._getExtraPath(), 'template'))
             content += "dvput('%s', 'template', 'template.mrc');" % self.projName
         else:
-            pass
-            # command for generating template with parameters in the form
-            # content += ...
+            content += "dvput('%s', 'template', 'default');" % self.projName
 
-        if self.alignmentMask.get() is not None:
-            writeVolume(self.alignmentMask.get(), join(self._getExtraPath(), 'alignMask'))
-            content += "dvput('%s', 'mask', 'alignMask.mrc');" % self.projName
-        else:
-            pass
-            # default mask (there are 3 masks!!, if for each one?)
-            # content += ...
+        if self.mask.get() is not None:
+            writeVolume(self.mask.get(), join(self._getExtraPath(), 'mask'))
+            content += "dvput('%s', 'mask', 'mask.mrc');" % self.projName
 
-            # 'mask', 'Ellipsoid.em', 'cmask', 'my_mask.em', 'fmask', 'settings', 'smask', 'smoothingMaskOnes.em'
-            # 'mask', 'Ellipsoid.em', 'cmask', 'default', 'fmask', 'default', 'smask', 'default'
-            
+        if self.cmask.get() is not None:
+            writeVolume(self.cmask.get(), join(self._getExtraPath(), 'cmask'))
+            content += "dvput('%s', 'cmask', 'cmask.mrc');" % self.projName
+
+        if self.fmask.get() is not None:
+            writeVolume(self.fmask.get(), join(self._getExtraPath(), 'fmask'))
+            content += "dvput('%s', 'fmask', 'fmask.mrc');" % self.projName
+
+        if self.smask.get() is not None:
+            writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
+            content += "dvput('%s', 'smask', 'smask.mrc');" % self.projName
+
+
+
+
         # # System Parameters
         # dvput('%s', 'destination', 'matlab_gpu');
         # dvput('%s', 'cores', 1);

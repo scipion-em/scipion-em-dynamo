@@ -63,9 +63,9 @@ class TestSubTomogramsAlignment(BaseTest):
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      projName=time.time(),
                                      inputVolumes=particles,
-                                     numberOfIters=1,
-                                     templateRef=protImport,
-                                     alignmentMask=protMask.outputMask)
+                                     numberOfIters=3,
+                                     templateRef=protImport)
+                                     # mask=protMask.outputMask)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.outputSubtomograms,
