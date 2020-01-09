@@ -46,8 +46,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _defineParams(self, form):
         form.addSection(label='Input subtomograms')
-        form.addParam('projName', StringParam, label='Project Name',
-                      help='Name for the dynamo align project that will be generated')
         form.addParam('inputVolumes', PointerParam, pointerClass="SetOfSubTomograms", label='Set of volumes',
                       help="Set of subtomograms to align with dynamo")
         form.addParam('numberOfRounds', IntParam, label='Rounds', default=1, expertLevel=LEVEL_ADVANCED,
@@ -137,57 +135,55 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         pcaInt = int(self.pca.get())
         # mraInt = int(self.mra.get())
         dim, _, _ = self.inputVolumes.get().getDimensions()
+        projName = 'dynamoAlignmentProject'
 
         fhCommands = open(self._getExtraPath("commands.doc"), 'w')
-        content = "dcp.new('%s','table','initial.tbl','data','data','gui',0);" % self.projName + \
-                  "dvput('%s', 'dim_r1', '%s');" % (self.projName, dim) + \
-                  "dvput('%s', 'ite_r1', '%s');" % (self.projName, self.numberOfIters) + \
-                  "dvput('%s', 'pcas', %d);" % (self.projName, pcaInt) + \
-                  "dvput('%s', 'cr', '%s');" % (self.projName, self.coneAperture) + \
-                  "dvput('%s', 'cs', '%s');" % (self.projName, self.coneSampling)
+        content = "dcp.new('%s','table','initial.tbl','data','data','gui',0);" % projName + \
+                  "dvput('%s', 'dim_r1', '%s');" % (projName, dim) + \
+                  "dvput('%s', 'ite_r1', '%s');" % (projName, self.numberOfIters) + \
+                  "dvput('%s', 'pcas', %d);" % (projName, pcaInt) + \
+                  "dvput('%s', 'cr', '%s');" % (projName, self.coneAperture) + \
+                  "dvput('%s', 'cs', '%s');" % (projName, self.coneSampling)
 
-        # "dvput('%s', 'nref_r1', '%s');" % (self.projName, self.numberOfRefs) + \
-        # "dvput('%s', 'mra', %d);" % (self.projName, self.mra) + \
+        # "dvput('%s', 'nref_r1', '%s');" % (projName, self.numberOfRefs) + \
+        # "dvput('%s', 'mra', %d);" % (projName, self.mra) + \
 
-        # "dvput('%s', 'inplane_range', 0);" % self.projName + \
+        # "dvput('%s', 'inplane_range', 0);" % projName + \
         # "dvput('%s', 'inplane_sampling', 1);" % vprojName + \
-        # "dvput('%s', 'refine', '%s');" % (self.projName, self.refine) + \
-        # "dvput('%s', 'low', 10);" % self.projName + \
-        # "dvput('%s', 'sym', 'c57');" % self.projName + \
-        # "dvput('%s', 'dim', '%s');" % (self.projName, self.inputVolumes.get().getDimensions()) + \
-        # "dvput('%s', 'area_search', 10);" % self.projName + \
-        # "dvput('%s', 'area_search_modus', 1);" % self.projName + \
+        # "dvput('%s', 'refine', '%s');" % (projName, self.refine) + \
+        # "dvput('%s', 'low', 10);" % projName + \
+        # "dvput('%s', 'sym', 'c57');" % projName + \
+        # "dvput('%s', 'dim', '%s');" % (projName, self.inputVolumes.get().getDimensions()) + \
+        # "dvput('%s', 'area_search', 10);" % projName + \
+        # "dvput('%s', 'area_search_modus', 1);" % projName + \
 
         if self.templateRef.get() is not None:
             writeVolume(self.templateRef.get(), join(self._getExtraPath(), 'template'))
-            content += "dvput('%s', 'template', 'template.mrc');" % self.projName
+            content += "dvput('%s', 'template', 'template.mrc');" % projName
         else:
-            content += "dvput('%s', 'template', 'default');" % self.projName
+            content += "dvput('%s', 'template', 'default');" % projName
 
         if self.mask.get() is not None:
             writeVolume(self.mask.get(), join(self._getExtraPath(), 'mask'))
-            content += "dvput('%s', 'mask', 'mask.mrc');" % self.projName
+            content += "dvput('%s', 'mask', 'mask.mrc');" % projName
 
         if self.cmask.get() is not None:
             writeVolume(self.cmask.get(), join(self._getExtraPath(), 'cmask'))
-            content += "dvput('%s', 'cmask', 'cmask.mrc');" % self.projName
+            content += "dvput('%s', 'cmask', 'cmask.mrc');" % projName
 
         if self.fmask.get() is not None:
             writeVolume(self.fmask.get(), join(self._getExtraPath(), 'fmask'))
-            content += "dvput('%s', 'fmask', 'fmask.mrc');" % self.projName
+            content += "dvput('%s', 'fmask', 'fmask.mrc');" % projName
 
         if self.smask.get() is not None:
             writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
-            content += "dvput('%s', 'smask', 'smask.mrc');" % self.projName
-
-
-
+            content += "dvput('%s', 'smask', 'smask.mrc');" % projName
 
         # # System Parameters
         # dvput('%s', 'destination', 'matlab_gpu');
         # dvput('%s', 'cores', 1);
         # dvput('%s', 'matlab_workers_average', 6);
-        content += "dvcheck('%s');dvunfold('%s');('%s')" % (self.projName, self.projName, self.projName)
+        content += "dvcheck('%s');dvunfold('%s');('%s')" % (projName, projName, projName)
         fhCommands.write(content)
         fhCommands.close()
 
