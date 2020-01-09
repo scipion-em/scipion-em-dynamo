@@ -78,6 +78,22 @@ class TestSubTomogramsAlignment(BaseTest):
                              "There was a problem with outputClassesSubtomo output")
         return alignment
 
+    def _runAlignmentWithTemplateMRA(self):
+        protImport = self._runPreviousProtocols()
+        particles = protImport.outputSubTomograms
+        alignment = self.newProtocol(DynamoSubTomoMRA,
+                                     inputVolumes=particles,
+                                     numberOfIters=3,
+                                     templateSetRef=particles,
+                                     mra=True,
+                                     nref=4)
+        self.launchProtocol(alignment)
+        self.assertIsNotNone(alignment.outputSubtomograms,
+                             "There was a problem with SetOfSubtomograms output")
+        self.assertIsNotNone(alignment.outputClassesSubtomo,
+                             "There was a problem with outputClassesSubtomo output")
+        return alignment
+
     def _runAlignmentWithMask(self):
         protImport = self._runPreviousProtocols()
         particles = protImport.outputSubTomograms
@@ -95,6 +111,34 @@ class TestSubTomogramsAlignment(BaseTest):
                                      numberOfIters=3,
                                      templateRef=protImport,
                                      mask=protMask.outputMask)
+        alignment.templateRef.setExtended("outputSubTomograms.1")
+        self.launchProtocol(alignment)
+        self.assertIsNotNone(alignment.outputSubtomograms,
+                             "There was a problem with SetOfSubtomograms output")
+        self.assertIsNotNone(alignment.outputClassesSubtomo,
+                             "There was a problem with outputClassesSubtomo output")
+        return alignment
+
+    def _runAlignmentWithMasks(self):
+        protImport = self._runPreviousProtocols()
+        particles = protImport.outputSubTomograms
+        protMask = self.newProtocol(XmippProtCreateMask3D,
+                                    inputVolume=protImport,
+                                    source=0, volumeOperation=0,
+                                    threshold=0.4)
+        protMask.inputVolume.setExtended("outputSubTomograms.1")
+        protMask.setObjLabel('threshold mask')
+        self.launchProtocol(protMask)
+        self.assertIsNotNone(protMask.outputMask,
+                             "There was a problem with create mask from volume")
+        alignment = self.newProtocol(DynamoSubTomoMRA,
+                                     inputVolumes=particles,
+                                     numberOfIters=3,
+                                     templateRef=protImport,
+                                     mask=protMask.outputMask,
+                                     cmask=protMask.outputMask,
+                                     fmask=protMask.outputMask,
+                                     smask=protMask.outputMask)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.outputSubtomograms,
@@ -126,6 +170,26 @@ class TestSubTomogramsAlignment(BaseTest):
 
     def test_alignmentWithMask(self):
         dynamoAlignment = self._runAlignmentWithMask()
+        outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
+        outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
+        self.assertTrue(outputSubtomos)
+        self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
+        self.assertTrue(outputClasses)
+        # self.assertTrue(outputClasses.hasRepresentatives())
+        return dynamoAlignment
+
+    def test_alignmentWithMasks(self):
+        dynamoAlignment = self._runAlignmentWithMasks()
+        outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
+        outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
+        self.assertTrue(outputSubtomos)
+        self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
+        self.assertTrue(outputClasses)
+        # self.assertTrue(outputClasses.hasRepresentatives())
+        return dynamoAlignment
+
+    def test_alignmentWithTemplateMRA(self):
+        dynamoAlignment = self._runAlignmentWithTemplateMRA()
         outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
         outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
         self.assertTrue(outputSubtomos)
