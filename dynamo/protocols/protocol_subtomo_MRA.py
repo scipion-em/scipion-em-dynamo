@@ -213,16 +213,16 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addParam('lim', StringParam, label='Area search', default='4 4 4', expertLevel=LEVEL_ADVANCED,
                       help='Restricts the search area to an ellipsoid centered and oriented in the last found position.'
                            ' The three parameters are the semiaxes of the ellipsoid. If a single parameter is '
-                           'introduced, the ellipsoidcollapses into a sphere. If no restriction should be imposed, put'
+                           'introduced, the ellipsoid collapses into a sphere. If no restriction should be imposed, put'
                            ' a zero on the "area search modus" parameter')
         form.addParam('limm', IntParam, label='Area search modus', default=0, expertLevel=LEVEL_ADVANCED,
                       help='States how exactly the shifts (area search) will be interpreted 0:  no limitations (can '
                            'easily produce artifacts if the initial reference is bad) 1:  limits are understood from '
                            'the center of the particle cube. 2:  limits are understood from the previous estimation on '
                            'the particle position (i.e., the shifts available in the table) With this option, the '
-                           'originof the shifts changes at every iteration. 3:  limis are understood from the '
+                           'origin of the shifts changes at every iteration. 3:  limits are understood from the '
                            'estimation provided for the first iteration of the round. The origin of the shifts will '
-                           'change at each round. 4:  limis are understood from the estimation provided for the first '
+                           'change at each round. 4:  limits are understood from the estimation provided for the first '
                            'iteration')
 
     # --------------------------- INSERT steps functions --------------------------------------------
