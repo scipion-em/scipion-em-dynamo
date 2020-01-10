@@ -48,6 +48,9 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addSection(label='Input subtomograms')
         form.addParam('inputVolumes', PointerParam, pointerClass="SetOfSubTomograms", label='Set of volumes',
                       help="Set of subtomograms to align with dynamo")
+        form.addParam('sym', StringParam, default='c1', label='Symmetry group',
+                      help="Specify the article's symmetry. Symmetrization is applied at the beginning of the round to "
+                           "the input reference.")
         form.addParam('numberOfRounds', IntParam, label='Rounds', default=1, expertLevel=LEVEL_ADVANCED,
                       help="Number of rounds (from 1 to 8). Each round consists in X iterations with the same "
                            "parameters, but parameters could vary in different rounds")
@@ -88,8 +91,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       help='Needs to have the same dimmensionality as the template. It does NOT need to be smoothened. '
                            'A hard mask (only 0 and 1 values) is expected for the Roseman"s-like normalization')
         form.addParam('fmask', PointerParam, label="Fourier mask on template", pointerClass='VolumeMask',
-                      allowsNull=True, help='The fmask indicates which fourier coefficients are present at the starting'
-                                            ' reference volume. The file should contain only ones or zeros.')
+                      allowsNull=True, condition="not mra",
+                      help='The fmask indicates which fourier coefficients are present at the starting reference volume'
+                           '. The file should contain only ones or zeros.')
+        form.addParam('setfmask', PointerParam, label="Fourier mask on template", pointerClass='SetOfVolumes',
+                      allowsNull=True, condition="mra",
+                      help='The fmask indicates which fourier coefficients are present at the starting reference volume'
+                           '. The file should contain only ones or zeros.')
         form.addParam('smask', PointerParam, label="FSC mask", pointerClass='VolumeMask', allowsNull=True,
                       help='A direct space mask that will be imposed onto any couple of volumes when computing their '
                            'FSC (smask)')
@@ -161,20 +169,61 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       help="Controls the size of the angular neighborhood during the local refinement of the angular "
                            "grid.")
 
-        form.addSection(label='Shift/Threshold')
-        form.addParam('shiftLims', StringParam, label='Shift limits', default='1 1 1', help=" ")
-        form.addParam('shiftWay', IntParam, label='Shift limiting way', default=0, help=" ")
-        form.addParam('separation', IntParam, label='Separation in tomogram', default=0, help=" ")
-        form.addParam('threshold', FloatParam, label='Threshold', default=0.2, help=" ")
-        form.addParam('thresholdMode', IntParam, label='Threshold modus', default=0, help=" ")
-        form.addParam('threshold2', FloatParam, label='Second threshold', default=0.2, expertLevel=LEVEL_ADVANCED, help=" ")
-        form.addParam('thresholdMode2', IntParam, label='Second threshold modus', default=0, expertLevel=LEVEL_ADVANCED, help=" ")
-
-        form.addSection(label='Classification')
-        form.addParam('ccmatrix', BooleanParam, label='Compute  cross-correlation matrix', default=False, help=" ")
-        form.addParam('ccmatrixType', StringParam, label='Cross-correlation matrix type', default='bin 1; sym c1;', help=" ")
-        form.addParam('ccmatrixBatch', IntParam, label='Cross-correlation matrix batch', default=10,
-                      expertLevel=LEVEL_ADVANCED, help=" ")
+        form.addSection(label='Threshold')
+        form.addParam('separation', IntParam, label='Separation in tomogram', default=0,
+                      help='When tuned to  positive number, it will check the relative positions (positions in the '
+                           'tomogram+shifts) of all the particles in each tomogram separately. Whenever two particles '
+                           'are closer together than "separation_in_tomogram", only the particle with the higher '
+                           'correlation will stay.')
+        form.addParam('threshold', FloatParam, label='Threshold', default=0.2,
+                      help='Different thresholding policies can be used in order to select which particles are averaged'
+                           ' in view of their CC (cross correlation value) . The value of the thresholding parameter '
+                           'defined here  will be interpreted differently depending on the "threshold_modus"')
+        form.addParam('thresholdMode', IntParam, label='Threshold modus', default=1,
+                      help='Possible values of the thresholding policy "threshold_modus": 0: no thesholding policy 1: '
+                           'THRESHOLD is an absolute threshold (only particles with CC above this value are selected).'
+                           ' 2: efective threshold = mean(CC) * THRESHOLD. 3: efective threshold = mean(CC) +std(CC)*'
+                           'THRESHOLD. 4: THRESHOLD is the total number of particle (ordered by CC ). 5: THRESHOLD '
+                           'ranges between 0 and 1  and sets the fraction of particles. * 11,21,31,34,41,51: select the'
+                           ' same particles as 1,2,3,4 or 5, BUT non selected particles will be excluded: - from '
+                           'averaging in the present iteration,and - ALSO from alignment in the next iteration (unlike '
+                           '1,2,3,4,5).')
+        form.addParam('threshold2', FloatParam, label='Second threshold', default=0.2, expertLevel=LEVEL_ADVANCED,
+                      help="Thresholding II is operated against the average produced by the particles that survived the"
+                           " first thresholding.")
+        form.addParam('thresholdMode2', IntParam, label='Second threshold modus', default=0, expertLevel=LEVEL_ADVANCED,
+                      help=" ")
+        form.addParam('ccmatrix', BooleanParam, label='Compute  cross-correlation matrix', default=False,
+                      help="Computation of a Cross-Correlation matrix among the aligned particles.")
+        form.addParam('ccmatrixType', StringParam, label='Cross-correlation matrix type', default='align',
+                      condition="ccmatrix", expertLevel=LEVEL_ADVANCED,
+                      help="string with three characters, each position controling a different aspect: thresholding, "
+                           "symmetrization, compensation")
+        form.addParam('ccmatrixBatch', IntParam, label='Cross-correlation matrix batch', default=128,
+                      expertLevel=LEVEL_ADVANCED,
+                      help="Number of particles to be kept in memory simultaneously during the computation of the "
+                           "ccmatrix. The larger this number, the more efficient the algorithm performance, as more "
+                           "computations can be kept for reuse.However, trying to keep all the particles in memory can "
+                           "lead to saturate it,blocking the CPU. Additionally, a small batch allows to divide the "
+                           "matrix in more blocks. This might be useful in parallel computations.")
+        form.addParam('low', IntParam, label='Low frequency', default=32,
+                      expertLevel=LEVEL_ADVANCED, help='Cut off frequency for low pass filtering')
+        form.addParam('high', IntParam, label='High frequency', default=2,
+                      expertLevel=LEVEL_ADVANCED, help='Cut off frequency for high pass filtering')
+        form.addParam('lim', StringParam, label='Area search', default='4 4 4', expertLevel=LEVEL_ADVANCED,
+                      help='Restricts the search area to an ellipsoid centered and oriented in the last found position.'
+                           ' The three parameters are the semiaxes of the ellipsoid. If a single parameter is '
+                           'introduced, the ellipsoidcollapses into a sphere. If no restriction should be imposed, put'
+                           ' a zero on the "area search modus" parameter')
+        form.addParam('limm', IntParam, label='Area search modus', default=0, expertLevel=LEVEL_ADVANCED,
+                      help='States how exactly the shifts (area search) will be interpreted 0:  no limitations (can '
+                           'easily produce artifacts if the initial reference is bad) 1:  limits are understood from '
+                           'the center of the particle cube. 2:  limits are understood from the previous estimation on '
+                           'the particle position (i.e., the shifts available in the table) With this option, the '
+                           'originof the shifts changes at every iteration. 3:  limis are understood from the '
+                           'estimation provided for the first iteration of the round. The origin of the shifts will '
+                           'change at each round. 4:  limis are understood from the estimation provided for the first '
+                           'iteration')
 
     # --------------------------- INSERT steps functions --------------------------------------------
 
@@ -187,23 +236,21 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def convertInputStep(self):
         inputVols = self.inputVolumes.get()
-        fnDir = self._getExtraPath("data")
-        fnTable = self._getExtraPath("initial.tbl")
-        makePath(fnDir)
-        fnRoot = join(fnDir, "particle_")
+        fnDirData = self._getExtraPath("data")
+        makePath(fnDirData)
+        fnRoot = join(fnDirData, "particle_")
         writeSetOfVolumes(inputVols, fnRoot)
-        fhTable = open(fnTable, 'w')
-        writeDynTable(fhTable, inputVols)
-        fhTable.close()
         pcaInt = int(self.pca.get())
         mraInt = int(self.mra.get())
+        ccmatrixInt = int(self.ccmatrix.get())
         dim, _, _ = self.inputVolumes.get().getDimensions()
         projName = 'dynamoAlignmentProject'
-
         fhCommands = open(self._getExtraPath("commands.doc"), 'w')
-        content = "dcp.new('%s','table','initial.tbl','data','data','gui',0);" % projName + \
+        content = "dcp.new('%s','table', 'initial.tbl','data','data','gui',0);" % projName + \
                   "dvput('%s', 'dim_r1', '%s');" % (projName, dim) + \
+                  "dvput('%s', 'sym', '%s');" % (projName, self.sym) + \
                   "dvput('%s', 'ite_r1', '%s');" % (projName, self.numberOfIters) + \
+                  "dvput('%s', 'mra', %s);" % (projName, mraInt) + \
                   "dvput('%s', 'pcas', %d);" % (projName, pcaInt) + \
                   "dvput('%s', 'cr', '%s');" % (projName, self.cr) + \
                   "dvput('%s', 'cs', '%s');" % (projName, self.cs) + \
@@ -211,19 +258,32 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                   "dvput('%s', 'ccp', '%s');" % (projName, self.ccp) + \
                   "dvput('%s', 'rf', '%s');" % (projName, self.rf) + \
                   "dvput('%s', 'rff', '%s');" % (projName, self.rff) + \
-                  "dvput('%s', 'inplane_range', '%s');" % (projName, self.inplane_range) + \
-                  "dvput('%s', 'inplane_sampling', '%s');" % (projName, self.inplane_sampling) + \
-                  "dvput('%s', 'inplane_flip', '%s');" % (projName, self.inplane_flip) + \
-                  "dvput('%s', 'inplane_check_peak', '%s');" % (projName, self.inplane_check_peak) + \
-                  "dvput('%s', 'mra', %s);" % (projName, mraInt)
-
-                # "dvput('%s', 'low', 10);" % projName + \
-                # "dvput('%s', 'sym', 'c57');" % projName + \
-                # "dvput('%s', 'dim', '%s');" % (projName, self.inputVolumes.get().getDimensions()) + \
-                # "dvput('%s', 'area_search', 10);" % projName + \
-                # "dvput('%s', 'area_search_modus', 1);" % projName + \
+                  "dvput('%s', 'ir', '%s');" % (projName, self.inplane_range) + \
+                  "dvput('%s', 'is', '%s');" % (projName, self.inplane_sampling) + \
+                  "dvput('%s', 'if', '%s');" % (projName, self.inplane_flip) + \
+                  "dvput('%s', 'icp', '%s');" % (projName, self.inplane_check_peak) + \
+                  "dvput('%s', 'thr', %s);" % (projName, self.threshold) + \
+                  "dvput('%s', 'thrm', %s);" % (projName, self.thresholdMode) + \
+                  "dvput('%s', 'thr2', %s);" % (projName, self.threshold2) + \
+                  "dvput('%s', 'thr2m', %s);" % (projName, self.thresholdMode2) + \
+                  "dvput('%s', 'ccms', %s);" % (projName, ccmatrixInt) + \
+                  "dvput('%s', 'ccmt', '%s');" % (projName, self.ccmatrixType) + \
+                  "dvput('%s', 'batch', '%s');" % (projName, self.ccmatrixBatch) +  \
+                  "dvput('%s', 'stm', '%s');" % (projName, self.separation) + \
+                  "dvput('%s', 'low', '%s');" % (projName, self.low) + \
+                  "dvput('%s', 'high', '%s');" % (projName, self.high) + \
+                  "dvput('%s', 'lim', '%s');" % (projName, self.lim) + \
+                  "dvput('%s', 'limm', '%s');" % (projName, self.limm)
 
         if self.mra:
+            fnDirTables = self._getExtraPath("tables")
+            makePath(fnDirTables)
+            for i, _ in enumerate(self.setfmask.get().iterItems()):
+                fnRootT = join(fnDirTables, "table_initial_ref_00%s" % str(int(i)+1))
+                fhTable = open(fnRootT, 'w')
+                writeDynTable(fhTable, inputVols)
+                fhTable.close()
+            content += "dvput('%s', 'table', 'tables');" % projName
             content += "dvput('%s', 'nref', '%s');" % (projName, self.nref)
             if self.templateSetRef.get() is not None and not self.generateTemplate.get():
                 fnDirTemps = self._getExtraPath("templates")
@@ -235,6 +295,20 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 pass
                 # Generate templates
 
+            if self.setfmask.get() is not None:
+                fnDirFmasks = self._getExtraPath("fmasks")
+                makePath(fnDirFmasks)
+                fnRootf = join(fnDirFmasks, "fmask_initial_ref_")
+                writeSetOfVolumes(self.setfmask.get(), fnRootf)
+                content += "dvput('%s', 'fmask', 'fmasks');" % projName
+
+        else:
+            fnTable = self._getExtraPath("initial.tbl")
+            fhTable = open(fnTable, 'w')
+            writeDynTable(fhTable, inputVols)
+            fhTable.close()
+            content += "dvput('%s', 'table', 'initial.tbl');" % projName
+
         if self.templateRef.get() is not None and not self.mra.get():
             writeVolume(self.templateRef.get(), join(self._getExtraPath(), 'template'))
             content += "dvput('%s', 'template', 'template.mrc');" % projName
@@ -245,15 +319,12 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         if self.mask.get() is not None:
             writeVolume(self.mask.get(), join(self._getExtraPath(), 'mask'))
             content += "dvput('%s', 'mask', 'mask.mrc');" % projName
-
         if self.cmask.get() is not None:
             writeVolume(self.cmask.get(), join(self._getExtraPath(), 'cmask'))
             content += "dvput('%s', 'cmask', 'cmask.mrc');" % projName
-
         if self.fmask.get() is not None:
             writeVolume(self.fmask.get(), join(self._getExtraPath(), 'fmask'))
             content += "dvput('%s', 'fmask', 'fmask.mrc');" % projName
-
         if self.smask.get() is not None:
             writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
             content += "dvput('%s', 'smask', 'smask.mrc');" % projName

@@ -86,6 +86,7 @@ class TestSubTomogramsAlignment(BaseTest):
                                      numberOfIters=3,
                                      templateSetRef=particles,
                                      mra=True,
+                                     setfmask=particles,
                                      nref=4)
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.outputSubtomograms,
