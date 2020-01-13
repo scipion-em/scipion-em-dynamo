@@ -96,9 +96,9 @@ def readDynTable(self, item):
     z = nline.split()[25]
     coordinate3d = Coordinate3D()
     coordinate3d.setVolId(volId)
-    coordinate3d.setX(x)
-    coordinate3d.setY(y)
-    coordinate3d.setZ(z)
+    coordinate3d.setX(float(x))
+    coordinate3d.setY(float(y))
+    coordinate3d.setZ(float(z))
     item.setCoordinate3D(coordinate3d)
     classId = nline.split()[21]
     item.setClassId(classId)

@@ -53,8 +53,7 @@ class TestSubTomogramsAlignment(BaseTest):
         protImport = self._runPreviousProtocols()
         particles = protImport.outputSubTomograms
         alignment = self.newProtocol(DynamoSubTomoMRA,
-                                     inputVolumes=particles,
-                                     numberOfIters=3)
+                                     inputVolumes=particles)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.outputSubtomograms,
@@ -68,7 +67,6 @@ class TestSubTomogramsAlignment(BaseTest):
         particles = protImport.outputSubTomograms
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
-                                     numberOfIters=3,
                                      templateRef=protImport)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
@@ -83,7 +81,6 @@ class TestSubTomogramsAlignment(BaseTest):
         particles = protImport.outputSubTomograms
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
-                                     numberOfIters=3,
                                      templateSetRef=particles,
                                      mra=True,
                                      setfmask=particles,
@@ -109,7 +106,6 @@ class TestSubTomogramsAlignment(BaseTest):
                              "There was a problem with create mask from volume")
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
-                                     numberOfIters=3,
                                      templateRef=protImport,
                                      mask=protMask.outputMask)
         alignment.templateRef.setExtended("outputSubTomograms.1")
@@ -134,7 +130,6 @@ class TestSubTomogramsAlignment(BaseTest):
                              "There was a problem with create mask from volume")
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
-                                     numberOfIters=3,
                                      templateRef=protImport,
                                      mask=protMask.outputMask,
                                      cmask=protMask.outputMask,
