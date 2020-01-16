@@ -246,7 +246,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         dim, _, _ = self.inputVolumes.get().getDimensions()
         projName = 'dynamoAlignmentProject'
         fhCommands = open(self._getExtraPath("commands.doc"), 'w')
-        content = "dcp.new('%s','table', 'initial.tbl','data','data','gui',0);" % projName + \
+        content = "dcp.new('%s','data','data','gui',0);" % projName + \
                   "dvput('%s', 'dim_r1', '%s');" % (projName, dim) + \
                   "dvput('%s', 'sym', '%s');" % (projName, self.sym) + \
                   "dvput('%s', 'ite_r1', '%s');" % (projName, self.numberOfIters) + \
@@ -275,16 +275,18 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                   "dvput('%s', 'lim', '%s');" % (projName, self.lim) + \
                   "dvput('%s', 'limm', '%s');" % (projName, self.limm)
 
-        if self.mra:
+        if self.mra.get():
             fnDirTables = self._getExtraPath("tables")
             makePath(fnDirTables)
-            for i, _ in enumerate(self.setfmask.get().iterItems()):
-                fnRootT = join(fnDirTables, "table_initial_ref_00%s" % str(int(i)+1))
-                fhTable = open(fnRootT, 'w')
-                writeDynTable(fhTable, inputVols)
-                fhTable.close()
-            content += "dvput('%s', 'table', 'tables');" % projName
+            # for i, _ in enumerate(self.setfmask.get().iterItems()):
+            #     fnRootT = join(fnDirTables, "table_initial_ref_00%s" % str(int(i)+1))
+            #     fhTable = open(fnRootT, 'w')
+            #     writeDynTable(fhTable, inputVols)
+            #     fhTable.close()
+            # content += "dynamo_write_multireference;"
+            # content += "dvput('%s', 'table', 'tables');" % projName
             content += "dvput('%s', 'nref', '%s');" % (projName, self.nref)
+
             if self.templateSetRef.get() is not None and not self.generateTemplate.get():
                 fnDirTemps = self._getExtraPath("templates")
                 makePath(fnDirTemps)
@@ -302,12 +304,12 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 writeSetOfVolumes(self.setfmask.get(), fnRootf)
                 content += "dvput('%s', 'fmask', 'fmasks');" % projName
 
-        else:
-            fnTable = self._getExtraPath("initial.tbl")
-            fhTable = open(fnTable, 'w')
-            writeDynTable(fhTable, inputVols)
-            fhTable.close()
-            content += "dvput('%s', 'table', 'initial.tbl');" % projName
+        # else:
+        fnTable = self._getExtraPath("initial.tbl")
+        fhTable = open(fnTable, 'w')
+        writeDynTable(fhTable, inputVols)
+        fhTable.close()
+        content += "dvput('%s', 'table', 'initial.tbl');" % projName
 
         if self.templateRef.get() is not None and not self.mra.get():
             writeVolume(self.templateRef.get(), join(self._getExtraPath(), 'template'))
