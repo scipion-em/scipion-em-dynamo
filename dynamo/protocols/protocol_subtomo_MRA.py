@@ -65,14 +65,14 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       help="Number of references for multi-reference alignment(MRA)")
         form.addParam('generateTemplate', BooleanParam, default=False, label='Generate reference templates:',
                       help="Generate a reference template based on parameters")
-        form.addParam('templateRef', PointerParam, label="Template", condition="not generateTemplate and not mra",
+        form.addParam('templateRef', PointerParam, label="Template", condition="not generateTemplate",
                       pointerClass='Volume', allowsNull=True,
                       help='The size of the template should be equal or smaller than the size of the particles. If you '
                            'pass a single file in multireference modus (MRA), Dynamo will just made copies of it.')
-        form.addParam('templateSetRef', PointerParam, label="Templates", condition="not generateTemplate and mra",
-                      pointerClass='SetOfVolumes', allowsNull=True,
-                      help='The size of the template should be equal or smaller than the size of the particles. If you '
-                           'pass a single file in multireference modus (MRA), Dynamo will just made copies of it.')
+        # form.addParam('templateSetRef', PointerParam, label="Templates", condition="not generateTemplate and mra",
+        #               pointerClass='SetOfVolumes', allowsNull=True,
+        #               help='The size of the template should be equal or smaller than the size of the particles. If you '
+        #                    'pass a single file in multireference modus (MRA), Dynamo will just made copies of it.')
         form.addParam('useChosenSoP', BooleanParam, label='Use random chosen set of particles', default=False,
                       condition="generateTemplate", help="Use a random set of particles")
         form.addParam('numberOfParticles', IntParam, label='Number of references', default=50,
@@ -91,13 +91,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       help='Needs to have the same dimmensionality as the template. It does NOT need to be smoothened. '
                            'A hard mask (only 0 and 1 values) is expected for the Roseman"s-like normalization')
         form.addParam('fmask', PointerParam, label="Fourier mask on template", pointerClass='VolumeMask',
-                      allowsNull=True, condition="not mra",
+                      allowsNull=True,
                       help='The fmask indicates which fourier coefficients are present at the starting reference volume'
                            '. The file should contain only ones or zeros.')
-        form.addParam('setfmask', PointerParam, label="Fourier mask on template", pointerClass='SetOfVolumes',
-                      allowsNull=True, condition="mra",
-                      help='The fmask indicates which fourier coefficients are present at the starting reference volume'
-                           '. The file should contain only ones or zeros.')
+        # form.addParam('setfmask', PointerParam, label="Fourier mask on template", pointerClass='SetOfVolumes',
+        #               allowsNull=True, condition="mra",
+        #               help='The fmask indicates which fourier coefficients are present at the starting reference volume'
+        #                    '. The file should contain only ones or zeros.')
         form.addParam('smask', PointerParam, label="FSC mask", pointerClass='VolumeMask', allowsNull=True,
                       help='A direct space mask that will be imposed onto any couple of volumes when computing their '
                            'FSC (smask)')
@@ -235,21 +235,25 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     # --------------------------- STEPS functions -------------------------------
 
     def convertInputStep(self):
-        inputVols = self.inputVolumes.get()
         fnDirData = self._getExtraPath("data")
         makePath(fnDirData)
         fnRoot = join(fnDirData, "particle_")
+        inputVols = self.inputVolumes.get()
         writeSetOfVolumes(inputVols, fnRoot)
         pcaInt = int(self.pca.get())
         mraInt = int(self.mra.get())
         ccmatrixInt = int(self.ccmatrix.get())
         dim, _, _ = self.inputVolumes.get().getDimensions()
         projName = 'dynamoAlignmentProject'
+        fnTable = self._getExtraPath("initial.tbl")
+        fhTable = open(fnTable, 'w')
+        writeDynTable(fhTable, inputVols)
+        fhTable.close()
         fhCommands = open(self._getExtraPath("commands.doc"), 'w')
-        content = "dcp.new('%s','data','data','gui',0);" % projName + \
-                  "dvput('%s', 'dim_r1', '%s');" % (projName, dim) + \
+        content = "dcp.new('%s','data','data','table', 'initial.tbl','gui',0);" % projName + \
+                  "dvput('%s', 'dim', '%s');" % (projName, dim) + \
                   "dvput('%s', 'sym', '%s');" % (projName, self.sym) + \
-                  "dvput('%s', 'ite_r1', '%s');" % (projName, self.numberOfIters) + \
+                  "dvput('%s', 'ite', '%s');" % (projName, self.numberOfIters) + \
                   "dvput('%s', 'mra', %s);" % (projName, mraInt) + \
                   "dvput('%s', 'pcas', %d);" % (projName, pcaInt) + \
                   "dvput('%s', 'cr', '%s');" % (projName, self.cr) + \
@@ -275,48 +279,40 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                   "dvput('%s', 'lim', '%s');" % (projName, self.lim) + \
                   "dvput('%s', 'limm', '%s');" % (projName, self.limm)
 
-        if self.mra.get():
-            fnDirTables = self._getExtraPath("tables")
-            makePath(fnDirTables)
-            # for i, _ in enumerate(self.setfmask.get().iterItems()):
-            #     fnRootT = join(fnDirTables, "table_initial_ref_00%s" % str(int(i)+1))
+        # if self.mra.get():
+            # fnDirMRA = self._getExtraPath("folder_multireference")
+            # makePath(fnDirMRA)
+            # for i in range(self.nref.get()):
+            #     fnRootT = join(self._getExtraPath(), "table_initial_ref_00%s" % str(int(i)+1))
             #     fhTable = open(fnRootT, 'w')
             #     writeDynTable(fhTable, inputVols)
             #     fhTable.close()
-            # content += "dynamo_write_multireference;"
-            # content += "dvput('%s', 'table', 'tables');" % projName
-            content += "dvput('%s', 'nref', '%s');" % (projName, self.nref)
+            # content += "dvput('%s', 'nref', '%s');" % (projName, self.nref)
 
-            if self.templateSetRef.get() is not None and not self.generateTemplate.get():
-                fnDirTemps = self._getExtraPath("templates")
-                makePath(fnDirTemps)
-                fnRoot = join(fnDirTemps, "template_initial_ref_")
-                writeSetOfVolumes(self.templateSetRef.get(), fnRoot)
-                content += "dvput('%s', 'template', 'templates');" % projName
-            else:
-                pass
-                # Generate templates
+            # if self.templateSetRef.get() is not None and not self.generateTemplate.get():
+            #     # fnDirTemps = self._getExtraPath("templates")
+            #     makePath(self._getExtraPath())
+            #     fnRoot = join(self._getExtraPath(), "template_initial_ref_")
+            #     writeSetOfVolumes(self.templateSetRef.get(), fnRoot)
+            #     content += "dvput('%s', 'template', 'templates');" % projName
+            # else:
+            #     pass
+            #     # Generate templates
 
-            if self.setfmask.get() is not None:
-                fnDirFmasks = self._getExtraPath("fmasks")
-                makePath(fnDirFmasks)
-                fnRootf = join(fnDirFmasks, "fmask_initial_ref_")
-                writeSetOfVolumes(self.setfmask.get(), fnRootf)
-                content += "dvput('%s', 'fmask', 'fmasks');" % projName
+            # if self.setfmask.get() is not None:
+            #     # fnDirFmasks = self._getExtraPath("fmasks")
+            #     makePath(self._getExtraPath())
+            #     fnRootf = join(self._getExtraPath(), "fmask_initial_ref_")
+            #     writeSetOfVolumes(self.setfmask.get(), fnRootf)
+            #     content += "dvput('%s', 'fmask', 'fmasks');" % projName
 
-        # else:
-        fnTable = self._getExtraPath("initial.tbl")
-        fhTable = open(fnTable, 'w')
-        writeDynTable(fhTable, inputVols)
-        fhTable.close()
-        content += "dvput('%s', 'table', 'initial.tbl');" % projName
-
-        if self.templateRef.get() is not None and not self.mra.get():
-            writeVolume(self.templateRef.get(), join(self._getExtraPath(), 'template'))
+        template = self.templateRef.get()
+        if template is not None:
+            writeVolume(template, join(self._getExtraPath(), 'template'))
             content += "dvput('%s', 'template', 'template.mrc');" % projName
         else:
-            pass
-            # Generate template
+            # pass
+            content += "dvput('%s', 'template', 1);" % projName
 
         if self.mask.get() is not None:
             writeVolume(self.mask.get(), join(self._getExtraPath(), 'mask'))
@@ -340,7 +336,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         Plugin.runDynamo(self, 'commands.doc', cwd=self._getExtraPath())
 
     def createOutput(self):
-        self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')  # Change to "real.tbl"
+        self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')  # Change to "real.tbl" or iter_x/...
         self.subtomoSet = self._createSetOfSubTomograms()
         inputSet = self.inputVolumes.get()
         self.subtomoSet.copyInfo(inputSet)

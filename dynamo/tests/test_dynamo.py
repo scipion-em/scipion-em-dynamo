@@ -81,10 +81,29 @@ class TestSubTomogramsAlignment(BaseTest):
         particles = protImport.outputSubTomograms
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
-                                     templateSetRef=particles,
+                                     templateRef=protImport,
                                      mra=True,
-                                     setfmask=particles,
+                                     fmask=protImport,
                                      nref=4)
+        alignment.templateRef.setExtended("outputSubTomograms.1")
+        alignment.fmask.setExtended("outputSubTomograms.1")
+        self.launchProtocol(alignment)
+        self.assertIsNotNone(alignment.outputSubtomograms,
+                             "There was a problem with SetOfSubtomograms output")
+        self.assertIsNotNone(alignment.outputClassesSubtomo,
+                             "There was a problem with outputClassesSubtomo output")
+        return alignment
+
+    def _runAlignmentWithTemplatesMRA(self):
+        protImport = self._runPreviousProtocols()
+        particles = protImport.outputSubTomograms
+        alignment = self.newProtocol(DynamoSubTomoMRA,
+                                     inputVolumes=particles,
+                                     templateRef=particles,
+                                     mra=True,
+                                     fmask=protImport,
+                                     nref=4)
+        alignment.fmask.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.outputSubtomograms,
                              "There was a problem with SetOfSubtomograms output")
@@ -97,7 +116,8 @@ class TestSubTomogramsAlignment(BaseTest):
         particles = protImport.outputSubTomograms
         protMask = self.newProtocol(XmippProtCreateMask3D,
                                     inputVolume=protImport,
-                                    source=0, volumeOperation=0,
+                                    source=0,
+                                    volumeOperation=0,
                                     threshold=0.4)
         protMask.inputVolume.setExtended("outputSubTomograms.1")
         protMask.setObjLabel('threshold mask')
@@ -152,7 +172,7 @@ class TestSubTomogramsAlignment(BaseTest):
     #     self.assertTrue(outputClasses)
     #     # self.assertTrue(outputClasses.hasRepresentatives())
     #     return dynamoAlignment
-    # UNCOMMENT WHEN TEMPLATE CAN BE GENERATED
+    #     # UNCOMMENT WHEN TEMPLATE CAN BE GENERATED
 
     def test_alignmentWithTemplate(self):
         dynamoAlignment = self._runAlignmentWithTemplate()
@@ -193,3 +213,14 @@ class TestSubTomogramsAlignment(BaseTest):
         self.assertTrue(outputClasses)
         # self.assertTrue(outputClasses.hasRepresentatives())
         return dynamoAlignment
+
+    # def test_alignmentWithTemplatesMRA(self):
+    #     dynamoAlignment = self._runAlignmentWithTemplatesMRA()
+    #     outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
+    #     outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
+    #     self.assertTrue(outputSubtomos)
+    #     self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
+    #     self.assertTrue(outputClasses)
+    #     # self.assertTrue(outputClasses.hasRepresentatives())
+    #     return dynamoAlignment
+    #     UNCOMMENT WHEN SETOFTEMPLATES CAN BE READ
