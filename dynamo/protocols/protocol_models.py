@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
@@ -30,8 +29,11 @@ import os
 from pyworkflow.em import ProtAnalysis3D
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.utils import importFromPlugin
+import pyworkflow.utils as pwutils
 
-from dynamo import Plugin
+from dynamo.viewers.views_tkinter_tree import DynamoDialog
+
+from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 
 Mesh = importFromPlugin("tomo.objects", "Mesh")
 SetOfMeshes = importFromPlugin("tomo.objects", "SetOfMeshes")
@@ -64,49 +66,22 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         # --------------------------- INSERT steps functions --------------------------------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('writeInputFile')
-        self._insertFunctionStep('modelStep')
-        self._insertFunctionStep('createOutput')
+        self._insertFunctionStep('launchDynamoGUIStep', interactive=True)
 
         # --------------------------- STEPS functions -------------------------------
+    def launchDynamoGUIStep(self):
+        tomoList = [tomo.clone() for tomo in self.inputTomograms.get().iterItems()]
 
-    def writeInputFile(self):
-        self.inputFilePath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "commands.doc")
-        tomoFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
-        catalogue = self._getExtraPath('tomos')
-        tomoFid = open(tomoFile, 'w')
-        for tomo in self.inputTomograms.get():
-            tomoFile = tomo.getFileName()
-            tomoName = os.path.basename(tomoFile)
-            tomoFid.write(tomoName + '\n')
-        tomoFid.close()
-        inputFid = open(self.inputFilePath, 'w')
-        content = 'dcm -create %s -fromvll %s \n' \
-                  'm = dmodels.membraneByLevels();\n' \
-                  'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1);\n' \
-                  'm.saveInCatalogue();\n' \
-                  'dtmslice %s -c %s \n' \
-                  'modeltrack.addOne(\'model\',m);\n' \
-                  'modeltrack.setActiveModel(1);\n' \
-                  'uiwait(dpkslicer.getHandles().figure_fastslicer); \n' \
-                  'm = dread(dcmodels(\'%s\',\'i\',1)); \n' \
-                  'writematrix([m.points m.group_labels\'], \'%s\'); \n' \
-                  'writematrix(m.mesh.tr.ConnectivityList, \'%s\'); \n' \
-                  'exit' % (catalogue, tomoFile, catalogue, tomoFile, catalogue,
-                            catalogue, self._getExtraPath(tomoName + '.txt'),
-                            self._getExtraPath(tomoName + '_connectivity.txt'))
-        inputFid.write(content)
-        inputFid.close()
+        tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "json")
 
+        self.dlg = DynamoDialog(None, self._getExtraPath(), provider=tomoProvider,)
 
-    def modelStep(self):
-        args = ' %s' % self.inputFilePath
-        dynamo = Plugin.runDynamo(self, args)
+        self._createOutput()
 
-    def createOutput(self):
+    def _createOutput(self):
         outSet = self._createSetOfMeshes()
         for tomo in self.inputTomograms.get().iterItems():
-                tomoName = os.path.basename(tomo.getFileName())
+                tomoName = pwutils.removeBaseExt(tomo.getFileName())
                 outFile = self._getExtraPath(tomoName + '.txt')
                 roi = Mesh(outFile)
                 roi.setVolume(tomo)
