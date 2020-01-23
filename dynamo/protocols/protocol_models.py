@@ -72,7 +72,7 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
     def launchDynamoGUIStep(self):
         tomoList = [tomo.clone() for tomo in self.inputTomograms.get().iterItems()]
 
-        tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "json")
+        tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "txt")
 
         self.dlg = DynamoDialog(None, self._getExtraPath(), provider=tomoProvider,)
 
