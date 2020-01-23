@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, threading
+import os, threading, shutil
 
 from pyworkflow import utils as pwutils
 from pyworkflow.utils.process import runJob
@@ -53,6 +53,8 @@ class DynamoDialog(ToolbarListDialog):
             self.after(1000, self.refresh_gui)
         else:
             self.tree.update()
+            pwutils.cleanPath(os.path.join(self.path, 'tomos'))
+            pwutils.cleanPath(os.path.join(self.path, 'tomos.ctlg'))
 
 
     def doubleClickOnTomogram(self, e=None):
@@ -78,20 +80,39 @@ class DynamoDialog(ToolbarListDialog):
         tomoFid.close()
         tomoBase = pwutils.removeBaseExt(tomo.getFileName())
         inputFid = open(inputFilePath, 'w')
-        content = 'dcm -create %s -fromvll %s \n' \
-                  'm = dmodels.membraneByLevels();\n' \
-                  'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1);\n' \
-                  'm.saveInCatalogue();\n' \
-                  'dtmslice %s -c %s \n' \
-                  'modeltrack.addOne(\'model\',m);\n' \
-                  'modeltrack.setActiveModel(1);\n' \
-                  'uiwait(dpkslicer.getHandles().figure_fastslicer); \n' \
-                  'm = dread(dcmodels(\'%s\',\'i\',1)); \n' \
-                  'writematrix([m.points m.group_labels\'], \'%s\'); \n' \
-                  'writematrix(m.mesh.tr.ConnectivityList, \'%s\'); \n' \
-                  'exit' % (catalogue, tomoFile, catalogue, tomo.getFileName(), catalogue,
-                            catalogue, os.path.join(self.path, tomoBase + '.txt'),
-                            os.path.join(self.path, tomoBase + '_connectivity.txt'))
+        if not os.path.isfile(os.path.join(self.path, tomoBase + '.txt')):
+            content = 'dcm -create %s -fromvll %s \n' \
+                      'm = dmodels.membraneByLevels()\n' \
+                      'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1)\n' \
+                      'm.saveInCatalogue()\n' \
+                      'dtmslice %s -c %s \n' \
+                      'modeltrack.addOne(\'model\',m)\n' \
+                      'modeltrack.setActiveModel(1)\n' \
+                      'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
+                      'm = dread(dcmodels(\'%s\',\'i\',1))\n' \
+                      'writematrix([m.points m.group_labels\'], \'%s\')\n' \
+                      'writematrix(m.mesh.tr.ConnectivityList, \'%s\')\n' \
+                      'exit' % (catalogue, tomoFile, catalogue, tomo.getFileName(), catalogue,
+                                catalogue, os.path.join(self.path, tomoBase + '.txt'),
+                                os.path.join(self.path, tomoBase + '_connectivity.txt'))
+        else:
+            content = 'dcm -create %s -fromvll %s \n' \
+                      'm = dmodels.membraneByLevels()\n' \
+                      'modelData = readmatrix(\'%s\')\n' \
+                      'addPoint(m, modelData(:,1:3), modelData(:,4))\n' \
+                      'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1)\n' \
+                      'm.saveInCatalogue()\n' \
+                      'dtmslice %s -c %s \n' \
+                      'modeltrack.addOne(\'model\',m)\n' \
+                      'modeltrack.setActiveModel(1)\n' \
+                      'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
+                      'm = dread(dcmodels(\'%s\',\'i\',1))\n' \
+                      'writematrix([m.points m.group_labels\'], \'%s\')\n' \
+                      'writematrix(m.mesh.tr.ConnectivityList, \'%s\')\n' \
+                      'exit' % (catalogue, tomoFile, os.path.join(self.path, tomoBase + '.txt'),
+                                catalogue, tomo.getFileName(), catalogue,
+                                catalogue, os.path.join(self.path, tomoBase + '.txt'),
+                                os.path.join(self.path, tomoBase + '_connectivity.txt'))
         inputFid.write(content)
         inputFid.close()
         return inputFilePath
