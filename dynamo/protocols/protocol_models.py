@@ -122,4 +122,4 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         ]
 
     def _citations(self):
-        pass
+        return ['CASTANODIEZ2012139']
