@@ -28,16 +28,13 @@ import os
 
 from pyworkflow.em import ProtAnalysis3D
 from pyworkflow.protocol.params import PointerParam
-from pyworkflow.utils import importFromPlugin
 import pyworkflow.utils as pwutils
 
 from dynamo.viewers.views_tkinter_tree import DynamoDialog
 
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
-
-Mesh = importFromPlugin("tomo.objects", "Mesh")
-SetOfMeshes = importFromPlugin("tomo.objects", "SetOfMeshes")
-ProtTomoBase = importFromPlugin("tomo.protocols", "ProtTomoBase")
+from tomo.objects import Mesh, SetOfMeshes
+from tomo.protocols import ProtTomoBase
 
 
 """
@@ -50,6 +47,7 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
 
     def __init__(self, **args):
         ProtAnalysis3D.__init__(self, **args)
+        self.OUTPUT_PREFIX = 'outputMeshes'
 
         # --------------------------- DEFINE param functions ------------------------
 
@@ -79,7 +77,8 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         self._createOutput()
 
     def _createOutput(self):
-        outSet = self._createSetOfMeshes()
+        suffix = self._getOutputSuffix(SetOfMeshes)
+        outSet = self._createSetOfMeshes(suffix)
         for tomo in self.inputTomograms.get().iterItems():
                 tomoName = pwutils.removeBaseExt(tomo.getFileName())
                 outFile = self._getExtraPath(tomoName + '.txt')
@@ -87,17 +86,41 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
                 roi.setVolume(tomo)
         outSet.append(roi)
         outSet.setVolumes(self.inputTomograms.get())
-        self._defineOutputs(outputMeshes=outSet)
+        name = self.OUTPUT_PREFIX + suffix
+        args = {}
+        args[name] = outSet
+        self._defineOutputs(**args)
         self._defineSourceRelation(self.inputTomograms.get(), outSet)
+
+        # Update Outputs
+        outSet.setObjComment(self.getSummary(outSet))
+        self._updateOutputSet(name, outSet, state=outSet.STREAM_CLOSED)
 
 
         # --------------------------- INFO functions --------------------------------
 
     def _summary(self):
-        pass
+        summary = []
+        if not os.listdir(self._getExtraPath()):
+            summary.append("Output Meshes not ready yet.")
+
+    def getSummary(self, outSet):
+        summary = []
+        count = 0
+        for file in os.listdir(self._getExtraPath()):
+            if file.endswith(".txt"):
+                count += 1
+        summary.append("Meshes defined for %d/%d files have been saved in Scipion (%s)." % (
+            count/2, self.inputTomograms.get().getSize(), self._getExtraPath()))
+        return "\n".join(summary)
 
     def _methods(self):
-        pass
+        tomos = self.inputTomograms.get()
+        return [
+            "Model creation using Dynamo",
+            "A total of %d tomograms of dimensions %s were used"
+            % (tomos.getSize(), tomos.getDimensions()),
+        ]
 
     def _citations(self):
         pass
