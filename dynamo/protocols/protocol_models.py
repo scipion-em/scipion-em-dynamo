@@ -59,12 +59,11 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
                       help="Set of tomograms to create a model")
 
 
-        # form.addParallelSection(threads=0, mpi=8)
-
         # --------------------------- INSERT steps functions --------------------------------------------
 
     def _insertAllSteps(self):
         self._insertFunctionStep('launchDynamoGUIStep', interactive=True)
+
 
         # --------------------------- STEPS functions -------------------------------
     def launchDynamoGUIStep(self):
