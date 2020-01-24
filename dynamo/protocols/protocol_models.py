@@ -51,7 +51,6 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         self.OUTPUT_PREFIX = 'outputMeshes'
 
         # --------------------------- DEFINE param functions ------------------------
-
     def _defineParams(self, form):
         form.addSection(label='Input Parameters')
         form.addParam('inputTomograms', PointerParam,
@@ -59,12 +58,9 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
                       label='Set of tomograms',
                       help="Set of tomograms to create a model")
 
-
         # --------------------------- INSERT steps functions --------------------------------------------
-
     def _insertAllSteps(self):
         self._insertFunctionStep('launchDynamoGUIStep', interactive=True)
-
 
         # --------------------------- STEPS functions -------------------------------
     def launchDynamoGUIStep(self):
@@ -93,12 +89,10 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         self._defineSourceRelation(self.inputTomograms.get(), outSet)
 
         # Update Outputs
-        outSet.setObjComment(self.getSummary(outSet))
+        outSet.setObjComment(self.getSummary())
         self._updateOutputSet(name, outSet, state=outSet.STREAM_CLOSED)
 
-
         # --------------------------- INFO functions --------------------------------
-
     def _summary(self):
         if self.getOutputsSize() >= 1:
             summary = []
@@ -110,7 +104,7 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
 
         return summary
 
-    def getSummary(self, outSet):
+    def getSummary(self):
         summary = []
         count = 0
         for file in os.listdir(self._getExtraPath()):

@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, threading, time
+import os, threading
 
 from pyworkflow import utils as pwutils
 from pyworkflow.utils.process import runJob
