@@ -29,6 +29,7 @@ import os
 from pyworkflow.em import ProtAnalysis3D
 from pyworkflow.protocol.params import PointerParam
 import pyworkflow.utils as pwutils
+from pyworkflow.utils.properties import Message
 
 from dynamo.viewers.views_tkinter_tree import DynamoDialog
 
@@ -99,9 +100,15 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         # --------------------------- INFO functions --------------------------------
 
     def _summary(self):
-        summary = []
-        if not os.listdir(self._getExtraPath()):
-            summary.append("Output Meshes not ready yet.")
+        if self.getOutputsSize() >= 1:
+            summary = []
+            for key, output in self.iterOutputAttributes():
+                summary.append("*%s:* \n %s \n" % (key, output.getObjComment()))
+        else:
+            summary = []
+            summary.append(Message.TEXT_NO_OUTPUT_CO)
+
+        return summary
 
     def getSummary(self, outSet):
         summary = []
@@ -109,8 +116,9 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
         for file in os.listdir(self._getExtraPath()):
             if file.endswith(".txt"):
                 count += 1
-        summary.append("Meshes defined for %d/%d files have been saved in Scipion (%s)." % (
+        summary.append("Meshes defined for %d/%d files have been saved in Scipion (%s)" % (
             count/2, self.inputTomograms.get().getSize(), self._getExtraPath()))
+
         return "\n".join(summary)
 
     def _methods(self):
