@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os
+import os, glob
 
 from pyworkflow.em import ProtAnalysis3D
 from pyworkflow.protocol.params import PointerParam
@@ -70,7 +70,8 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
 
         self.dlg = DynamoDialog(None, self._getExtraPath(), provider=tomoProvider,)
 
-        self._createOutput()
+        if glob.glob(self._getExtraPath("*.txt")):
+            self._createOutput()
 
     def _createOutput(self):
         suffix = self._getOutputSuffix(SetOfMeshes)
