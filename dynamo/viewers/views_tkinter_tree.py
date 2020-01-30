@@ -39,14 +39,21 @@ class DynamoDialog(ToolbarListDialog):
     an Eman subprocess from a list of Tomograms.
     """
 
-    def __init__(self, parent, path, **kwargs):
+    def __init__(self, parent, path, viewer, **kwargs):
         self.path = path
         self.provider = kwargs.get("provider", None)
-        ToolbarListDialog.__init__(self, parent,
-                                   "Tomogram List",
-                                    allowsEmptySelection=False,
-                                    itemDoubleClick=self.doubleClickOnTomogram,
-                                    **kwargs)
+        if viewer:
+            ToolbarListDialog.__init__(self, parent,
+                                       "Tomogram List",
+                                       allowsEmptySelection=False,
+                                       itemDoubleClick=self.doubleClickViewer,
+                                       **kwargs)
+        else:
+            ToolbarListDialog.__init__(self, parent,
+                                       "Tomogram List",
+                                        allowsEmptySelection=False,
+                                        itemDoubleClick=self.doubleClickOnTomogram,
+                                        **kwargs)
 
     def refresh_gui(self):
         if self.proc.isAlive():
@@ -63,8 +70,20 @@ class DynamoDialog(ToolbarListDialog):
         self.proc.start()
         self.after(1000, self.refresh_gui)
 
+    def doubleClickViewer(self, e=None):
+        self.tomo = e
+        self.proc = threading.Thread(target=self.lanchDynamoForViewing, args=(self.tomo,))
+        self.proc.start()
+        self.after(1000, self.refresh_gui)
+
     def lanchDynamoForTomogram(self, tomo):
         inputFilePath = self._writeInputFile(tomo)
+
+        args = ' %s' % inputFilePath
+        runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+
+    def lanchDynamoForViewing(self, tomo):
+        inputFilePath = self._writeViewerFile(tomo)
 
         args = ' %s' % inputFilePath
         runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
@@ -113,6 +132,33 @@ class DynamoDialog(ToolbarListDialog):
                                 catalogue, tomo.getFileName(), catalogue,
                                 catalogue, os.path.join(self.path, tomoBase + '.txt'),
                                 os.path.join(self.path, tomoBase + '_connectivity.txt'))
+        inputFid.write(content)
+        inputFid.close()
+        return inputFilePath
+
+    def _writeViewerFile(self, tomo):
+        inputFilePath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "commands.doc")
+        tomoFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
+        catalogue = os.path.join(self.path, 'tomos')
+        tomoFid = open(tomoFile, 'w')
+        tomoName = tomo.getFileName()
+        tomoName = os.path.basename(tomoName)
+        tomoFid.write(tomoName + '\n')
+        tomoFid.close()
+        tomoBase = pwutils.removeBaseExt(tomo.getFileName())
+        inputFid = open(inputFilePath, 'w')
+        content = 'dcm -create %s -fromvll %s \n' \
+                  'm = dmodels.membraneByLevels()\n' \
+                  'modelData = readmatrix(\'%s\')\n' \
+                  'addPoint(m, modelData(:,1:3), modelData(:,4))\n' \
+                  'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1)\n' \
+                  'm.saveInCatalogue()\n' \
+                  'dtmslice %s -c %s \n' \
+                  'modeltrack.addOne(\'model\',m)\n' \
+                  'modeltrack.setActiveModel(1)\n' \
+                  'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
+                  'exit' % (catalogue, tomoFile, os.path.join(self.path, tomoBase + '.txt'),
+                            catalogue, tomo.getFileName(), catalogue)
         inputFid.write(content)
         inputFid.close()
         return inputFilePath

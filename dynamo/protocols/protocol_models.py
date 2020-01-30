@@ -68,7 +68,7 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
 
         tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "txt")
 
-        self.dlg = DynamoDialog(None, self._getExtraPath(), provider=tomoProvider,)
+        self.dlg = DynamoDialog(None, self._getExtraPath(), False, provider=tomoProvider,)
 
         if glob.glob(self._getExtraPath("*.txt")):
             self._createOutput()
@@ -83,6 +83,7 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
                 roi.setVolume(tomo)
         outSet.append(roi)
         outSet.setVolumes(self.inputTomograms.get())
+        # FIXME Tiene sentido actualizar la salida si no se puede recuperar las anteriores?
         name = self.OUTPUT_PREFIX + suffix
         args = {}
         args[name] = outSet

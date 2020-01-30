@@ -23,3 +23,5 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+from .viewers_data import DynamoDataViewer
