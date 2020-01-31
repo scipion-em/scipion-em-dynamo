@@ -101,20 +101,32 @@ class DynamoDialog(ToolbarListDialog):
         inputFid = open(inputFilePath, 'w')
         if not os.path.isfile(os.path.join(self.path, tomoBase + '.txt')):
             content = 'dcm -create %s -fromvll %s \n' \
+                      'newClass = \'Yes\' \n' \
+                      'class = 0 \n' \
+                      'while strcmp(newClass, \'Yes\') \n' \
+                      'class = class + 1 \n' \
                       'm = dmodels.membraneByLevels()\n' \
-                      'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1)\n' \
+                      'm.linkCatalogue(\'%s\',\'i\',1,\'s\',class)\n' \
                       'm.saveInCatalogue()\n' \
                       'dtmslice %s -c %s \n' \
                       'modeltrack.addOne(\'model\',m)\n' \
-                      'modeltrack.setActiveModel(1)\n' \
+                      'modeltrack.setActiveModel(class)\n' \
                       'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
-                      'm = dread(dcmodels(\'%s\',\'i\',1))\n' \
-                      'writematrix([m.points m.group_labels\'], \'%s\')\n' \
-                      'writematrix(m.mesh.tr.ConnectivityList, \'%s\')\n' \
+                      'm = dread(dcmodels(\'%s\',\'i\', 1))\n' \
+                      'if class > 1 \n' \
+                      'aux = [m{class}.points class*ones(length(m{class}.points), 1)] \n' \
+                      'mat = [mat ; aux] \n' \
+                      'else \n' \
+                      'mat = [m.points class*ones(length(m.points), 1)] \n' \
+                      'end \n' \
+                      'newClass = questdlg(\'Create a new class\', \'Dialog\', \'Yes\', \'No\', \'Yes\') \n' \
+                      'end \n' \
+                      'writematrix(mat, \'%s\')\n' \
                       'exit' % (catalogue, tomoFile, catalogue, tomo.getFileName(), catalogue,
-                                catalogue, os.path.join(self.path, tomoBase + '.txt'),
-                                os.path.join(self.path, tomoBase + '_connectivity.txt'))
+                                catalogue, os.path.join(self.path, tomoBase + '.txt'))
+            # 'writematrix(m.mesh.tr.ConnectivityList, \'%s\')\n' \
         else:
+            # TODO Cambiar content para usar clases de Meshes
             content = 'dcm -create %s -fromvll %s \n' \
                       'm = dmodels.membraneByLevels()\n' \
                       'modelData = readmatrix(\'%s\')\n' \
