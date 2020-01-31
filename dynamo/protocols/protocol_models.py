@@ -74,8 +74,7 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
             self._createOutput()
 
     def _createOutput(self):
-        suffix = self._getOutputSuffix(SetOfMeshes)
-        outSet = self._createSetOfMeshes(suffix)
+        outSet = self._createSetOfMeshes()
         for tomo in self.inputTomograms.get().iterItems():
                 tomoName = pwutils.removeBaseExt(tomo.getFileName())
                 outFile = self._getExtraPath(tomoName + '.txt')
@@ -83,10 +82,8 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
                 roi.setVolume(tomo)
         outSet.append(roi)
         outSet.setVolumes(self.inputTomograms.get())
-        # FIXME Tiene sentido actualizar la salida si no se puede recuperar las anteriores?
-        name = self.OUTPUT_PREFIX + suffix
-        args = {}
-        args[name] = outSet
+        name = self.OUTPUT_PREFIX
+        args = {name: outSet}
         self._defineOutputs(**args)
         self._defineSourceRelation(self.inputTomograms.get(), outSet)
 
