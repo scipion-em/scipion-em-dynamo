@@ -32,6 +32,8 @@ from pyworkflow.utils.path import makePath
 from dynamo import Plugin
 from dynamo.convert import writeVolume, writeSetOfVolumes, writeDynTable, readDynTable
 ProtTomoSubtomogramAveraging = importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
+AverageSubTomogram = importFromPlugin("tomo.objects", "AverageSubTomogram")
+SetOfAverageSubTomograms = importFromPlugin("tomo.objects", "SetOfAverageSubTomograms")
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
@@ -244,40 +246,40 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         mraInt = int(self.mra.get())
         ccmatrixInt = int(self.ccmatrix.get())
         dim, _, _ = self.inputVolumes.get().getDimensions()
-        projName = 'dynamoAlignmentProject'
+        self.projName = 'dynamoAlignmentProject'
         fnTable = self._getExtraPath("initial.tbl")
         fhTable = open(fnTable, 'w')
         writeDynTable(fhTable, inputVols)
         fhTable.close()
         fhCommands = open(self._getExtraPath("commands.doc"), 'w')
-        content = "dcp.new('%s','data','data','table', 'initial.tbl','gui',0);" % projName + \
-                  "dvput('%s', 'dim', '%s');" % (projName, dim) + \
-                  "dvput('%s', 'sym', '%s');" % (projName, self.sym) + \
-                  "dvput('%s', 'ite', '%s');" % (projName, self.numberOfIters) + \
-                  "dvput('%s', 'mra', %s);" % (projName, mraInt) + \
-                  "dvput('%s', 'pcas', %d);" % (projName, pcaInt) + \
-                  "dvput('%s', 'cr', '%s');" % (projName, self.cr) + \
-                  "dvput('%s', 'cs', '%s');" % (projName, self.cs) + \
-                  "dvput('%s', 'cf', '%s');" % (projName, self.cf) + \
-                  "dvput('%s', 'ccp', '%s');" % (projName, self.ccp) + \
-                  "dvput('%s', 'rf', '%s');" % (projName, self.rf) + \
-                  "dvput('%s', 'rff', '%s');" % (projName, self.rff) + \
-                  "dvput('%s', 'ir', '%s');" % (projName, self.inplane_range) + \
-                  "dvput('%s', 'is', '%s');" % (projName, self.inplane_sampling) + \
-                  "dvput('%s', 'if', '%s');" % (projName, self.inplane_flip) + \
-                  "dvput('%s', 'icp', '%s');" % (projName, self.inplane_check_peak) + \
-                  "dvput('%s', 'thr', %s);" % (projName, self.threshold) + \
-                  "dvput('%s', 'thrm', %s);" % (projName, self.thresholdMode) + \
-                  "dvput('%s', 'thr2', %s);" % (projName, self.threshold2) + \
-                  "dvput('%s', 'thr2m', %s);" % (projName, self.thresholdMode2) + \
-                  "dvput('%s', 'ccms', %s);" % (projName, ccmatrixInt) + \
-                  "dvput('%s', 'ccmt', '%s');" % (projName, self.ccmatrixType) + \
-                  "dvput('%s', 'batch', '%s');" % (projName, self.ccmatrixBatch) +  \
-                  "dvput('%s', 'stm', '%s');" % (projName, self.separation) + \
-                  "dvput('%s', 'low', '%s');" % (projName, self.low) + \
-                  "dvput('%s', 'high', '%s');" % (projName, self.high) + \
-                  "dvput('%s', 'lim', '%s');" % (projName, self.lim) + \
-                  "dvput('%s', 'limm', '%s');" % (projName, self.limm)
+        content = "dcp.new('%s','data','data','table', 'initial.tbl','gui',0);" % self.projName + \
+                  "dvput('%s', 'dim', '%s');" % (self.projName, dim) + \
+                  "dvput('%s', 'sym', '%s');" % (self.projName, self.sym) + \
+                  "dvput('%s', 'ite', '%s');" % (self.projName, self.numberOfIters) + \
+                  "dvput('%s', 'mra', %s);" % (self.projName, mraInt) + \
+                  "dvput('%s', 'pcas', %d);" % (self.projName, pcaInt) + \
+                  "dvput('%s', 'cr', '%s');" % (self.projName, self.cr) + \
+                  "dvput('%s', 'cs', '%s');" % (self.projName, self.cs) + \
+                  "dvput('%s', 'cf', '%s');" % (self.projName, self.cf) + \
+                  "dvput('%s', 'ccp', '%s');" % (self.projName, self.ccp) + \
+                  "dvput('%s', 'rf', '%s');" % (self.projName, self.rf) + \
+                  "dvput('%s', 'rff', '%s');" % (self.projName, self.rff) + \
+                  "dvput('%s', 'ir', '%s');" % (self.projName, self.inplane_range) + \
+                  "dvput('%s', 'is', '%s');" % (self.projName, self.inplane_sampling) + \
+                  "dvput('%s', 'if', '%s');" % (self.projName, self.inplane_flip) + \
+                  "dvput('%s', 'icp', '%s');" % (self.projName, self.inplane_check_peak) + \
+                  "dvput('%s', 'thr', %s);" % (self.projName, self.threshold) + \
+                  "dvput('%s', 'thrm', %s);" % (self.projName, self.thresholdMode) + \
+                  "dvput('%s', 'thr2', %s);" % (self.projName, self.threshold2) + \
+                  "dvput('%s', 'thr2m', %s);" % (self.projName, self.thresholdMode2) + \
+                  "dvput('%s', 'ccms', %s);" % (self.projName, ccmatrixInt) + \
+                  "dvput('%s', 'ccmt', '%s');" % (self.projName, self.ccmatrixType) + \
+                  "dvput('%s', 'batch', '%s');" % (self.projName, self.ccmatrixBatch) +  \
+                  "dvput('%s', 'stm', '%s');" % (self.projName, self.separation) + \
+                  "dvput('%s', 'low', '%s');" % (self.projName, self.low) + \
+                  "dvput('%s', 'high', '%s');" % (self.projName, self.high) + \
+                  "dvput('%s', 'lim', '%s');" % (self.projName, self.lim) + \
+                  "dvput('%s', 'limm', '%s');" % (self.projName, self.limm)
 
         # if self.mra.get():
             # fnDirMRA = self._getExtraPath("folder_multireference")
@@ -309,7 +311,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         template = self.templateRef.get()
         if template is not None:
             writeVolume(template, join(self._getExtraPath(), 'template'))
-            content += "dvput('%s', 'template', 'template.mrc');" % projName
+            content += "dvput('%s', 'template', 'template.mrc');" % self.projName
         else:
             # pass
             makePath(self._getExtraPath('templates'))
@@ -317,19 +319,19 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
         if self.mask.get() is not None:
             writeVolume(self.mask.get(), join(self._getExtraPath(), 'mask'))
-            content += "dvput('%s', 'mask', 'mask.mrc');" % projName
+            content += "dvput('%s', 'mask', 'mask.mrc');" % self.projName
         if self.cmask.get() is not None:
             writeVolume(self.cmask.get(), join(self._getExtraPath(), 'cmask'))
-            content += "dvput('%s', 'cmask', 'cmask.mrc');" % projName
+            content += "dvput('%s', 'cmask', 'cmask.mrc');" % self.projName
         if self.fmask.get() is not None:
             writeVolume(self.fmask.get(), join(self._getExtraPath(), 'fmask'))
-            content += "dvput('%s', 'fmask', 'fmask.mrc');" % projName
+            content += "dvput('%s', 'fmask', 'fmask.mrc');" % self.projName
         if self.smask.get() is not None:
             writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
-            content += "dvput('%s', 'smask', 'smask.mrc');" % projName
+            content += "dvput('%s', 'smask', 'smask.mrc');" % self.projName
 
         # content += "dvcheck('%s');" % projName
-        content += "dvcheck('%s');dvunfold('%s');dynamo_execute_project %s" % (projName, projName, projName)
+        content += "dvcheck('%s');dvunfold('%s');dynamo_execute_project %s" % (self.projName, self.projName, self.projName)
         fhCommands.write(content)
         fhCommands.close()
 
@@ -337,18 +339,35 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         Plugin.runDynamo(self, 'commands.doc', cwd=self._getExtraPath())
 
     def createOutput(self):
-        self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')  # Change to "real.tbl" or iter_x/...
-        self.subtomoSet = self._createSetOfSubTomograms()
+        # self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')  # Change to "real.tbl" or iter_x/...
+        # self.subtomoSet = self._createSetOfSubTomograms()
+        # inputSet = self.inputVolumes.get()
+        # self.subtomoSet.copyInfo(inputSet)
+        # self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
+        # classesSubtomoSet = self._createSetOfClassesSubTomograms(self.subtomoSet)
+        # classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
+        # self.fhTable.close()
+        # self._defineOutputs(outputSubtomograms=self.subtomoSet)
+        # self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
+        # self._defineOutputs(outputClassesSubtomo=classesSubtomoSet)
+        # self._defineSourceRelation(self.inputVolumes, classesSubtomoSet)
+
+        self.fhTable = open(self._getExtraPath('%s/results/ite_000%s/averages/refined_table_ref_001_ite_000%s.tbl') %
+                            (self.projName, self.numberOfIters.get(), self.numberOfIters.get()), 'r')
         inputSet = self.inputVolumes.get()
-        self.subtomoSet.copyInfo(inputSet)
-        self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
-        classesSubtomoSet = self._createSetOfClassesSubTomograms(self.subtomoSet)
-        classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
-        self.fhTable.close()
-        self._defineOutputs(outputSubtomograms=self.subtomoSet)
-        self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
-        self._defineOutputs(outputClassesSubtomo=classesSubtomoSet)
-        self._defineSourceRelation(self.inputVolumes, classesSubtomoSet)
+        averageSubTomogram = AverageSubTomogram()
+        readDynTable(self, averageSubTomogram)
+        averageSubTomogram.setFileName(self._getExtraPath
+                                       ('%s/results/ite_000%s/averages/average_ref_001_ite_000%s.em') %
+                                       (self.projName, self.numberOfIters.get(), self.numberOfIters.get()))
+        averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
+        setOfAverageSubTomograms = self._createSet(SetOfAverageSubTomograms, 'subtomograms%s.sqlite', "")
+        setOfAverageSubTomograms.copyInfo(inputSet)
+        setOfAverageSubTomograms.setSamplingRate(inputSet.getSamplingRate())
+        setOfAverageSubTomograms.append(averageSubTomogram)
+
+        self._defineOutputs(averageSubTomogram=setOfAverageSubTomograms)
+        self._defineSourceRelation(inputSet, setOfAverageSubTomograms)
 
     # --------------------------- INFO functions --------------------------------
 
