@@ -126,7 +126,6 @@ class DynamoDialog(ToolbarListDialog):
                                 catalogue, os.path.join(self.path, tomoBase + '.txt'))
             # 'writematrix(m.mesh.tr.ConnectivityList, \'%s\')\n' \
         else:
-            # TODO Cambiar content para usar clases de Meshes
             content = 'dcm -create %s -fromvll %s\n' \
                       'idx=0\n' \
                       'modelData=readmatrix(\'%s\')\n' \
