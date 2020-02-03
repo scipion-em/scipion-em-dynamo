@@ -312,7 +312,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             content += "dvput('%s', 'template', 'template.mrc');" % projName
         else:
             # pass
-            content += "dvput('%s', 'template', 1);" % projName
+            makePath(self._getExtraPath('templates'))
+            content += "dynamo_write_multireference('table','initial.tbl','1:4','refs','data','subset','4/4');"
 
         if self.mask.get() is not None:
             writeVolume(self.mask.get(), join(self._getExtraPath(), 'mask'))
@@ -328,7 +329,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             content += "dvput('%s', 'smask', 'smask.mrc');" % projName
 
         # content += "dvcheck('%s');" % projName
-        content += "dvcheck('%s');dvunfold('%s');('%s')" % (projName, projName, projName)
+        content += "dvcheck('%s');dvunfold('%s');dynamo_execute_project %s" % (projName, projName, projName)
         fhCommands.write(content)
         fhCommands.close()
 

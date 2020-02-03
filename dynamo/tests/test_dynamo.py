@@ -99,7 +99,7 @@ class TestSubTomogramsAlignment(BaseTest):
         particles = protImport.outputSubTomograms
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
-                                     templateRef=particles,
+                                     # templateRef=particles,
                                      mra=True,
                                      fmask=protImport,
                                      nref=4)
@@ -163,16 +163,16 @@ class TestSubTomogramsAlignment(BaseTest):
                              "There was a problem with outputClassesSubtomo output")
         return alignment
 
-    # def test_basicAlignment(self):
-    #     dynamoAlignment = self._runAlignment()
-    #     outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
-    #     outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
-    #     self.assertTrue(outputSubtomos)
-    #     self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
-    #     self.assertTrue(outputClasses)
-    #     # self.assertTrue(outputClasses.hasRepresentatives())
-    #     return dynamoAlignment
-    #     # UNCOMMENT WHEN TEMPLATE CAN BE GENERATED
+    def test_basicAlignment(self):
+        dynamoAlignment = self._runAlignment()
+        outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
+        outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
+        self.assertTrue(outputSubtomos)
+        self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
+        self.assertTrue(outputClasses)
+        # self.assertTrue(outputClasses.hasRepresentatives())
+        return dynamoAlignment
+        # UNCOMMENT WHEN TEMPLATE CAN BE GENERATED
 
     def test_alignmentWithTemplate(self):
         dynamoAlignment = self._runAlignmentWithTemplate()
@@ -214,13 +214,13 @@ class TestSubTomogramsAlignment(BaseTest):
         # self.assertTrue(outputClasses.hasRepresentatives())
         return dynamoAlignment
 
-    # def test_alignmentWithTemplatesMRA(self):
-    #     dynamoAlignment = self._runAlignmentWithTemplatesMRA()
-    #     outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
-    #     outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
-    #     self.assertTrue(outputSubtomos)
-    #     self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
-    #     self.assertTrue(outputClasses)
-    #     # self.assertTrue(outputClasses.hasRepresentatives())
-    #     return dynamoAlignment
-    #     UNCOMMENT WHEN SETOFTEMPLATES CAN BE READ
+    def test_alignmentWithTemplatesMRA(self):
+        dynamoAlignment = self._runAlignmentWithTemplatesMRA()
+        outputSubtomos = getattr(dynamoAlignment, 'outputSubtomograms')
+        outputClasses = getattr(dynamoAlignment, 'outputClassesSubtomo')
+        self.assertTrue(outputSubtomos)
+        self.assertTrue(outputSubtomos.getFirstItem().hasTransform())
+        self.assertTrue(outputClasses)
+        # self.assertTrue(outputClasses.hasRepresentatives())
+        return dynamoAlignment
+        # UNCOMMENT WHEN SETOFTEMPLATES CAN BE READ
