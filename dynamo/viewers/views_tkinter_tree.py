@@ -127,7 +127,7 @@ class DynamoDialog(ToolbarListDialog):
             # 'writematrix(m.mesh.tr.ConnectivityList, \'%s\')\n' \
         else:
             content = 'dcm -create %s -fromvll %s\n' \
-                      'idx=0\n' \
+                      'idx=1\n' \
                       'modelData=readmatrix(\'%s\')\n' \
                       'class=unique(modelData(:,4))\n' \
                       'for item=class\'\n' \
@@ -151,7 +151,7 @@ class DynamoDialog(ToolbarListDialog):
                       'modeltrack.setActiveModel(class(end))\n' \
                       'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
                       'm=dread(dcmodels(\'%s\',\'i\', 1))\n' \
-                      'if idx==0 \n' \
+                      'if idx==1 \n' \
                       'aux=[m.points class(end)*ones(length(m.points),1)]\n' \
                       'modelData=[modelData;aux] \n' \
                       'idx=idx+1\n' \
@@ -181,15 +181,20 @@ class DynamoDialog(ToolbarListDialog):
         tomoFid.close()
         tomoBase = pwutils.removeBaseExt(tomo.getFileName())
         inputFid = open(inputFilePath, 'w')
-        content = 'dcm -create %s -fromvll %s \n' \
-                  'm = dmodels.membraneByLevels()\n' \
-                  'modelData = readmatrix(\'%s\')\n' \
-                  'addPoint(m, modelData(:,1:3), modelData(:,4))\n' \
-                  'm.linkCatalogue(\'%s\',\'i\',1,\'s\',1)\n' \
+        content = 'dcm -create %s -fromvll %s\n' \
+                  'modelData=readmatrix(\'%s\')\n' \
+                  'class=unique(modelData(:,4))\n' \
+                  'for item=class\'\n' \
+                  'm=dmodels.membraneByLevels()\n' \
+                  'logic=repmat(modelData(:,4)==item,1,4)\n' \
+                  'data=modelData(logic)\n' \
+                  'data=reshape(data,length(data)/4,4)\n' \
+                  'addPoint(m,data(:,1:3),data(:,3))\n' \
+                  'm.linkCatalogue(\'%s\',\'i\',1,\'s\',item)\n' \
                   'm.saveInCatalogue()\n' \
-                  'dtmslice %s -c %s \n' \
                   'modeltrack.addOne(\'model\',m)\n' \
-                  'modeltrack.setActiveModel(1)\n' \
+                  'end\n' \
+                  'dtmslice %s -c %s \n' \
                   'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
                   'exit' % (catalogue, tomoFile, os.path.join(self.path, tomoBase + '.txt'),
                             catalogue, tomo.getFileName(), catalogue)
