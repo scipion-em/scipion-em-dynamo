@@ -35,6 +35,7 @@ from dynamo.convert import writeVolume, writeSetOfVolumes, writeDynTable, readDy
 ProtTomoSubtomogramAveraging = importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
 AverageSubTomogram = importFromPlugin("tomo.objects", "AverageSubTomogram")
 SetOfAverageSubTomograms = importFromPlugin("tomo.objects", "SetOfAverageSubTomograms")
+SubTomogram = importFromPlugin("tomo.objects", "SubTomogram")
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
@@ -86,7 +87,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addParam('cmask', PointerParam, label="Classification mask", pointerClass='VolumeMask', allowsNull=True,
                       help='Needs to have the same dimmensionality as the template. It does NOT need to be smoothened. '
                            'A hard mask (only 0 and 1 values) is expected for the Roseman"s-like normalization')
-        form.addParam('fmask', PointerParam, label="Fourier mask on template", pointerClass='VolumeMask, SetOfVolumes',
+        form.addParam('fmask', PointerParam, label="Fourier mask on template", pointerClass='Volume, SetOfVolumes',
                       allowsNull=True,
                       help='The fmask indicates which fourier coefficients are present at the starting reference volume'
                            '. The file should contain only ones or zeros.')
@@ -296,7 +297,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             writeVolume(self.cmask.get(), join(self._getExtraPath(), 'cmask'))
             content += "dvput('%s', 'cmask', 'cmask.mrc');" % self.projName
         if self.fmask.get() is not None:
-            if isinstance(template, Volume):
+            if isinstance(template, Volume) or isinstance(template, SubTomogram):
                 writeVolume(self.fmask.get(), join(self._getExtraPath(), 'fmask'))
                 content += "dvput('%s', 'fmask', 'fmask.mrc');" % self.projName
             else:
@@ -351,27 +352,43 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _summary(self):
         summary = []
-        if hasattr(self, 'outputClassesSubtomo'):
-            summary.append(
-                "Input subtomograms: *%d* \nGenerated classes: *%d*"
-                % (self.inputVolumes.get().getSize(), self.outputClassesSubtomo.getSize()))
+        # if hasattr(self, 'outputClassesSubtomo'):
+        summary.append("Input subtomograms: %d" % self.inputVolumes.get().getSize())
+
+        if self.fmask.get() is not None:
+            if isinstance(self.fmask.get(), Volume) or isinstance(self.fmask.get(), SubTomogram):
+                summary.append("Input fmask: %s" % self.fmask.get())
+            else:
+                summary.append("Input fmasks: %d" % self.fmask.get().getSize())
         else:
-            summary.append("Output classes not ready yet.")
+            summary.append("Fmask generated")
+
+        if self.mra.get():
+            summary.append("Perform MRA with %d references" % self.nref.get())
+        else:
+            summary.append("No mra")
+
+        if self.generateTemplate.get():
+            summary.append("Template generated")
+        else:
+            if isinstance(self.templateRef.get(), Volume) or isinstance(self.templateRef.get(), SubTomogram):
+                summary.append("Provided template: %s" % self.templateRef.get())
+            else:
+                summary.append("Provided templates: %d" % self.templateRef.get().getSize())
+
+        # else:
+            # summary.append("Output classes not ready yet.")
         return summary
 
     def _methods(self):
         methods = []
-        if hasattr(self, 'outputClassesSubtomo'):
-            methods.append(
-                'We classified %d subtomograms from %s into %d classes %s using Dynamo *MRA* Subtomogram averaging.'
-                % (self.inputVolumes.get().getSize(),
-                   self.getObjectTag('inputVolumes'),
-                   self.outputClassesSubtomo.getSize(),
-                   self.getObjectTag('outputClassesSubtomo')))
-        else:
-            methods.append("Output classes not ready yet.")
+        # if hasattr(self, 'outputClassesSubtomo'):
+        methods.append(
+            'We aligned %d subtomograms from %s using Dynamo Subtomogram averaging.'
+            % (self.inputVolumes.get().getSize(), self.getObjectTag('inputVolumes')))
+        # else:
+        #     methods.append("Output classes not ready yet.")
         return methods
 
     def _citations(self):
         return ['CASTANODIEZ2012139']
-

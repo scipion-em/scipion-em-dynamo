@@ -188,9 +188,9 @@ class TestSubTomogramsAlignment(BaseTest):
         self.assertTrue(averageSubTomogram.getFirstItem().hasTransform())
         return dynamoAlignment
 
-    # def test_alignmentWithTemplatesMRA(self):
-    #     dynamoAlignment = self._runAlignmentWithTemplatesMRA()
-    #     averageSubTomogram = getattr(dynamoAlignment, 'averageSubTomogram')
-    #     self.assertTrue(averageSubTomogram)
-    #     self.assertTrue(averageSubTomogram.getFirstItem().hasTransform())
-    #     return dynamoAlignment
+    def test_alignmentWithTemplatesMRA(self):
+        dynamoAlignment = self._runAlignmentWithTemplatesMRA()
+        averageSubTomogram = getattr(dynamoAlignment, 'averageSubTomogram')
+        self.assertTrue(averageSubTomogram)
+        self.assertTrue(averageSubTomogram.getFirstItem().hasTransform())
+        return dynamoAlignment
