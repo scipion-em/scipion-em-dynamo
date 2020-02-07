@@ -66,7 +66,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
             shiftz = 0
         fhTable.write('%d 1 0 %d %d %d %d %d %d 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
                       % (subtomo.getObjId(), tilt, narot, tdrot, shiftx, shifty, shiftz,
-                         int(subtomo.getAcquisition().getAngleMin()), int(subtomo.getAcquisition().getAngleMax()), int(x), int(y), int(z)))
+                         subtomo.getAcquisition().getAngleMin(), subtomo.getAcquisition().getAngleMax(), x, y, z))
 
 
 def readDynTable(self, item):
