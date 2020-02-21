@@ -33,7 +33,7 @@ from pyworkflow.utils.properties import Message
 import pyworkflow.utils as pwutils
 
 import tomo.objects
-from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
+from tomo.viewers.views_tkinter_tree import MeshesTreeProvider
 
 from dynamo.viewers.views_tkinter_tree import DynamoDialog
 
@@ -63,12 +63,13 @@ class DynamoDataViewer(pwviewer.Viewer):
         if issubclass(cls, tomo.objects.SetOfMeshes):
             outputMeshes = obj
 
-            tomoList = [item.clone() for item in outputMeshes.getVolumes().iterItems()]
+            meshList = [item.clone() for item in outputMeshes.iterItems()]
+            meshList.reverse()
 
-            path = self.protocol._getExtraPath()
+            path = self.protocol._getTmpPath()
 
-            tomoProvider = TomogramsTreeProvider(tomoList, self.protocol._getExtraPath(), 'txt',)
+            meshProvider = MeshesTreeProvider(meshList,)
 
-            setView = DynamoDialog(self._tkRoot, path, True, provider=tomoProvider,)
+            setView = DynamoDialog(self._tkRoot, path, True, provider=meshProvider,)
 
         return views

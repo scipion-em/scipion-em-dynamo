@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import os, glob
+import numpy as np
 
 from pyworkflow.em import ProtAnalysis3D
 from pyworkflow.protocol.params import PointerParam
@@ -76,11 +77,15 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
     def _createOutput(self):
         outSet = self._createSetOfMeshes()
         for tomo in self.inputTomograms.get().iterItems():
-                tomoName = pwutils.removeBaseExt(tomo.getFileName())
-                outFile = self._getExtraPath(tomoName + '.txt')
-                roi = Mesh(outFile)
-                roi.setVolume(tomo)
-        outSet.append(roi)
+            tomoName = pwutils.removeBaseExt(tomo.getFileName())
+            outFile = self._getExtraPath(tomoName + '.txt')
+            if os.path.isfile(outFile):
+                data = np.loadtxt(outFile, delimiter=',')
+                groups = np.unique(data[:, 3]).astype(int)
+                for group in groups:
+                    mesh = Mesh(group=group, path=outFile)
+                    mesh.setVolume(tomo.clone())
+                    outSet.append(mesh)
         outSet.setVolumes(self.inputTomograms.get())
         name = self.OUTPUT_PREFIX
         args = {name: outSet}

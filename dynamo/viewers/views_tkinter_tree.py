@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import os, threading
+import numpy as np
 
 from pyworkflow import utils as pwutils
 from pyworkflow.utils.process import runJob
@@ -63,6 +64,12 @@ class DynamoDialog(ToolbarListDialog):
             pwutils.cleanPath(os.path.join(self.path, 'tomos'))
             pwutils.cleanPath(os.path.join(self.path, 'tomos.ctlg'))
 
+    def refresh_gui_viewer(self):
+        if self.proc.isAlive():
+            self.after(1000, self.refresh_gui_viewer)
+        else:
+            pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
+
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
@@ -74,7 +81,7 @@ class DynamoDialog(ToolbarListDialog):
         self.tomo = e
         self.proc = threading.Thread(target=self.lanchDynamoForViewing, args=(self.tomo,))
         self.proc.start()
-        self.after(1000, self.refresh_gui)
+        self.after(1000, self.refresh_gui_viewer)
 
     def lanchDynamoForTomogram(self, tomo):
         inputFilePath = self._writeInputFile(tomo)
@@ -82,8 +89,9 @@ class DynamoDialog(ToolbarListDialog):
         args = ' %s' % inputFilePath
         runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
-    def lanchDynamoForViewing(self, tomo):
-        inputFilePath = self._writeViewerFile(tomo)
+    def lanchDynamoForViewing(self, mesh):
+        self.mesh = mesh
+        inputFilePath = self._writeViewerFile(mesh.getVolume())
 
         args = ' %s' % inputFilePath
         runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
@@ -179,7 +187,10 @@ class DynamoDialog(ToolbarListDialog):
         tomoName = os.path.basename(tomoName)
         tomoFid.write(tomoName + '\n')
         tomoFid.close()
-        tomoBase = pwutils.removeBaseExt(tomo.getFileName())
+        mesh_group = self.mesh.getMesh()
+        group = np.ones((1, len(mesh_group))) * self.mesh.getGroup()
+        meshFile = 'mesh.txt'
+        np.savetxt(os.path.join(self.path, meshFile), np.append(mesh_group, group.T, axis=1), fmt='%d', delimiter=',')
         inputFid = open(inputFilePath, 'w')
         content = 'dcm -create %s -fromvll %s\n' \
                   'modelData=readmatrix(\'%s\')\n' \
@@ -196,7 +207,7 @@ class DynamoDialog(ToolbarListDialog):
                   'end\n' \
                   'dtmslice %s -c %s \n' \
                   'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
-                  'exit' % (catalogue, tomoFile, os.path.join(self.path, tomoBase + '.txt'),
+                  'exit' % (catalogue, tomoFile, os.path.join(self.path, meshFile),
                             catalogue, tomo.getFileName(), catalogue)
         inputFid.write(content)
         inputFid.close()
