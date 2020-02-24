@@ -88,7 +88,7 @@ class DynamoBoxing(ProtTomoPicking):
             coords_tomo = []
             for coord in inputCoordinates.iterCoordinates(tomo):
                 coords_tomo.append(coord.getPosition())
-            np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=',')
+            np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
 
         # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
         codeFile = os.path.join(os.getcwd(), 'coords2model.m')
@@ -101,7 +101,7 @@ class DynamoBoxing(ProtTomoPicking):
                    "tomoIndex=catalogue.volumes{idv}.index\n" \
                    "[~,tomoName,~]=fileparts(tomoPath)\n" \
                    "coordFile=[path '/' tomoName '.txt']\n" \
-                   "coords=readmatrix(coordFile)\n" \
+                   "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
                    "vesicle=dmodels.vesicle()\n" \
                    "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
                    "vesicle.linkCatalogue('%s','i',tomoIndex)\n" \
@@ -160,6 +160,8 @@ class DynamoBoxing(ProtTomoPicking):
         args[name] = coord3DSet
         self._defineOutputs(**args)
         self._defineSourceRelation(setTomograms, coord3DSet)
+        coord3DSet.setObjComment(self.getSummary(coord3DSet))
+        self._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
 
     # --------------------------- DEFINE utils functions ----------------------
     def writeMatlabCode(self):
@@ -213,9 +215,9 @@ class DynamoBoxing(ProtTomoPicking):
                   "crop_points=[]\n" \
                   "for model=models{idt}\n" \
                   "if iscell(model)\n" \
-                  "crop_points=[crop_points; model{end}.crop_points]\n" \
+                  "crop_points=[crop_points; model{end}.points]\n" \
                   "else\n" \
-                  "crop_points=[crop_points; model.crop_points]\n" \
+                  "crop_points=[crop_points; model.points]\n" \
                   "end\n" \
                   "end\n" \
                   "if ~isempty(crop_points)\n" \
@@ -246,3 +248,44 @@ class DynamoBoxing(ProtTomoPicking):
             fid.close()
 
         return codeFilePath
+
+    # --------------------------- DEFINE info functions ----------------------
+    def getMethods(self, output):
+        msg = 'User picked %d particles ' % output.getSize()
+        msg += 'with a particle size of %s.' % output.getBoxSize()
+        return msg
+
+    def _methods(self):
+        methodsMsgs = []
+        if self.inputTomograms is None:
+            return ['Input tomogram not available yet.']
+
+        methodsMsgs.append("Input tomograms imported of dims %s." %(
+                              str(self.inputTomograms.get().getDim())))
+
+        if self.getOutputsSize() >= 1:
+            for key, output in self.iterOutputAttributes():
+                msg = self.getMethods(output)
+                methodsMsgs.append("%s: %s" % (self.getObjectTag(output), msg))
+        else:
+            methodsMsgs.append(Message.TEXT_NO_OUTPUT_CO)
+
+        return methodsMsgs
+
+    def getSummary(self, coord3DSet):
+        summary = []
+        summary.append("Number of particles picked: %s" % coord3DSet.getSize())
+        summary.append("Particle size: %s" % coord3DSet.getBoxSize())
+        return "\n".join(summary)
+
+    def _summary(self):
+        summary = []
+        if self.isFinished():
+            summary.append("Output 3D Coordinates not ready yet.")
+
+        if self.getOutputsSize() >= 1:
+            for key, output in self.iterOutputAttributes():
+                summary.append("*%s:* \n %s " % (key, output.getObjComment()))
+        else:
+            summary.append(Message.TEXT_NO_OUTPUT_CO)
+        return summary
