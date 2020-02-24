@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import os
+import numpy as np
 
 import pyworkflow.utils as pwutils
 from pyworkflow.protocol.params import PointerParam, IntParam
@@ -53,22 +54,67 @@ class DynamoBoxing(ProtTomoPicking):
 
         form.addParam('boxSize', IntParam, label="Box Size")
 
-        # form.addParam('inputCoordinates', PointerParam, label="Input Coordinates",
-        #               allowsNull=True, pointerClass='SetOfCoordinates3D',
-        #               help='Select the SetOfCoordinates3D.')
+        form.addParam('inputCoordinates', PointerParam, label="Input Coordinates",
+                      allowsNull=True, pointerClass='SetOfCoordinates3D',
+                      help='Select the SetOfCoordinates3D.')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        # # Copy input coordinates to Extra Path
-        # if self.inputCoordinates.get():
-        #     self._insertFunctionStep('copyInputCoords')
+        # Copy input coordinates to Extra Path
+        if self.inputCoordinates.get():
+            self._insertFunctionStep('copyInputCoords')
 
         # Launch Boxing GUI
         self._insertFunctionStep('launchDynamoBoxingStep', interactive=True)
 
     # --------------------------- STEPS functions -----------------------------
-    # def copyInputCoords(self):
-    #     setCoords2Jsons(self.inputTomograms.get(), self.inputCoordinates.get(), self._getExtraPath())
+    def copyInputCoords(self):
+        # Initialize the catalogue
+        listTomosFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
+        catalogue = os.path.abspath(self._getExtraPath("tomos"))
+
+        # Create list of tomos file
+        tomoFid = open(listTomosFile, 'w')
+        for tomo in self.inputTomograms.get().iterItems():
+            tomoPath = os.path.abspath(tomo.getFileName())
+            tomoFid.write(tomoPath + '\n')
+        tomoFid.close()
+
+        # Save coordinates into .txt file for each tomogram
+        inputCoordinates = self.inputCoordinates.get()
+        inputTomograms = self.inputTomograms.get()
+        for tomo in inputTomograms:
+            outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
+            coords_tomo = []
+            for coord in inputCoordinates.iterCoordinates(tomo):
+                coords_tomo.append(coord.getPosition())
+            np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=',')
+
+        # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
+        codeFile = os.path.join(os.getcwd(), 'coords2model.m')
+        contents = "dcm -create %s -fromvll %s\n" \
+                   "path='%s'\n" \
+                   "catalogue=dread(['%s' '.ctlg'])\n" \
+                   "nVolumes=length(catalogue.volumes)\n" \
+                   "for idv=1:nVolumes\n" \
+                   "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
+                   "tomoIndex=catalogue.volumes{idv}.index\n" \
+                   "[~,tomoName,~]=fileparts(tomoPath)\n" \
+                   "coordFile=[path '/' tomoName '.txt']\n" \
+                   "coords=readmatrix(coordFile)\n" \
+                   "vesicle=dmodels.vesicle()\n" \
+                   "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
+                   "vesicle.linkCatalogue('%s','i',tomoIndex)\n" \
+                   "vesicle.saveInCatalogue()\n" \
+                   "end\n" % (catalogue, listTomosFile, self._getExtraPath(), catalogue, catalogue)
+
+        codeFid = open(codeFile, 'w')
+        codeFid.write(contents)
+        codeFid.close()
+
+        # Tell Dynamo to create the catalogue with the models
+        args = ' %s' % codeFile
+        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def launchDynamoBoxingStep(self):
         codeFilePath = self.writeMatlabCode()
@@ -135,7 +181,9 @@ class DynamoBoxing(ProtTomoPicking):
         content = "path='%s'\n" \
                   "savePath = '%s'\n" \
                   "catalogue_name='%s'\n" \
+                  "if ~isfile(catalogue_name)\n" \
                   "dcm -create %s -fromvll %s\n" \
+                  "end\n" \
                   "hGUI=findobj(0)\n" \
                   "hGUI.ShowHiddenHandles=true\n" \
                   "dcm -c %s\n" \
