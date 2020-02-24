@@ -220,9 +220,9 @@ class DynamoBoxing(ProtTomoPicking):
                   "crop_points=[]\n" \
                   "for model=models{idt}\n" \
                   "if iscell(model)\n" \
-                  "crop_points=[crop_points; model{end}.points]\n" \
+                  "crop_points=[crop_points; model{end}.crop_points]\n" \
                   "else\n" \
-                  "crop_points=[crop_points; model.points]\n" \
+                  "crop_points=[crop_points; model.crop_points]\n" \
                   "end\n" \
                   "end\n" \
                   "if ~isempty(crop_points)\n" \
