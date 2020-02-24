@@ -88,7 +88,8 @@ class DynamoBoxing(ProtTomoPicking):
             coords_tomo = []
             for coord in inputCoordinates.iterCoordinates(tomo):
                 coords_tomo.append(coord.getPosition())
-            np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
+            if coords_tomo:
+                np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
 
         # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
         codeFile = os.path.join(os.getcwd(), 'coords2model.m')
@@ -101,6 +102,9 @@ class DynamoBoxing(ProtTomoPicking):
                    "tomoIndex=catalogue.volumes{idv}.index\n" \
                    "[~,tomoName,~]=fileparts(tomoPath)\n" \
                    "coordFile=[path '/' tomoName '.txt']\n" \
+                   "if ~isfile(coordFile)\n" \
+                   "continue\n" \
+                   "end\n" \
                    "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
                    "vesicle=dmodels.vesicle()\n" \
                    "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
