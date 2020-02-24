@@ -130,6 +130,8 @@ class DynamoBoxing(ProtTomoPicking):
         if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, None):
             self._createOutput()
 
+        pwutils.cleanPattern('*.m')
+
     def _createOutput(self):
         coord3DSetDict = {}
         coord3DMap = {}
@@ -170,7 +172,6 @@ class DynamoBoxing(ProtTomoPicking):
     # --------------------------- DEFINE utils functions ----------------------
     def writeMatlabCode(self):
         # Initialization params
-        # codeFilePath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "DynamoPicker.m")
         codeFilePath = os.path.join(os.getcwd(), "DynamoPicker.m")
         listTomosFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
