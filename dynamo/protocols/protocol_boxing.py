@@ -166,7 +166,6 @@ class DynamoBoxing(ProtTomoPicking):
         args[name] = coord3DSet
         self._defineOutputs(**args)
         self._defineSourceRelation(setTomograms, coord3DSet)
-        coord3DSet.setObjComment(self.getSummary(coord3DSet))
         self._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
 
     # --------------------------- DEFINE utils functions ----------------------
@@ -277,20 +276,3 @@ class DynamoBoxing(ProtTomoPicking):
 
         return methodsMsgs
 
-    def getSummary(self, coord3DSet):
-        summary = []
-        summary.append("Number of particles picked: %s" % coord3DSet.getSize())
-        summary.append("Particle size: %s" % coord3DSet.getBoxSize())
-        return "\n".join(summary)
-
-    def _summary(self):
-        summary = []
-        if self.isFinished():
-            summary.append("Output 3D Coordinates not ready yet.")
-
-        if self.getOutputsSize() >= 1:
-            for key, output in self.iterOutputAttributes():
-                summary.append("*%s:* \n %s " % (key, output.getObjComment()))
-        else:
-            summary.append(Message.TEXT_NO_OUTPUT_CO)
-        return summary
