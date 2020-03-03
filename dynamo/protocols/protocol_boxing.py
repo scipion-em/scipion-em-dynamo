@@ -28,7 +28,7 @@ import os
 import numpy as np
 
 import pyworkflow.utils as pwutils
-from pyworkflow.protocol.params import PointerParam, IntParam
+from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 from pyworkflow.em.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR,
@@ -53,15 +53,17 @@ class DynamoBoxing(ProtTomoPicking):
         ProtTomoPicking._defineParams(self, form)
 
         form.addParam('boxSize', IntParam, label="Box Size")
-
-        form.addParam('inputCoordinates', PointerParam, label="Input Coordinates",
+        form.addParam('selection', EnumParam, choices=['Yes', 'No'], default=1,
+                      label='Modify previous coordinates?', display=EnumParam.DISPLAY_HLIST,
+                      help='This option allows to add and/or remove coordinates to a previous SetOfCoordinates')
+        form.addParam('inputCoordinates', PointerParam, label="Input Coordinates", condition='selection == 0',
                       allowsNull=True, pointerClass='SetOfCoordinates3D',
-                      help='Select the SetOfCoordinates3D.')
+                      help='Select the previous SetOfCoordinates you want to modify')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         # Copy input coordinates to Extra Path
-        if self.inputCoordinates.get():
+        if self.selection.get() == 0:
             self._insertFunctionStep('copyInputCoords')
 
         # Launch Boxing GUI
