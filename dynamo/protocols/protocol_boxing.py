@@ -31,8 +31,6 @@ import pyworkflow.utils as pwutils
 from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
-from pyworkflow.em.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR,
-                                    MDL_PICKING_PARTICLE_SIZE)
 
 from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D, Coordinate3D
@@ -86,7 +84,7 @@ class DynamoBoxing(ProtTomoPicking):
         inputCoordinates = self.inputCoordinates.get()
         inputTomograms = self.inputTomograms.get()
         for tomo in inputTomograms:
-            outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
+            outFileCoord = self._getTmpPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
             coords_tomo = []
             for coord in inputCoordinates.iterCoordinates(tomo):
                 coords_tomo.append(coord.getPosition())
@@ -112,7 +110,7 @@ class DynamoBoxing(ProtTomoPicking):
                    "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
                    "vesicle.linkCatalogue('%s','i',tomoIndex)\n" \
                    "vesicle.saveInCatalogue()\n" \
-                   "end\n" % (catalogue, listTomosFile, self._getExtraPath(), catalogue, catalogue)
+                   "end\n" % (catalogue, listTomosFile, self._getTmpPath(), catalogue, catalogue)
 
         codeFid = open(codeFile, 'w')
         codeFid.write(contents)
@@ -145,19 +143,18 @@ class DynamoBoxing(ProtTomoPicking):
         coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
         coord3DSet.setBoxSize(self.boxSize.get())
         for tomo in setTomograms.iterItems():
-            outFile = pwutils.join(self._getExtraPath(), pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-            if not os.path.isfile(outFile):
+            outPoints = pwutils.join(self._getExtraPath(), pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
+            outAngles = pwutils.join(self._getExtraPath(), 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
+            if not os.path.isfile(outPoints):
                 continue
 
             # Populate Set of 3D Coordinates with 3D Coordinates
-            md = MetaData()
-            md.readPlain(outFile, "xcoor ycoor zcoor")
-            for objId in md:
-                x = md.getValue(MDL_XCOOR, objId)
-                y = md.getValue(MDL_YCOOR, objId)
-                z = md.getValue(MDL_ZCOOR, objId)
+            points = np.loadtxt(outPoints, delimiter=' ')
+            angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' '))
+            for idx in range(len(points)):
                 coord = Coordinate3D()
-                coord.setPosition(x, y, z)
+                coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
+                coord.setMatrix(angles[idx, 0], angles[idx, 1], angles[idx, 2])
                 coord.setVolume(tomo)
                 coord3DSet.append(coord)
 
@@ -217,17 +214,22 @@ class DynamoBoxing(ProtTomoPicking):
                   "numTomos=length(dcm_data)\n" \
                   "for idt=1:numTomos\n" \
                   "[~,outFile,~]=fileparts(dcm_data{idt}{end})\n" \
-                  "outFile=[outFile '.txt']\n" \
+                  "outPoints=[outFile '.txt']\n" \
+                  "outAngles=['angles_' outFile '.txt']\n" \
                   "crop_points=[]\n" \
+                  "crop_angles=[]\n" \
                   "for model=models{idt}\n" \
                   "if iscell(model)\n" \
                   "crop_points=[crop_points; model{end}.crop_points]\n" \
+                  "crop_angles=[crop_angles; model{end}.crop_angles]\n" \
                   "else\n" \
                   "crop_points=[crop_points; model.crop_points]\n" \
+                  "crop_angles=[crop_angles; model.crop_angles]\n" \
                   "end\n" \
                   "end\n" \
                   "if ~isempty(crop_points)\n" \
-                  "writematrix(crop_points,fullfile(savePath,outFile),'Delimiter',' ')\n" \
+                  "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
+                  "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
                   "end\n" \
                   "end\n" % (os.path.abspath(os.getcwd()), self._getExtraPath(),
                              catalogue, catalogue, listTomosFile, catalogue, catalogue)
