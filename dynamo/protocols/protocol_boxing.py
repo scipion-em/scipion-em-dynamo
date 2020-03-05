@@ -154,7 +154,7 @@ class DynamoBoxing(ProtTomoPicking):
             for idx in range(len(points)):
                 coord = Coordinate3D()
                 coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
-                coord.setMatrix(angles[idx, 0], angles[idx, 1], angles[idx, 2])
+                coord.euler2Matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2])
                 coord.setVolume(tomo)
                 coord3DSet.append(coord)
 
