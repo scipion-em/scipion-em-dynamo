@@ -26,6 +26,7 @@
 # **************************************************************************
 
 from os.path import join
+from shutil import copy
 from pyworkflow.em.data import Volume
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils import importFromPlugin
@@ -243,7 +244,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         writeDynTable(fhTable, inputVols)
         fhTable.close()
         fhCommands = open(self._getExtraPath("commands.doc"), 'w')
-        content = "dcp.new('%s','data','data','table', 'initial.tbl','gui',0);" % self.projName + \
+        content = "dcp.new('%s','data','data','gui',0);" % self.projName + \
                   "dvput('%s', 'dim', '%s');" % (self.projName, dim) + \
                   "dvput('%s', 'sym', '%s');" % (self.projName, self.sym) + \
                   "dvput('%s', 'ite', '%s');" % (self.projName, self.numberOfIters) + \
@@ -277,10 +278,18 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             if isinstance(template, Volume):
                 writeVolume(template, join(self._getExtraPath(), 'template'))
                 content += "dvput('%s', 'template', 'template.mrc');" % self.projName
+                content += "dvput('%s', 'table', 'initial.tbl');" % self.projName
+
             else:
                 makePath(self._getExtraPath('templates'))
                 writeSetOfVolumes(template, join(self._getExtraPath(), 'templates/template_initial_ref_'))
+                for template in self.templateRef.get().iterItems():
+                    copy(join(self._getExtraPath(), 'initial.tbl'),
+                         join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % template.getObjId()))
                 content += "dvput('%s', 'template', 'templates');" % self.projName
+                content += "dvput('%s', 'table', 'templates');" % self.projName
+                content += "dvput('%s', 'nref', '%d');" % (self.projName, self.nref)
+
         else:
             if self.useRandomTable.get():
                 content += "dynamo_table_perturbation('data','pshift',0,'paxis',0,'pnarot',360);"
@@ -310,7 +319,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             content += "dvput('%s', 'smask', 'smask.mrc');" % self.projName
 
         # content += "dvcheck('%s');" % self.projName
-        content += "dvcheck('%s');dvunfold('%s');dynamo_execute_project %s" % (self.projName, self.projName, self.projName)
+        content += "dvcheck('%s');dvunfold('%s');dynamo_execute_project %s" % \
+                   (self.projName, self.projName, self.projName)
         fhCommands.write(content)
         fhCommands.close()
 
