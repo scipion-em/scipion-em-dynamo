@@ -313,6 +313,11 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 makePath(self._getExtraPath('fmasks'))
                 writeSetOfVolumes(self.fmask.get(), join(self._getExtraPath(), 'fmasks/fmask_initial_ref_'))
                 content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
+        else:
+            if self.mra.get():
+                makePath(self._getExtraPath('fmasks'))
+                content += "dynamo_write_multireference({ones(64,64,64),ones(64,64,64)},'fmask','fmasks');"
+                content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
 
         if self.smask.get() is not None:
             writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
