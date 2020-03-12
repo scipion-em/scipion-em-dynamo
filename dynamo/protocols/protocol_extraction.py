@@ -208,7 +208,7 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
     def _tomosOther(self):
         """ Return True if other tomograms are used for extract. """
         return self.tomoSource == OTHER
-    
+
     def _methods(self):
         methodsMsgs = []
         if self.getOutputsSize() >= 1:
