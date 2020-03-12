@@ -25,14 +25,14 @@
 # **************************************************************************
 
 import os
-import numpy as np
+import glob
 
 import pyworkflow.utils as pwutils
 import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
 
 from tomo.protocols import ProtTomoBase
-from tomo.objects import SetOfCoordinates3D, Coordinate3D
+from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
 
 from dynamo import Plugin
 
@@ -125,7 +125,22 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
         pwutils.cleanPattern('*.m')
 
     def createOutputStep(self):
-        pass
+        self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
+        self.outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() * self.downFactor.get())
+        self.outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
+        acquisition = TomoAcquisition()
+        acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
+        acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
+        acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
+        self.outputSubTomogramsSet.setAcquisition(acquisition)
+        for ind, tomoFile in enumerate(self.tomoFiles):
+            cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind+1)), '')
+            if os.path.isdir(cropPath):
+                coordSet = self.lines[ind]
+                outputSet = self.readSetOfSubTomograms(cropPath, self.outputSubTomogramsSet, coordSet)
+
+        self._defineOutputs(outputSetOfSubtomogram=outputSet)
+        self._defineSourceRelation(self.inputCoordinates, outputSet)
 
     # --------------------------- DEFINE utils functions ----------------------
     def getInputTomograms(self):
@@ -175,25 +190,51 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
 
         return codeFilePath
 
-    # --------------------------- DEFINE info functions ----------------------
-    def getMethods(self, output):
-        msg = 'User picked %d particles ' % output.getSize()
-        msg += 'with a particle size of %s.' % output.getBoxSize()
-        return msg
+    def readSetOfSubTomograms(self, workDir, outputSubTomogramsSet, coordSet):
+        for ids, subTomoFile in enumerate(glob.glob(os.path.join(workDir, '*.em'))):
+            subtomogram = SubTomogram()
+            subtomogram.cleanObjId()
+            subtomogram.setLocation(subTomoFile)
+            dfactor = self.downFactor.get()
+            if dfactor != 1:
+                fnSubtomo = self._getExtraPath("downsampled_subtomo%d.mrc" % ids+1)
+                pwem.ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
+                subtomogram.setLocation(fnSubtomo)
+            subtomogram.setCoordinate3D(coordSet[ids])
+            outputSubTomogramsSet.append(subtomogram)
+        return outputSubTomogramsSet
 
+    # --------------------------- DEFINE info functions ----------------------
+    def _tomosOther(self):
+        """ Return True if other tomograms are used for extract. """
+        return self.tomoSource == OTHER
+    
     def _methods(self):
         methodsMsgs = []
-        if self.inputTomograms is None:
-            return ['Input tomogram not available yet.']
-
-        methodsMsgs.append("Input tomograms imported of dims %s." %(
-                              str(self.inputTomograms.get().getDim())))
-
         if self.getOutputsSize() >= 1:
-            for key, output in self.iterOutputAttributes():
-                msg = self.getMethods(output)
-                methodsMsgs.append("%s: %s" % (self.getObjectTag(output), msg))
+            msg = ("A total of %s subtomograms of size %s were extracted"
+                   % (str(self.inputCoordinates.get().getSize()), self.boxSize.get()))
+            if self._tomosOther():
+                msg += (" from another set of tomograms: %s"
+                        % self.getObjectTag('inputTomogram'))
+            msg += " using coordinates %s" % self.getObjectTag('inputCoordinates')
+            msg += self.methodsVar.get('')
+            methodsMsgs.append(msg)
         else:
-            methodsMsgs.append(Message.TEXT_NO_OUTPUT_CO)
-
+            methodsMsgs.append("Set of Subtomograms not ready yet")
+        if self.downFactor.get() != 1:
+            methodsMsgs.append("Subtomograms downsample by factor %d."
+                               % self.downFactor.get())
         return methodsMsgs
+
+    def _summary(self):
+        summary = []
+        summary.append("Tomogram source: %s"
+                       % self.getEnumText("tomoSource"))
+        if self.getOutputsSize() >= 1:
+            summary.append("Particle box size: %s" % self.boxSize.get())
+            summary.append("Subtomogram extracted: %s" %
+                           self.inputCoordinates.get().getSize())
+        else:
+            summary.append("Output subtomograms not ready yet.")
+        return summary
