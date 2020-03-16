@@ -93,8 +93,10 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def writeSetOfCoordinates3D(self):
+        samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
+        samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
+        self.factor = float(samplingRateCoord / samplingRateTomo)
         self.lines = []
-        self.tomoFiles = []
         inputSet = self.getInputTomograms()
         self.coordsFileName = self._getExtraPath('coords.txt')
         self.anglesFileName = self._getExtraPath('angles.txt')
@@ -104,15 +106,16 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
             coordDict = []
             tomo = item.clone()
             for coord3DSet in self.inputCoordinates.get().iterCoordinates():
-                if os.path.basename(tomo.getFileName()) == os.path.basename(coord3DSet.getVolName()):
+                if pwutils.removeBaseExt(tomo.getFileName()) == pwutils.removeBaseExt(coord3DSet.getVolName()):
                     angles_coord = coord3DSet.eulerAngles()
-                    outC.write("%d\t%d\t%d\t%d\n" % (coord3DSet.getX(), coord3DSet.getY(), coord3DSet.getZ(), idt+1))
+                    x = round(self.factor * coord3DSet.getX())
+                    y = round(self.factor * coord3DSet.getY())
+                    z = round(self.factor * coord3DSet.getZ())
+                    outC.write("%d\t%d\t%d\t%d\n" % (x, y, z, idt+1))
                     outA.write("%f\t%f\t%f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
                     coordDict.append(coord3DSet.clone())
             if coordDict:
                 self.lines.append(coordDict)
-                self.tomoFiles.append(tomo.getFileName())
-                self.samplingRateTomo = tomo.getSamplingRate()
         outC.close()
         outA.close()
 
@@ -155,6 +158,7 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
         codeFilePath = os.path.join(os.getcwd(), "DynamoExtraction.m")
         listTomosFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
+        self.tomoFiles = [tomo.getFileName() for tomo in self.getInputTomograms().iterItems()]
 
         # Create list of tomos file
         tomoFid = open(listTomosFile, 'w')
@@ -164,7 +168,7 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
         tomoFid.close()
 
         # Check of box size is an even number (as required by Dynamo)
-        boxSize = self.boxSize.get()
+        boxSize = round(self.factor * self.boxSize.get())
         if boxSize % 2 != 0:
             boxSize += 1
 
