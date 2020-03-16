@@ -163,6 +163,11 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
             tomoFid.write(tomoPath + '\n')
         tomoFid.close()
 
+        # Check of box size is an even number (as required by Dynamo)
+        boxSize = self.boxSize.get()
+        if boxSize % 2 != 0:
+            boxSize += 1
+
         # Write code to Matlab code file
         codeFid = open(codeFilePath, 'w')
         content = "path='%s'\n" \
@@ -182,7 +187,7 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
                   "dtcrop(c.volumes{tag}.fullFileName,t,strcat(savePath,num2str(tag)),box)\n" \
                   "end\n" \
                    % (os.path.abspath(os.getcwd()), self._getExtraPath('Crop'),
-                      catalogue, self.boxSize.get(), catalogue, listTomosFile, os.path.abspath(self.coordsFileName),
+                      catalogue,boxSize, catalogue, listTomosFile, os.path.abspath(self.coordsFileName),
                       os.path.abspath(self.anglesFileName))
 
         codeFid.write(content)
