@@ -206,7 +206,7 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
             subtomogram.setLocation(subTomoFile)
             dfactor = self.downFactor.get()
             if dfactor != 1:
-                fnSubtomo = self._getExtraPath("downsampled_subtomo%d.mrc" % ids+1)
+                fnSubtomo = self._getExtraPath("downsampled_subtomo%d.mrc" % (ids+1))
                 pwem.ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coordSet[ids])
