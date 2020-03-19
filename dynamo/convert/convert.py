@@ -103,6 +103,29 @@ def readDynTable(self, item):
     classId = nline.split()[21]
     item.setClassId(classId)
 
+def readDynCoord(tableFile, coord3DSet, tomo):
+    with open(tableFile) as fhTable:
+        for nline in fhTable:
+            coordinate3d = Coordinate3D()
+            nline = nline.rstrip()
+            shiftx = nline.split()[3]
+            shifty = nline.split()[4]
+            shiftz = nline.split()[5]
+            tilt = nline.split()[6]
+            narot = nline.split()[7]
+            tdrot = nline.split()[8]
+            A = eulerAngles2matrix(tilt, narot, tdrot, shiftx, shifty, shiftz)
+            x = nline.split()[23]
+            y = nline.split()[24]
+            z = nline.split()[25]
+            coordinate3d.setX(float(x))
+            coordinate3d.setY(float(y))
+            coordinate3d.setZ(float(z))
+            coordinate3d.setMatrix(A)
+            coordinate3d.setVolume(tomo)
+            coord3DSet.append(coordinate3d)
+    return coord3DSet
+
 
 # matrix2euler dynamo
 def matrix2eulerAngles(A):
