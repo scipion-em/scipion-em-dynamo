@@ -124,7 +124,6 @@ def readDynCoord(tableFile, coord3DSet, tomo):
             coordinate3d.setMatrix(A)
             coordinate3d.setVolume(tomo)
             coord3DSet.append(coordinate3d)
-    return coord3DSet
 
 
 # matrix2euler dynamo
