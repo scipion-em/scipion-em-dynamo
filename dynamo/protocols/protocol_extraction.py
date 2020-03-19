@@ -78,7 +78,8 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
                       label='Box size',
                       help='The subtomograms are extracted as a cubic box of this size.\n'
                            'The wizard selects same box size as picking.\n'
-                           'In Dynamo, this parameter must be an even number.')
+                           'Dynamo only accepts even numbers as box sizes. Otherwise, an exception will '
+                           'be returned.')
 
         form.addParam('downFactor', params.FloatParam, default=1.0,
                       label='Downsampling factor',
@@ -214,6 +215,14 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
         return outputSubTomogramsSet
 
     # --------------------------- DEFINE info functions ----------------------
+    def _validate(self):
+        errors = []
+        if not self.boxSize.get() % 2 == 0:
+            errors.append('The box size provided to Dynamo is an odd number. '
+                          'This will rise an execption when Dynamo is invoked.\n'
+                          'Please, provide an even number to continue with the extraction.')
+        return errors
+
     def _tomosOther(self):
         """ Return True if other tomograms are used for extract. """
         return self.tomoSource == OTHER

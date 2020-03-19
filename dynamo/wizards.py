@@ -44,7 +44,10 @@ class DynamoExtractionWizard(EmWizard):
             print('You must specify input coordinates')
             return
 
-        boxSize = inputCoordinates.getBoxSize()
+        aux = inputCoordinates.getBoxSize()
+        if not aux % 2 == 0:
+            aux += 1
+        boxSize = aux
         if not boxSize:
             print('These coordinates do not have box size. Please, enter box size manually.')
             return
