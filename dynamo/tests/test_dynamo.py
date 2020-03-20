@@ -48,7 +48,8 @@ class TestDynamoBase(BaseTest):
         DataSet = importFromPlugin("tomo.tests", "DataSet", errorMsg=TOMO_NEEDED_MSG)
         cls.dataset = DataSet.getDataSet(projectData)
         cls.tomogram = cls.dataset.getFile('tomo1')
-        cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
+        cls.emanCoords = cls.dataset.getFile('overview_wbp.txt')
+        cls.dynCoords = cls.dataset.getFile('overview_wbp.tbl')
         cls.angles = cls.dataset.getFile('overview_wbp.ang')
         cls.inputSetOfSubTomogram = cls.dataset.getFile('subtomo')
         cls.smallTomogram = cls.dataset.getFile('coremask_normcorona.mrc')
@@ -127,14 +128,14 @@ class TestDynamoExtraction(TestDynamoBase):
 
         protImportCoordinatesNoAngles = self.newProtocol(ProtImportCoordinates3D,
                                                          auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                                         filesPath=self.coords3D,
+                                                         filesPath=self.emanCoords,
                                                          importTomograms=protImportTomogram.outputTomograms,
                                                          filesPattern='', boxSize=32,
                                                          samplingRate=5)
 
         protImportCoordinatesAngles = self.newProtocol(ProtImportCoordinates3D,
                                                        auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                                       filesPath=self.coords3D,
+                                                       filesPath=self.dynCoords,
                                                        importTomograms=protImportTomogram.outputTomograms,
                                                        filesPattern='', boxSize=32, importAngles=True,
                                                        samplingRate=5)

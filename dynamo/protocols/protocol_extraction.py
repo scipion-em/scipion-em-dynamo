@@ -30,6 +30,7 @@ import glob
 import pyworkflow.utils as pwutils
 import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
+from pyworkflow.em.data import Transform
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
@@ -211,6 +212,9 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
                 pwem.ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coordSet[ids])
+            transform = Transform()
+            transform.setMatrix(coordSet[ids].getMatrix())
+            subtomogram.setTransform(transform)
             outputSubTomogramsSet.append(subtomogram)
         return outputSubTomogramsSet
 
