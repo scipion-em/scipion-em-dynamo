@@ -25,7 +25,7 @@
 # **************************************************************************
 
 from os.path import join
-import pyworkflow.em as pwem
+import pwem
 import pyworkflow.utils as pwutils
 from .constants import *
 
@@ -76,4 +76,3 @@ class Plugin(pwem.Plugin):
     #                    neededProgs=["wget"],
     #                    default=True)
 
-pwem.Domain.registerPlugin(__name__)

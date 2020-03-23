@@ -28,9 +28,10 @@ import os
 import glob
 
 import pyworkflow.utils as pwutils
-import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
-from pyworkflow.em.data import Transform
+from pwem.emlib.image import ImageHandler
+from pwem.objects import Transform
+from pwem.protocols import EMProtocol
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
@@ -43,13 +44,13 @@ SAME_AS_PICKING = 0
 OTHER = 1
 
 
-class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
+class DynamoExtraction(EMProtocol, ProtTomoBase):
     """Extraction of subtomograms using Dynamo"""
 
     _label = 'tomo extraction'
 
     def __init__(self, **kwargs):
-        pwem.EMProtocol.__init__(self, **kwargs)
+        EMProtocol.__init__(self, **kwargs)
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -102,8 +103,8 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
         inputSet = self.getInputTomograms()
         self.coordsFileName = self._getExtraPath('coords.txt')
         self.anglesFileName = self._getExtraPath('angles.txt')
-        outC = file(self.coordsFileName, "w")
-        outA = file(self.anglesFileName, 'w')
+        outC = open(self.coordsFileName, "w")
+        outA = open(self.anglesFileName, 'w')
         for idt, item in enumerate(inputSet):
             coordDict = []
             tomo = item.clone()
@@ -158,7 +159,7 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
     def writeMatlabCode(self):
         # Initialization params
         codeFilePath = os.path.join(os.getcwd(), "DynamoExtraction.m")
-        listTomosFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
+        listTomosFile = self._getTmpPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
         self.tomoFiles = [tomo.getFileName() for tomo in self.getInputTomograms().iterItems()]
 
@@ -209,7 +210,7 @@ class DynamoExtraction(pwem.EMProtocol, ProtTomoBase):
             dfactor = self.downFactor.get()
             if dfactor != 1:
                 fnSubtomo = self._getExtraPath(os.path.basename(workDir.strip("/")) + "_downsampled_subtomo%d.mrc" % (ids+1))
-                pwem.ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
+                ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coordSet[ids])
             transform = Transform()

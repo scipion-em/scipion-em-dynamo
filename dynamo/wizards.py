@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from pyworkflow.em.wizard import EmWizard
+from pwem.wizards import EmWizard
 
 from dynamo.protocols import DynamoExtraction
 

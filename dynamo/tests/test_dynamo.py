@@ -25,13 +25,10 @@
 # *
 # **************************************************************************
 
-from pyworkflow.utils import importFromPlugin
-from pyworkflow.tests import BaseTest, setupTestProject, DataSet
+from pyworkflow.tests import BaseTest, setupTestProject
 
-from tomo.protocols import ProtImportSubTomograms
+from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
 from tomo.tests import DataSet
-
-from eman2.constants import TOMO_NEEDED_MSG
 
 from xmipp3.protocols import XmippProtCreateMask3D
 
@@ -45,7 +42,6 @@ class TestDynamoBase(BaseTest):
 
     @classmethod
     def setData(cls, projectData='tomo-em'):
-        DataSet = importFromPlugin("tomo.tests", "DataSet", errorMsg=TOMO_NEEDED_MSG)
         cls.dataset = DataSet.getDataSet(projectData)
         cls.tomogram = cls.dataset.getFile('tomo1')
         cls.emanCoords = cls.dataset.getFile('overview_wbp.txt')
@@ -112,10 +108,6 @@ class TestDynamoExtraction(TestDynamoBase):
         TestDynamoBase.setData()
 
     def _runExtraction(self, tomoSource = 0, downFactor = 1):
-        ProtImportTomograms = importFromPlugin("tomo.protocols", "ProtImportTomograms",
-                                               errorMsg=TOMO_NEEDED_MSG)
-        ProtImportCoordinates3D = importFromPlugin("tomo.protocols", "ProtImportCoordinates3D",
-                                                   errorMsg=TOMO_NEEDED_MSG)
 
         protImportTomogram = self.newProtocol(ProtImportTomograms,
                                               filesPath=self.tomogram,
