@@ -56,9 +56,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addParam('sym', StringParam, default='c1', label='Symmetry group',
                       help="Specify the article's symmetry. Symmetrization is applied at the beginning of the round to "
                            "the input reference.")
-        form.addParam('numberOfRounds', IntParam, label='Rounds', default=1, expertLevel=LEVEL_ADVANCED,
-                      help="Number of rounds (from 1 to 8). Each round consists in X iterations with the same "
-                           "parameters, but parameters could vary in different rounds")
         form.addParam('numberOfIters', IntParam, label='Iterations', default=5, help="Number of iterations per round")
         form.addParam('pca', BooleanParam, label='Perform PCA', default=False,
                       help="If selected, principal component analysis alignment is performed")
@@ -66,18 +63,17 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addSection(label='Templates')
         form.addParam('mra', BooleanParam, label='Perform MRA', default=False,
                       help="If selected, multi-reference alignment (MRA) is performed")
-        form.addParam('nref', IntParam, label='Number of references for MRA', default=1, condition="mra",
-                      help="Number of references for multi-reference alignment(MRA)")
-        form.addParam('generateTemplate', BooleanParam, default=False, label='Generate reference templates:',
+        form.addParam('generateTemplate', BooleanParam, default=False, label='Generate reference template(s):',
                       help="Generate a reference template based on parameters")
+        form.addParam('nref', IntParam, label='Number of references for MRA', default=2,
+                      condition="mra and generateTemplate",
+                      help="Number of references for multi-reference alignment (MRA)")
         form.addParam('templateRef', PointerParam, label="Template", condition="not generateTemplate",
                       pointerClass='Volume, SetOfVolumes', allowsNull=True,
                       help='The size of the template should be equal or smaller than the size of the particles. If you '
                            'pass a single file in multireference modus (MRA), Dynamo will just made copies of it.')
-        form.addParam('numberOfParticles', IntParam, label='Number of particles', default=50,
-                      condition="generateTemplate", help="Number of references to generate automatically")
-        form.addParam('useRandomTable', BooleanParam, label='Use a random table (rotate particles randomly)',
-                      default=False, condition="generateTemplate", help="")
+        form.addParam('useRandomTable', BooleanParam, label='Use a random table',
+                      default=False, condition="generateTemplate", help="Rotate particles randomly")
         form.addParam('compensateMissingWedge', BooleanParam, label='Compensate for missing wedge', default=False,
                       condition="generateTemplate", help="")
 
@@ -233,7 +229,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         makePath(fnDirData)
         fnRoot = join(fnDirData, "particle_")
         inputVols = self.inputVolumes.get()
-        writeSetOfVolumes(inputVols, fnRoot)
+        writeSetOfVolumes(inputVols, fnRoot, 'id')
         pcaInt = int(self.pca.get())
         mraInt = int(self.mra.get())
         ccmatrixInt = int(self.ccmatrix.get())
@@ -279,25 +275,55 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 writeVolume(template, join(self._getExtraPath(), 'template'))
                 content += "dvput('%s', 'template', 'template.mrc');" % self.projName
                 content += "dvput('%s', 'table', 'initial.tbl');" % self.projName
-
             else:
                 makePath(self._getExtraPath('templates'))
-                writeSetOfVolumes(template, join(self._getExtraPath(), 'templates/template_initial_ref_'))
-                for template in self.templateRef.get().iterItems():
+                writeSetOfVolumes(template, join(self._getExtraPath(), 'templates/template_initial_ref_'), 'ix')
+                for ix, template1 in enumerate(self.templateRef.get().iterItems()):
                     copy(join(self._getExtraPath(), 'initial.tbl'),
-                         join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % template.getObjId()))
+                         join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % int(ix+1)))
                 content += "dvput('%s', 'template', 'templates');" % self.projName
                 content += "dvput('%s', 'table', 'templates');" % self.projName
                 content += "dvput('%s', 'nref', '%d');" % (self.projName, self.nref)
-
+                if self.fmask.get() is None:
+                        makePath(self._getExtraPath('fmasks'))
+                        dimsf = inputVols.getFirstItem().getDim()
+                        sizef = template.getSize()
+                        content += "dynamo_write_multireference(ones(%d,%d,%d),'fmask','fmasks','refs',1:%d);" \
+                                   % (dimsf[0], dimsf[1], dimsf[2], sizef)
+                        content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
         else:
-            if self.useRandomTable.get():
-                content += "dynamo_table_perturbation('data','pshift',0,'paxis',0,'pnarot',360);"
-            if self.compensateMissingWedge.get():
-                pass
-                # content += "dynamo_table_randomize_azimuth('initial');"
-            makePath(self._getExtraPath('templates'))
-            content += "daverage('data','t','initial','fc',1);"
+            if not self.mra.get():
+                if self.useRandomTable.get():
+                    content += "dynamo_table_perturbation('initial.tbl','pshift',0,'paxis',0,'pnarot',360,'o'," \
+                               "'initialmodif.tbl');"
+                if self.compensateMissingWedge.get():
+                    content += "dynamo_table_randomize_azimuth('initial.tbl','o','initialmodif.tbl');"
+                content += "dynamo_average('data','table','initialmodif.tbl','o','template.mrc');"
+                content += "dvput('%s', 'template', 'template.mrc');" % self.projName
+                content += "dvput('%s', 'table', 'initial.tbl');" % self.projName
+
+            else:
+                makePath(self._getExtraPath('templates'))
+                for ix, template in enumerate(range(self.nref.get())):
+                    if self.useRandomTable.get():
+                        content += "dynamo_table_perturbation('initial.tbl','pshift',0,'paxis',0,'pnarot',360,'o'," \
+                                   "'initialmodif.tbl');"
+                    if self.compensateMissingWedge.get():
+                        content += "dynamo_table_randomize_azimuth('initial.tbl','o','initialmodif.tbl');"
+                    content += "dynamo_average('data','table','initialmodif.tbl','o'," \
+                               "'templates/template_initial_ref_%03d.mrc');" % int(ix+1)
+                    copy(join(self._getExtraPath(), 'initial.tbl'),
+                         join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % int(ix+1)))
+                content += "dvput('%s', 'template', 'templates');" % self.projName
+                content += "dvput('%s', 'table', 'templates');" % self.projName
+                content += "dvput('%s', 'nref', '%d');" % (self.projName, self.nref)
+                if self.fmask.get() is None:
+                        makePath(self._getExtraPath('fmasks'))
+                        dimsf = inputVols.getFirstItem().getDim()
+                        sizef = self.nref.get()
+                        content += "dynamo_write_multireference(ones(%d,%d,%d),'fmask','fmasks','refs',1:%d);" \
+                                   % (dimsf[0], dimsf[1], dimsf[2], sizef)
+                        content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
 
         if self.mask.get() is not None:
             writeVolume(self.mask.get(), join(self._getExtraPath(), 'mask'))
@@ -311,21 +337,15 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 content += "dvput('%s', 'fmask', 'fmask.mrc');" % self.projName
             else:
                 makePath(self._getExtraPath('fmasks'))
-                writeSetOfVolumes(self.fmask.get(), join(self._getExtraPath(), 'fmasks/fmask_initial_ref_'))
+                writeSetOfVolumes(self.fmask.get(), join(self._getExtraPath(), 'fmasks/fmask_initial_ref_'), 'ix')
                 content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
-        else:
-            if self.mra.get():
-                makePath(self._getExtraPath('fmasks'))
-                content += "dynamo_write_multireference({ones(64,64,64),ones(64,64,64)},'fmask','fmasks');"
-                content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
-
         if self.smask.get() is not None:
             writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
             content += "dvput('%s', 'smask', 'smask.mrc');" % self.projName
 
         # content += "dvcheck('%s');" % self.projName
-        content += "dvcheck('%s');dvunfold('%s');dynamo_execute_project %s" % \
-                   (self.projName, self.projName, self.projName)
+        content += "dvcheck('%s');dvunfold('%s');dynamo_execute_project %s" \
+                   % (self.projName, self.projName, self.projName)
         fhCommands.write(content)
         fhCommands.close()
 
@@ -333,76 +353,79 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         Plugin.runDynamo(self, 'commands.doc', cwd=self._getExtraPath())
 
     def createOutput(self):
-        # self.fhTable = open(self._getExtraPath("initial.tbl"), 'r')  # Change to "real.tbl" or iter_x/...
-        # self.subtomoSet = self._createSetOfSubTomograms()
-        # inputSet = self.inputVolumes.get()
-        # self.subtomoSet.copyInfo(inputSet)
-        # self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
-        # classesSubtomoSet = self._createSetOfClassesSubTomograms(self.subtomoSet)
-        # classesSubtomoSet.classifyItems(updateClassCallback=self._updateClass)
-        # self.fhTable.close()
-        # self._defineOutputs(outputSubtomograms=self.subtomoSet)
-        # self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
-        # self._defineOutputs(outputClassesSubtomo=classesSubtomoSet)
-        # self._defineSourceRelation(self.inputVolumes, classesSubtomoSet)
-
+        self.projName = 'dynamoAlignmentProject'
+        self.subtomoSet = self._createSetOfSubTomograms()
+        inputSet = self.inputVolumes.get()
+        self.subtomoSet.copyInfo(inputSet)
         self.fhTable = open(self._getExtraPath('%s/results/ite_000%s/averages/refined_table_ref_001_ite_000%s.tbl') %
                             (self.projName, self.numberOfIters.get(), self.numberOfIters.get()), 'r')
-        inputSet = self.inputVolumes.get()
-        averageSubTomogram = AverageSubTomogram()
-        readDynTable(self, averageSubTomogram)
-        averageSubTomogram.setFileName(self._getExtraPath
-                                       ('%s/results/ite_000%s/averages/average_ref_001_ite_000%s.em') %
-                                       (self.projName, self.numberOfIters.get(), self.numberOfIters.get()))
-        averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
-        setOfAverageSubTomograms = self._createSet(SetOfAverageSubTomograms, 'subtomograms%s.sqlite', "")
-        setOfAverageSubTomograms.copyInfo(inputSet)
-        setOfAverageSubTomograms.setSamplingRate(inputSet.getSamplingRate())
-        setOfAverageSubTomograms.append(averageSubTomogram)
+        self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
+        self.fhTable.close()
 
-        self._defineOutputs(averageSubTomogram=setOfAverageSubTomograms)
-        self._defineSourceRelation(inputSet, setOfAverageSubTomograms)
+        averageSubTomogram = AverageSubTomogram()
+        averageSubTomogram.setFileName(self._getExtraPath('%s/results/ite_000%s/averages/average_ref_001_ite_000%s.em')
+                                       % (self.projName, self.numberOfIters.get(), self.numberOfIters.get()))
+        averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
+        # setOfAverageSubTomograms = self._createSet(SetOfAverageSubTomograms, 'subtomograms%s.sqlite', "")
+        # setOfAverageSubTomograms.copyInfo(inputSet)
+        # setOfAverageSubTomograms.setSamplingRate(inputSet.getSamplingRate())
+        # setOfAverageSubTomograms.append(averageSubTomogram)
+        self._defineOutputs(outputSubtomograms=self.subtomoSet)
+        self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
+        self._defineOutputs(averageSubTomogram=averageSubTomogram)
+        self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
+
+    # --------------------------- UTILS functions --------------------------------
+    def _updateItem(self, item, row):
+        readDynTable(self, item)
 
     # --------------------------- INFO functions --------------------------------
+    def _validate(self):
+        validateMsgs = []
+        if self.mra.get():
+            if self.generateTemplate.get():
+                if self.nref.get() <= 1:
+                    validateMsgs.append('If MRA is selected, number of references should be greater than one.')
+            elif isinstance(self.templateRef.get(), Volume):
+                validateMsgs.append('If MRA is selected, number of references should be greater than one.')
+            elif self.templateRef.get().getSize() <= 1:
+                validateMsgs.append('If MRA is selected, number of references should be greater than one.')
+        return validateMsgs
 
     def _summary(self):
         summary = []
-        # if hasattr(self, 'outputClassesSubtomo'):
-        summary.append("Input subtomograms: %d" % self.inputVolumes.get().getSize())
-
-        if self.fmask.get() is not None:
-            if isinstance(self.fmask.get(), Volume) or isinstance(self.fmask.get(), SubTomogram):
-                summary.append("Input fmask: %s" % self.fmask.get())
+        if hasattr(self, 'averageSubTomogram') and hasattr(self, 'outputSubtomograms'):
+            summary.append("Input subtomograms: %d" % self.inputVolumes.get().getSize())
+            if self.fmask.get() is not None:
+                if isinstance(self.fmask.get(), Volume) or isinstance(self.fmask.get(), SubTomogram):
+                    summary.append("Input fmask: %s" % self.fmask.get())
+                else:
+                    summary.append("Input fmasks: %d" % self.fmask.get().getSize())
             else:
-                summary.append("Input fmasks: %d" % self.fmask.get().getSize())
-        else:
-            summary.append("Fmask generated")
-
-        if self.mra.get():
-            summary.append("Perform MRA with %d references" % self.nref.get())
-        else:
-            summary.append("No mra")
-
-        if self.generateTemplate.get():
-            summary.append("Template generated")
-        else:
-            if isinstance(self.templateRef.get(), Volume) or isinstance(self.templateRef.get(), SubTomogram):
-                summary.append("Provided template: %s" % self.templateRef.get())
+                summary.append("Fmask(s) generated")
+            if self.mra.get():
+                summary.append("Perform MRA with %d references" % self.nref.get())
             else:
-                summary.append("Provided templates: %d" % self.templateRef.get().getSize())
-
-        # else:
-            # summary.append("Output classes not ready yet.")
+                summary.append("No mra")
+            if self.generateTemplate.get():
+                summary.append("Template(s) generated")
+            else:
+                if isinstance(self.templateRef.get(), Volume) or isinstance(self.templateRef.get(), SubTomogram):
+                    summary.append("Provided template: %s" % self.templateRef.get())
+                else:
+                    summary.append("Provided templates: %d" % self.templateRef.get().getSize())
+        else:
+            summary.append("Output not ready yet.")
         return summary
 
     def _methods(self):
         methods = []
-        # if hasattr(self, 'outputClassesSubtomo'):
-        methods.append(
-            'We aligned %d subtomograms from %s using Dynamo Subtomogram averaging.'
-            % (self.inputVolumes.get().getSize(), self.getObjectTag('inputVolumes')))
-        # else:
-        #     methods.append("Output classes not ready yet.")
+        if hasattr(self, 'averageSubTomogram') and hasattr(self, 'outputSubtomograms'):
+            methods.append(
+                'We aligned %d subtomograms from %s using Dynamo Subtomogram averaging.'
+                % (self.inputVolumes.get().getSize(), self.getObjectTag('inputVolumes')))
+        else:
+            methods.append("Output not ready yet.")
         return methods
 
     def _citations(self):

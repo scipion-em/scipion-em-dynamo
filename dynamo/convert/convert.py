@@ -37,10 +37,14 @@ def writeVolume(volume, outputFn):
     ih.convert(volume, "%s.mrc" % outputFn)
 
 
-def writeSetOfVolumes(setOfVolumes, outputFnRoot):
+def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
     ih = ImageHandler()
-    for volume in setOfVolumes:
-        ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
+    if name == 'id':  # write the ID of the object in the name
+        for volume in setOfVolumes:
+            ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
+    if name == 'ix':  # write the INDEX of the object in the name
+        for ix, volume in enumerate(setOfVolumes):
+            ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, int(ix+1)))
 
 
 def writeDynTable(fhTable, setOfSubtomograms):
