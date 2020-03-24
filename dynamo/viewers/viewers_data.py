@@ -26,11 +26,9 @@
 
 import os
 
+from pwem.viewers import ObjectView
+
 import pyworkflow.viewer as pwviewer
-import pyworkflow.em.viewers.views as vi
-from pyworkflow.gui.dialog import askYesNo
-from pyworkflow.utils.properties import Message
-import pyworkflow.utils as pwutils
 
 import tomo.objects
 from tomo.viewers.views_tkinter_tree import MeshesTreeProvider
@@ -53,7 +51,7 @@ class DynamoDataViewer(pwviewer.Viewer):
         self._views = []
 
     def _getObjView(self, obj, fn, viewParams={}):
-        return vi.ObjectView(
+        return ObjectView(
             self._project, obj.strId(), fn, viewParams=viewParams)
 
     def _visualize(self, obj, **kwargs):

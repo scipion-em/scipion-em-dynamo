@@ -27,6 +27,7 @@
 import os, threading
 import numpy as np
 
+import pyworkflow.config as conf
 from pyworkflow import utils as pwutils
 from pyworkflow.utils.process import runJob
 from pyworkflow.gui.dialog import ToolbarListDialog
@@ -97,8 +98,8 @@ class DynamoDialog(ToolbarListDialog):
         runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def _writeInputFile(self, tomo):
-        inputFilePath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "commands.doc")
-        tomoFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
+        inputFilePath = os.path.join(conf.Config.SCIPION_TMP, "commands.doc")
+        tomoFile = os.path.join(conf.Config.SCIPION_TMP, "tomos.vll")
         catalogue = os.path.join(self.path, 'tomos')
         tomoFid = open(tomoFile, 'w')
         tomoName = tomo.getFileName()
@@ -179,8 +180,8 @@ class DynamoDialog(ToolbarListDialog):
         return inputFilePath
 
     def _writeViewerFile(self, tomo):
-        inputFilePath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "commands.doc")
-        tomoFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
+        inputFilePath = os.path.join(conf.Config.SCIPION_TMP, "commands.doc")
+        tomoFile = os.path.join(conf.Config.SCIPION_TMP, "tomos.vll")
         catalogue = os.path.join(self.path, 'tomos')
         tomoFid = open(tomoFile, 'w')
         tomoName = tomo.getFileName()

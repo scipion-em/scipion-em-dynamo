@@ -27,7 +27,8 @@
 import os, glob
 import numpy as np
 
-from pyworkflow.em import ProtAnalysis3D
+from pwem.protocols import ProtAnalysis3D
+
 from pyworkflow.protocol.params import PointerParam
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
@@ -35,7 +36,7 @@ from pyworkflow.utils.properties import Message
 from dynamo.viewers.views_tkinter_tree import DynamoDialog
 
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
-from tomo.objects import Mesh, SetOfMeshes
+from tomo.objects import Mesh
 from tomo.protocols import ProtTomoBase
 
 

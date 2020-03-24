@@ -25,5 +25,5 @@
 # *
 # **************************************************************************
 
-from protocol_subtomo_MRA import DynamoSubTomoMRA
-from protocol_models import DynamoModels
+from .protocol_subtomo_MRA import DynamoSubTomoMRA
+from .protocol_models import DynamoModels
