@@ -107,7 +107,7 @@ class TestDynamoExtraction(TestDynamoBase):
         setupTestProject(cls)
         TestDynamoBase.setData()
 
-    def _runExtraction(self, tomoSource = 0, downFactor = 1):
+    def _runExtraction(self, tomoSource = 0, downFactor = 1, text=''):
 
         protImportTomogram = self.newProtocol(ProtImportTomograms,
                                               filesPath=self.tomogram,
@@ -119,6 +119,7 @@ class TestDynamoExtraction(TestDynamoBase):
                              "There was a problem with tomogram output")
 
         protImportCoordinatesNoAngles = self.newProtocol(ProtImportCoordinates3D,
+                                                         objLabel='Coordinates without Angles',
                                                          auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
                                                          filesPath=self.emanCoords,
                                                          importTomograms=protImportTomogram.outputTomograms,
@@ -126,6 +127,7 @@ class TestDynamoExtraction(TestDynamoBase):
                                                          samplingRate=5)
 
         protImportCoordinatesAngles = self.newProtocol(ProtImportCoordinates3D,
+                                                       objLabel='Coordinates with Angles',
                                                        auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
                                                        filesPath=self.dynCoords,
                                                        importTomograms=protImportTomogram.outputTomograms,
@@ -144,6 +146,7 @@ class TestDynamoExtraction(TestDynamoBase):
                              "There was a problem with coordinates 3d output")
 
         protDynamoExtractionNoAngles = self.newProtocol(DynamoExtraction,
+                                                        objLabel='Extraction without Angles - %s' % text,
                                                         inputTomograms=protImportTomogram.outputTomograms,
                                                         inputCoordinates=coordsNoAngle,
                                                         boxSize=coordsNoAngle.getBoxSize(),
@@ -151,6 +154,7 @@ class TestDynamoExtraction(TestDynamoBase):
                                                         downFactor=downFactor)
 
         protDynamoExtractionAngles = self.newProtocol(DynamoExtraction,
+                                                      objLabel='Extraction with Angles - %s' % text,
                                                       inputTomograms=protImportTomogram.outputTomograms,                                                      inputCoordinates=coordsAngle,
                                                       boxSize=coordsAngle.getBoxSize(),
                                                       tomoSource=tomoSource,
@@ -161,7 +165,7 @@ class TestDynamoExtraction(TestDynamoBase):
         return protDynamoExtractionNoAngles, protDynamoExtractionAngles
 
     def test_Extraction_SameAsPicking(self):
-        protExtraction = self._runExtraction()
+        protExtraction = self._runExtraction(text='SameAsPicking')
 
         outputNoAngles = getattr( protExtraction[0], 'outputSetOfSubtomogram', None)
         self.assertTrue(outputNoAngles)
@@ -176,7 +180,7 @@ class TestDynamoExtraction(TestDynamoBase):
         return protExtraction
 
     def test_Extraction_Other(self):
-        protExtraction = self._runExtraction(tomoSource = 1)
+        protExtraction = self._runExtraction(tomoSource = 1, text='OtherSource')
 
         outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
         self.assertTrue(outputNoAngles)
@@ -191,7 +195,7 @@ class TestDynamoExtraction(TestDynamoBase):
         return protExtraction
 
     def test_Extraction_DownSampling(self):
-        protExtraction = self._runExtraction(downFactor = 2)
+        protExtraction = self._runExtraction(downFactor = 2, text='DownSampling')
 
         outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
         self.assertTrue(outputNoAngles)
@@ -206,7 +210,7 @@ class TestDynamoExtraction(TestDynamoBase):
         return protExtraction
 
     def test_Extraction_All(self):
-        protExtraction = self._runExtraction(tomoSource = 1, downFactor = 2)
+        protExtraction = self._runExtraction(tomoSource = 1, downFactor = 2, text='AllOptions')
 
         outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
         self.assertTrue(outputNoAngles)
