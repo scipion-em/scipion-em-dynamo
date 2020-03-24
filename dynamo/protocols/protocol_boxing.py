@@ -70,7 +70,7 @@ class DynamoBoxing(ProtTomoPicking):
     # --------------------------- STEPS functions -----------------------------
     def copyInputCoords(self):
         # Initialize the catalogue
-        listTomosFile = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "tomos.vll")
+        listTomosFile = self._getTmpPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
 
         # Create list of tomos file
