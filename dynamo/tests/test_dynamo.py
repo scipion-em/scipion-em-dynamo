@@ -97,7 +97,7 @@ class TestSubTomogramsAlignment(BaseTest):
                                      nref=4)
         alignment.fmask.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
-        self.assertIsNotNone(alignment.averageSubTomogram,
+        self.assertIsNotNone(alignment.AverageRef1,
                              "There was a problem with SetOfSubtomograms output")
         return alignment
 
