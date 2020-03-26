@@ -25,9 +25,11 @@
 # *
 # **************************************************************************
 
+from os import rename, remove
 from os.path import join
 from shutil import copy
 from pyworkflow.em.data import Volume
+from pyworkflow.object import Set
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils import importFromPlugin
 from pyworkflow.utils.path import makePath
@@ -35,7 +37,7 @@ from dynamo import Plugin
 from dynamo.convert import writeVolume, writeSetOfVolumes, writeDynTable, readDynTable
 ProtTomoSubtomogramAveraging = importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
 AverageSubTomogram = importFromPlugin("tomo.objects", "AverageSubTomogram")
-SetOfAverageSubTomograms = importFromPlugin("tomo.objects", "SetOfAverageSubTomograms")
+SetOfSubTomograms = importFromPlugin("tomo.objects", "SetOfSubTomograms")
 SubTomogram = importFromPlugin("tomo.objects", "SubTomogram")
 
 
@@ -220,7 +222,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     def _insertAllSteps(self):
         self._insertFunctionStep('convertInputStep')
         self._insertFunctionStep('alignStep')
-        self._insertFunctionStep('createOutput')
+        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep('closeSetsStep')
 
     # --------------------------- STEPS functions -------------------------------
 
@@ -239,7 +242,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         fhTable = open(fnTable, 'w')
         writeDynTable(fhTable, inputVols)
         fhTable.close()
-        fhCommands = open(self._getExtraPath("commands.doc"), 'w')
+        fhCommands = open(self._getExtraPath("commands1.doc"), 'w')
         content = "dcp.new('%s','data','data','gui',0);" % self.projName + \
                   "dvput('%s', 'dim', '%s');" % (self.projName, dim) + \
                   "dvput('%s', 'sym', '%s');" % (self.projName, self.sym) + \
@@ -295,10 +298,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             if not self.mra.get():
                 if self.useRandomTable.get():
                     content += "dynamo_table_perturbation('initial.tbl','pshift',0,'paxis',0,'pnarot',360,'o'," \
-                               "'initialmodif.tbl');"
+                               "'initial.tbl');"
                 if self.compensateMissingWedge.get():
-                    content += "dynamo_table_randomize_azimuth('initial.tbl','o','initialmodif.tbl');"
-                content += "dynamo_average('data','table','initialmodif.tbl','o','template.mrc');"
+                    content += "dynamo_table_randomize_azimuth('initial.tbl','o','initial.tbl');"
+                content += "dynamo_average('data','table','initial.tbl','o','template.mrc');"
                 content += "dvput('%s', 'template', 'template.mrc');" % self.projName
                 content += "dvput('%s', 'table', 'initial.tbl');" % self.projName
 
@@ -307,10 +310,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 for ix, template in enumerate(range(self.nref.get())):
                     if self.useRandomTable.get():
                         content += "dynamo_table_perturbation('initial.tbl','pshift',0,'paxis',0,'pnarot',360,'o'," \
-                                   "'initialmodif.tbl');"
+                                   "'initial.tbl');"
                     if self.compensateMissingWedge.get():
-                        content += "dynamo_table_randomize_azimuth('initial.tbl','o','initialmodif.tbl');"
-                    content += "dynamo_average('data','table','initialmodif.tbl','o'," \
+                        content += "dynamo_table_randomize_azimuth('initial.tbl','o','initial.tbl');"
+                    content += "dynamo_average('data','table','initial.tbl','o'," \
                                "'templates/template_initial_ref_%03d.mrc');" % int(ix+1)
                     copy(join(self._getExtraPath(), 'initial.tbl'),
                          join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % int(ix+1)))
@@ -343,37 +346,91 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
             content += "dvput('%s', 'smask', 'smask.mrc');" % self.projName
 
-        # content += "dvcheck('%s');" % self.projName
-        content += "dvcheck('%s');dvunfold('%s');dynamo_execute_project %s" \
-                   % (self.projName, self.projName, self.projName)
+        content += "dynamo_data_format('templates/template_initial_ref_*.mrc'," \
+                   "'templates','modus','convert','extension','.em');"
+
         fhCommands.write(content)
         fhCommands.close()
 
+        Plugin.runDynamo(self, 'commands1.doc', cwd=self._getExtraPath())
+
+        if mraInt == 1:
+            if self.generateTemplate.get() == 0:
+                numberOfrefs = self.templateRef.get().getSize()
+            else:
+                numberOfrefs = self.nref.get()
+            for iref in range(numberOfrefs):
+                rename(join(self._getExtraPath(), 'templates/particle_%05d.em' % int(iref+1)),
+                       join(self._getExtraPath(), 'templates/template_initial_ref_%03d.em' % int(iref+1)))
+                remove(join(self._getExtraPath(), 'templates/template_initial_ref_%03d.mrc' % int(iref+1)))
+
     def alignStep(self):
-        Plugin.runDynamo(self, 'commands.doc', cwd=self._getExtraPath())
+        fhCommands2 = open(self._getExtraPath("commands2.doc"), 'w')
+        content2 = "dvcheck('%s');" % self.projName
+        content2 += "dvunfold('%s');dynamo_execute_project %s" % (self.projName, self.projName)
+        fhCommands2.write(content2)
+        fhCommands2.close()
+        Plugin.runDynamo(self, 'commands2.doc', cwd=self._getExtraPath())
 
-    def createOutput(self):
+    def createOutputStep(self):
         self.projName = 'dynamoAlignmentProject'
-        self.subtomoSet = self._createSetOfSubTomograms()
-        inputSet = self.inputVolumes.get()
-        self.subtomoSet.copyInfo(inputSet)
-        self.fhTable = open(self._getExtraPath('%s/results/ite_000%s/averages/refined_table_ref_001_ite_000%s.tbl') %
-                            (self.projName, self.numberOfIters.get(), self.numberOfIters.get()), 'r')
-        self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
-        self.fhTable.close()
+        niters = int(self.numberOfIters.get())
+        if self.mra.get() == 0:
+            self.subtomoSet = self._createSetOfSubTomograms()
+            inputSet = self.inputVolumes.get()
+            self.subtomoSet.copyInfo(inputSet)
+            self.fhTable = open(self._getExtraPath('%s/results/ite_%04d/averages/refined_table_ref_001_ite_%04d.tbl')
+                                % (self.projName, niters, niters), 'r')
+            self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
+            self.fhTable.close()
+            averageSubTomogram = AverageSubTomogram()
+            averageSubTomogram.setFileName(
+                self._getExtraPath('%s/results/ite_%04d/averages/average_ref_001_ite_%04d.em')
+                % (self.projName, niters, niters))
+            averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
+            self._defineOutputs(outputSubtomograms=self.subtomoSet)
+            self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
+            self._defineOutputs(averageSubTomogram=averageSubTomogram)
+            self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
+        else:
+            fhSurvivRefs = open(self._getExtraPath('%s/results/ite_%04d/currently_surviving_references_ite_%04d.txt')
+                                % (self.projName, niters, niters), 'r')
+            nline = fhSurvivRefs.next().rstrip()
+            for nref in range(len(nline.split())):
+                ref = int(nline.split()[nref])
+                subtomoSet = self._createSetOfSubTomograms()
+                inputSet = self.inputVolumes.get()
+                subtomoSet.copyInfo(inputSet)
+                self.fhTable = open(
+                    self._getExtraPath('%s/results/ite_%04d/averages/refined_table_ref_%03d_ite_%04d.tbl') %
+                    (self.projName, niters, ref, niters), 'r')
+                subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
+                self.fhTable.close()
+                averageSubTomogram = AverageSubTomogram()
+                averageSubTomogram.setFileName(
+                    self._getExtraPath('%s/results/ite_%04d/averages/average_ref_%03d_ite_%04d.em')
+                    % (self.projName, niters, ref, niters))
+                averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
 
-        averageSubTomogram = AverageSubTomogram()
-        averageSubTomogram.setFileName(self._getExtraPath('%s/results/ite_000%s/averages/average_ref_001_ite_000%s.em')
-                                       % (self.projName, self.numberOfIters.get(), self.numberOfIters.get()))
-        averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
-        # setOfAverageSubTomograms = self._createSet(SetOfAverageSubTomograms, 'subtomograms%s.sqlite', "")
-        # setOfAverageSubTomograms.copyInfo(inputSet)
-        # setOfAverageSubTomograms.setSamplingRate(inputSet.getSamplingRate())
-        # setOfAverageSubTomograms.append(averageSubTomogram)
-        self._defineOutputs(outputSubtomograms=self.subtomoSet)
-        self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
-        self._defineOutputs(averageSubTomogram=averageSubTomogram)
-        self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
+                name = 'outputSubtomogramsRef%s' % str(ref)
+                args = {}
+                args[name] = subtomoSet
+                subtomoSet.setStreamState(Set.STREAM_OPEN)
+                self._defineOutputs(**args)
+                self._defineSourceRelation(inputSet, subtomoSet)
+
+                name2 = 'AverageRef%s' % str(ref)
+                args2 = {}
+                args2[name2] = averageSubTomogram
+                self._defineOutputs(**args2)
+                self._defineSourceRelation(inputSet, averageSubTomogram)
+
+    def closeSetsStep(self):
+        if self.mra.get() == True:
+            for outputset in self._iterOutputsNew():
+                if isinstance(outputset, SetOfSubTomograms):
+                    outputset[1].setStreamState(Set.STREAM_CLOSED)
+            self._store()
 
     # --------------------------- UTILS functions --------------------------------
     def _updateItem(self, item, row):
