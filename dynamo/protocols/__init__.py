@@ -21,8 +21,8 @@
 # * 02111-1307  USA
 # *
 # *  All comments concerning this program package may be sent to the
-# *  e-mail address 'you@yourinstitution.email'
+# *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
 
-from protocol_subtomo_MRA import DynamoSubTomoMRA
+from .protocol_subtomo_MRA import DynamoSubTomoMRA

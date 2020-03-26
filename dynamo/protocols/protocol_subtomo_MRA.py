@@ -21,24 +21,24 @@
 # * 02111-1307  USA
 # *
 # *  All comments concerning this program package may be sent to the
-# *  e-mail address 'you@yourinstitution.email'
+# *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
 
 from os import rename, remove
 from os.path import join
 from shutil import copy
-from pyworkflow.em.data import Volume
+from pwem import Domain
+from pwem.objects.data import Volume
 from pyworkflow.object import Set
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
-from pyworkflow.utils import importFromPlugin
 from pyworkflow.utils.path import makePath
 from dynamo import Plugin
 from dynamo.convert import writeVolume, writeSetOfVolumes, writeDynTable, readDynTable
-ProtTomoSubtomogramAveraging = importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
-AverageSubTomogram = importFromPlugin("tomo.objects", "AverageSubTomogram")
-SetOfSubTomograms = importFromPlugin("tomo.objects", "SetOfSubTomograms")
-SubTomogram = importFromPlugin("tomo.objects", "SubTomogram")
+ProtTomoSubtomogramAveraging = Domain.importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
+AverageSubTomogram = Domain.importFromPlugin("tomo.objects", "AverageSubTomogram")
+SetOfSubTomograms = Domain.importFromPlugin("tomo.objects", "SetOfSubTomograms")
+SubTomogram = Domain.importFromPlugin("tomo.objects", "SubTomogram")
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):

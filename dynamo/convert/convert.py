@@ -25,11 +25,11 @@
 # **************************************************************************
 import math
 import numpy as np
-from pyworkflow.em.convert import ImageHandler
-from pyworkflow.em.data import Transform
-from pyworkflow.utils import importFromPlugin
-Coordinate3D = importFromPlugin("tomo.objects", "Coordinate3D")
-TomoAcquisition = importFromPlugin("tomo.objects", "TomoAcquisition")
+from pwem import Domain
+from pwem.emlib.image.image_handler import ImageHandler
+from pwem.objects.data import Transform
+Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
+TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
 
 
 def writeVolume(volume, outputFn):
