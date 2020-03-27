@@ -25,12 +25,30 @@
 # *
 # **************************************************************************
 
-from pyworkflow.tests import BaseTest, setupTestProject, DataSet
-from tomo.protocols import ProtImportSubTomograms
-from tomo.tests import DataSet
-from xmipp3.protocols import XmippProtCreateMask3D
-from dynamo.protocols import DynamoSubTomoMRA
+from pyworkflow.tests import BaseTest, setupTestProject
 
+from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
+from tomo.tests import DataSet
+
+from xmipp3.protocols import XmippProtCreateMask3D
+
+from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction
+
+
+class TestDynamoBase(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+
+    @classmethod
+    def setData(cls, projectData='tomo-em'):
+        cls.dataset = DataSet.getDataSet(projectData)
+        cls.tomogram = cls.dataset.getFile('tomo1')
+        cls.emanCoords = cls.dataset.getFile('overview_wbp.txt')
+        cls.dynCoords = cls.dataset.getFile('overview_wbp.tbl')
+        cls.angles = cls.dataset.getFile('overview_wbp.ang')
+        cls.inputSetOfSubTomogram = cls.dataset.getFile('subtomo')
+        cls.smallTomogram = cls.dataset.getFile('coremask_normcorona.mrc')
 
 class TestSubTomogramsAlignment(BaseTest):
     """ This class check if the protocol to import sub tomograms works
@@ -79,3 +97,129 @@ class TestSubTomogramsAlignment(BaseTest):
         # self.assertTrue(outputClasses)
         # self.assertTrue(outputClasses.hasRepresentatives())
         return dynamoAlignment
+
+class TestDynamoExtraction(TestDynamoBase):
+    '''This class checks if the protocol to extract subtomograms
+    works properly'''
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        TestDynamoBase.setData()
+
+    def _runExtraction(self, tomoSource = 0, downFactor = 1, text=''):
+
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                              filesPath=self.tomogram,
+                                              samplingRate=5)
+
+        self.launchProtocol(protImportTomogram)
+
+        self.assertIsNotNone(protImportTomogram.outputTomograms,
+                             "There was a problem with tomogram output")
+
+        protImportCoordinatesNoAngles = self.newProtocol(ProtImportCoordinates3D,
+                                                         objLabel='Coordinates without Angles',
+                                                         auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                         filesPath=self.emanCoords,
+                                                         importTomograms=protImportTomogram.outputTomograms,
+                                                         filesPattern='', boxSize=32,
+                                                         samplingRate=5)
+
+        protImportCoordinatesAngles = self.newProtocol(ProtImportCoordinates3D,
+                                                       objLabel='Coordinates with Angles',
+                                                       auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                       filesPath=self.dynCoords,
+                                                       importTomograms=protImportTomogram.outputTomograms,
+                                                       filesPattern='', boxSize=32, importAngles=True,
+                                                       samplingRate=5)
+
+        self.launchProtocol(protImportCoordinatesNoAngles)
+        self.launchProtocol(protImportCoordinatesAngles)
+
+        coordsNoAngle = protImportCoordinatesNoAngles.outputCoordinates
+        coordsAngle = protImportCoordinatesAngles.outputCoordinates
+
+        self.assertIsNotNone(coordsNoAngle,
+                             "There was a problem with coordinates 3d output")
+        self.assertIsNotNone(coordsAngle,
+                             "There was a problem with coordinates 3d output")
+
+        protDynamoExtractionNoAngles = self.newProtocol(DynamoExtraction,
+                                                        objLabel='Extraction without Angles - %s' % text,
+                                                        inputTomograms=protImportTomogram.outputTomograms,
+                                                        inputCoordinates=coordsNoAngle,
+                                                        boxSize=coordsNoAngle.getBoxSize(),
+                                                        tomoSource=tomoSource,
+                                                        downFactor=downFactor)
+
+        protDynamoExtractionAngles = self.newProtocol(DynamoExtraction,
+                                                      objLabel='Extraction with Angles - %s' % text,
+                                                      inputTomograms=protImportTomogram.outputTomograms,                                                      inputCoordinates=coordsAngle,
+                                                      boxSize=coordsAngle.getBoxSize(),
+                                                      tomoSource=tomoSource,
+                                                      downFactor=downFactor)
+
+        self.launchProtocol(protDynamoExtractionNoAngles)
+        self.launchProtocol(protDynamoExtractionAngles)
+        return protDynamoExtractionNoAngles, protDynamoExtractionAngles
+
+    def test_Extraction_SameAsPicking(self):
+        protExtraction = self._runExtraction(text='SameAsPicking')
+
+        outputNoAngles = getattr( protExtraction[0], 'outputSetOfSubtomogram', None)
+        self.assertTrue(outputNoAngles)
+        self.assertTrue(outputNoAngles.hasCoordinates3D())
+        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+
+        outputAngles = getattr( protExtraction[1], 'outputSetOfSubtomogram', None)
+        self.assertTrue(outputAngles)
+        self.assertTrue(outputAngles.hasCoordinates3D())
+        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+
+        return protExtraction
+
+    def test_Extraction_Other(self):
+        protExtraction = self._runExtraction(tomoSource = 1, text='OtherSource')
+
+        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        self.assertTrue(outputNoAngles)
+        self.assertTrue(outputNoAngles.hasCoordinates3D())
+        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+
+        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        self.assertTrue(outputAngles)
+        self.assertTrue(outputAngles.hasCoordinates3D())
+        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+
+        return protExtraction
+
+    def test_Extraction_DownSampling(self):
+        protExtraction = self._runExtraction(downFactor = 2, text='DownSampling')
+
+        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        self.assertTrue(outputNoAngles)
+        self.assertTrue(outputNoAngles.hasCoordinates3D())
+        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+
+        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        self.assertTrue(outputAngles)
+        self.assertTrue(outputAngles.hasCoordinates3D())
+        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+
+        return protExtraction
+
+    def test_Extraction_All(self):
+        protExtraction = self._runExtraction(tomoSource = 1, downFactor = 2, text='AllOptions')
+
+        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        self.assertTrue(outputNoAngles)
+        self.assertTrue(outputNoAngles.hasCoordinates3D())
+        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+
+        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        self.assertTrue(outputAngles)
+        self.assertTrue(outputAngles.hasCoordinates3D())
+        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+
+        return protExtraction
