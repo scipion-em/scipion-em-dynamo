@@ -26,3 +26,4 @@
 # **************************************************************************
 
 from .protocol_subtomo_MRA import DynamoSubTomoMRA
+from .protocol_extraction import DynamoExtraction
