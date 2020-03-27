@@ -76,4 +76,3 @@ class Plugin(pwem.Plugin):
     #                    neededProgs=["wget"],
     #                    default=True)
 
-pwem.Domain.registerPlugin(__name__)

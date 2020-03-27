@@ -25,15 +25,18 @@ with open('requirements.txt') as f:
 
 setup(
     name='scipion-em-dynamo',  # Required
-    version='0.1',  # Required
+    version='3.0',  # Required
     description='Scipion plugin for dynamo.',  # Required
     long_description=long_description,  # Optional
     url='https://github.com/scipion-em/scipion-em-dynamo',  # Optional
     author='you',  # Optional
     author_email='you@yourinstitution.email',  # Optional
-    keywords='scipion cryoem imageprocessing scipion-2.0',  # Optional
+    keywords='scipion cryoem imageprocessing scipion-3.0',  # Optional
     packages=find_packages(),
     install_requires=[requirements],
+    entry_points={
+        'pyworkflow.plugin': 'dynamo = dynamo'
+    },
     package_data={  # Optional
        'dynamo': ['icon.png', 'protocols.conf'],
     }
