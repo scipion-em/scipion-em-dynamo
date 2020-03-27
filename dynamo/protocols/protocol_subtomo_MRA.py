@@ -395,7 +395,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         else:
             fhSurvivRefs = open(self._getExtraPath('%s/results/ite_%04d/currently_surviving_references_ite_%04d.txt')
                                 % (self.projName, niters, niters), 'r')
-            nline = fhSurvivRefs.next().rstrip()
+            nline = next(fhSurvivRefs).rstrip()
             for nref in range(len(nline.split())):
                 ref = int(nline.split()[nref])
                 subtomoSet = self._createSetOfSubTomograms()

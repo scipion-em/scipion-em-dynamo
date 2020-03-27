@@ -73,7 +73,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
 
 
 def readDynTable(self, item):
-    nline = self.fhTable.next()
+    nline = next(self.fhTable)
     nline = nline.rstrip()
     id = int(nline.split()[0])
     item.setObjId(id)
