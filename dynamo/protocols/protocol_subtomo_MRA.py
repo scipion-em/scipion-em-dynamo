@@ -29,7 +29,7 @@ from os import rename, remove
 from os.path import join
 from shutil import copy
 from pwem import Domain
-from pwem.objects.data import Volume
+from pwem.objects.data import Volume, VolumeMask
 from pyworkflow.object import Set
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils.path import makePath
@@ -53,7 +53,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _defineParams(self, form):
         form.addSection(label='Input subtomograms')
-        form.addParam('inputVolumes', PointerParam, pointerClass="SetOfSubTomograms", label='Set of volumes',
+        form.addParam('inputVolumes', PointerParam, pointerClass="SetOfSubTomograms", label='Set of subtomograms',
                       help="Set of subtomograms to align with dynamo")
         form.addParam('sym', StringParam, default='c1', label='Symmetry group',
                       help="Specify the article's symmetry. Symmetrization is applied at the beginning of the round to "
@@ -273,6 +273,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                   "dvput('%s', 'limm', '%s');" % (self.projName, self.limm)
 
         template = self.templateRef.get()
+        fmask = self.fmask.get()
         if template is not None:
             if isinstance(template, Volume):
                 writeVolume(template, join(self._getExtraPath(), 'template'))
@@ -287,7 +288,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 content += "dvput('%s', 'template', 'templates');" % self.projName
                 content += "dvput('%s', 'table', 'templates');" % self.projName
                 content += "dvput('%s', 'nref', '%d');" % (self.projName, self.nref)
-                if self.fmask.get() is None:
+                if fmask is None:
                         makePath(self._getExtraPath('fmasks'))
                         dimsf = inputVols.getFirstItem().getDim()
                         sizef = template.getSize()
@@ -320,7 +321,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 content += "dvput('%s', 'template', 'templates');" % self.projName
                 content += "dvput('%s', 'table', 'templates');" % self.projName
                 content += "dvput('%s', 'nref', '%d');" % (self.projName, self.nref)
-                if self.fmask.get() is None:
+                if fmask is None:
                         makePath(self._getExtraPath('fmasks'))
                         dimsf = inputVols.getFirstItem().getDim()
                         sizef = self.nref.get()
@@ -334,13 +335,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         if self.cmask.get() is not None:
             writeVolume(self.cmask.get(), join(self._getExtraPath(), 'cmask'))
             content += "dvput('%s', 'cmask', 'cmask.mrc');" % self.projName
-        if self.fmask.get() is not None:
-            if isinstance(template, Volume) or isinstance(template, SubTomogram):
-                writeVolume(self.fmask.get(), join(self._getExtraPath(), 'fmask'))
+        if fmask is not None:
+            if isinstance(fmask, Volume) or isinstance(fmask, SubTomogram) or isinstance(fmask, VolumeMask):
+                writeVolume(fmask, join(self._getExtraPath(), 'fmask'))
                 content += "dvput('%s', 'fmask', 'fmask.mrc');" % self.projName
             else:
                 makePath(self._getExtraPath('fmasks'))
-                writeSetOfVolumes(self.fmask.get(), join(self._getExtraPath(), 'fmasks/fmask_initial_ref_'), 'ix')
+                writeSetOfVolumes(fmask, join(self._getExtraPath(), 'fmasks/fmask_initial_ref_'), 'ix')
                 content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
         if self.smask.get() is not None:
             writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
@@ -439,7 +440,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
         validateMsgs = []
-        if self.mra.get():
+        if self.mra.get() == True:
             if self.generateTemplate.get():
                 if self.nref.get() <= 1:
                     validateMsgs.append('If MRA is selected, number of references should be greater than one.')
@@ -451,38 +452,32 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _summary(self):
         summary = []
-        if hasattr(self, 'averageSubTomogram') and hasattr(self, 'outputSubtomograms'):
-            summary.append("Input subtomograms: %d" % self.inputVolumes.get().getSize())
-            if self.fmask.get() is not None:
-                if isinstance(self.fmask.get(), Volume) or isinstance(self.fmask.get(), SubTomogram):
-                    summary.append("Input fmask: %s" % self.fmask.get())
-                else:
-                    summary.append("Input fmasks: %d" % self.fmask.get().getSize())
+        summary.append("Input subtomograms: %d" % self.inputVolumes.get().getSize())
+        if self.fmask.get() is not None:
+            if isinstance(self.fmask.get(), Volume) or isinstance(self.fmask.get(), SubTomogram):
+                summary.append("Input fmask: %s" % self.fmask.get())
             else:
-                summary.append("Fmask(s) generated")
-            if self.mra.get():
-                summary.append("Perform MRA with %d references" % self.nref.get())
-            else:
-                summary.append("No mra")
-            if self.generateTemplate.get():
-                summary.append("Template(s) generated")
-            else:
-                if isinstance(self.templateRef.get(), Volume) or isinstance(self.templateRef.get(), SubTomogram):
-                    summary.append("Provided template: %s" % self.templateRef.get())
-                else:
-                    summary.append("Provided templates: %d" % self.templateRef.get().getSize())
+                summary.append("Input fmasks: %d" % self.fmask.get().getSize())
         else:
-            summary.append("Output not ready yet.")
+            summary.append("Fmask(s) generated")
+        if self.mra.get() == True:
+            summary.append("Perform MRA with %s references" % self.nref.get())
+        else:
+            summary.append("No mra")
+        if self.generateTemplate.get():
+            summary.append("Template(s) generated")
+        else:
+            if isinstance(self.templateRef.get(), Volume) or isinstance(self.templateRef.get(), SubTomogram):
+                summary.append("Provided template: %s" % self.templateRef.get())
+            else:
+                summary.append("Provided templates: %d" % self.templateRef.get().getSize())
         return summary
 
     def _methods(self):
         methods = []
-        if hasattr(self, 'averageSubTomogram') and hasattr(self, 'outputSubtomograms'):
-            methods.append(
-                'We aligned %d subtomograms from %s using Dynamo Subtomogram averaging.'
-                % (self.inputVolumes.get().getSize(), self.getObjectTag('inputVolumes')))
-        else:
-            methods.append("Output not ready yet.")
+        methods.append(
+            'We aligned %d subtomograms from %s using Dynamo Subtomogram averaging.'
+            % (self.inputVolumes.get().getSize(), self.getObjectTag('inputVolumes')))
         return methods
 
     def _citations(self):

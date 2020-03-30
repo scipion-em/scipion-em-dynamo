@@ -165,6 +165,29 @@ class TestSubTomogramsAlignment(BaseTest):
                              "There was a problem with SetOfSubtomograms output")
         return alignment
 
+    def _runAlignmentWithFmask(self):
+        protImport = self._runPreviousProtocols()
+        particles = protImport.outputSubTomograms
+        protMask = self.newProtocol(XmippProtCreateMask3D,
+                                    inputVolume=protImport,
+                                    source=0, volumeOperation=0,
+                                    threshold=0.4)
+        protMask.inputVolume.setExtended("outputSubTomograms.1")
+        protMask.setObjLabel('threshold mask')
+        self.launchProtocol(protMask)
+        self.assertIsNotNone(protMask.outputMask,
+                             "There was a problem with create mask from volume")
+
+        alignment = self.newProtocol(DynamoSubTomoMRA,
+                                     inputVolumes=particles,
+                                     generateTemplate=True,
+                                     fmask=protMask.outputMask)
+        alignment.templateRef.setExtended("outputSubTomograms.1")
+        self.launchProtocol(alignment)
+        self.assertIsNotNone(alignment.averageSubTomogram,
+                             "There was a problem with SetOfSubtomograms output")
+        return alignment
+
     def test_basicAlignment(self):
         dynamoAlignment = self._runAlignment()
         averageSubTomogram = getattr(dynamoAlignment, 'averageSubTomogram')
@@ -185,6 +208,15 @@ class TestSubTomogramsAlignment(BaseTest):
 
     def test_alignmentWithMask(self):
         dynamoAlignment = self._runAlignmentWithMask()
+        averageSubTomogram = getattr(dynamoAlignment, 'averageSubTomogram')
+        outputSubtomograms = getattr(dynamoAlignment, 'outputSubtomograms')
+        self.assertTrue(averageSubTomogram)
+        self.assertTrue(outputSubtomograms)
+        self.assertTrue(outputSubtomograms.getFirstItem().hasTransform())
+        return dynamoAlignment
+
+    def test_alignmentWithFask(self):
+        dynamoAlignment = self._runAlignmentWithFmask()
         averageSubTomogram = getattr(dynamoAlignment, 'averageSubTomogram')
         outputSubtomograms = getattr(dynamoAlignment, 'outputSubtomograms')
         self.assertTrue(averageSubTomogram)
