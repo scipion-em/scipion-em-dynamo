@@ -71,7 +71,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       condition="mra and generateTemplate",
                       help="Number of references for multi-reference alignment (MRA)")
         form.addParam('templateRef', PointerParam, label="Template", condition="not generateTemplate",
-                      pointerClass='Volume, SetOfVolumes', allowsNull=True,
+                      pointerClass='Volume, SetOfVolumes',
                       help='The size of the template should be equal or smaller than the size of the particles. If you '
                            'pass a single file in multireference modus (MRA), Dynamo will just made copies of it.')
         form.addParam('useRandomTable', BooleanParam, label='Use a random table',
