@@ -25,9 +25,7 @@
 # **************************************************************************
 
 import os, threading
-import numpy as np
 
-import pyworkflow.config as conf
 from pyworkflow import utils as pwutils
 from pyworkflow.utils.process import runJob
 from pyworkflow.gui.dialog import ToolbarListDialog
@@ -86,6 +84,7 @@ class DynamoTomoDialog(ToolbarListDialog):
                   "n=cellfun(@(c) c.fullFileName,c.volumes,'UniformOutput',false)\n" \
                   "idt=find(cell2mat(cellfun(@(c) strcmp(c,'%s'),n,'UniformOutput',false)))\n" \
                   "dtmslice %s -c %s \n" \
+                  "modeltrack.loadFromCatalogue('handles',c,'full',true,'select',false)\n" \
                   "uiwait(dpkslicer.getHandles().figure_fastslicer)\n" \
                   "models = dread(dcmodels(catalogue_name,'i', idt))\n" \
                   "outFile='%s'\n" \

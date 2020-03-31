@@ -160,7 +160,7 @@ class DynamoBoxing(ProtTomoPicking):
         if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, tk.Frame()):
             self._createOutput()
 
-        pwutils.cleanPattern('*.m')
+        pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
         coord3DSetDict = {}
