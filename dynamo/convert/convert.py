@@ -25,12 +25,10 @@
 # **************************************************************************
 import math
 import numpy as np
-from pwem.convert.headers import ImageHandler
-from pwem.objects import Transform
 from pwem import Domain
-
-Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D",
-                                       doRaise=True)
+from pwem.emlib.image.image_handler import ImageHandler
+from pwem.objects.data import Transform
+Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
 
 
@@ -39,11 +37,14 @@ def writeVolume(volume, outputFn):
     ih.convert(volume, "%s.mrc" % outputFn)
 
 
-def writeSetOfVolumes(setOfVolumes, outputFnRoot):
+def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
     ih = ImageHandler()
-    for volume in setOfVolumes:
-        i = volume.getObjId()
-        ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, i))
+    if name == 'id':  # write the ID of the object in the name
+        for volume in setOfVolumes:
+            ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
+    if name == 'ix':  # write the INDEX of the object in the name
+        for ix, volume in enumerate(setOfVolumes):
+            ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, int(ix+1)))
 
 
 def writeDynTable(fhTable, setOfSubtomograms):
