@@ -45,7 +45,9 @@ Protocols to create models in Dynamo
 """
 
 class DynamoModels(ProtAnalysis3D, ProtTomoBase):
-    """ It will align subtomograms using Dynamo"""
+    """Model manger from Dynamo for Mesh creation.
+    Once the desired Tomogram is opened, a surface model will be created and loaded in Dynamo automatically. Once the points of
+    the Mesh have been defined, close the window to save automatically your data."""
     _label = 'model manager'
 
     def __init__(self, **args):
