@@ -121,6 +121,7 @@ class DynamoDialog(ToolbarListDialog):
                       'modeltrack.addOne(\'model\',m)\n' \
                       'modeltrack.setActiveModel(class)\n' \
                       'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
+                      'modeltrack.saveAllInCatalogue\n' \
                       'm = dread(dcmodels(\'%s\',\'i\', 1))\n' \
                       'if class > 1 \n' \
                       'aux = [m{class}.points class*ones(length(m{class}.points), 1)] \n' \
@@ -159,6 +160,7 @@ class DynamoDialog(ToolbarListDialog):
                       'modeltrack.addOne(\'model\',m)\n' \
                       'modeltrack.setActiveModel(class(end))\n' \
                       'uiwait(dpkslicer.getHandles().figure_fastslicer)\n' \
+                      'modeltrack.saveAllInCatalogue\n' \
                       'm=dread(dcmodels(\'%s\',\'i\', 1))\n' \
                       'if idx==1 \n' \
                       'aux=[m.points class(end)*ones(length(m.points),1)]\n' \
