@@ -47,7 +47,7 @@ OTHER = 1
 class DynamoExtraction(EMProtocol, ProtTomoBase):
     """Extraction of subtomograms using Dynamo"""
 
-    _label = 'tomo extraction'
+    _label = 'vectorial extraction'
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)

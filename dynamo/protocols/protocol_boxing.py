@@ -40,7 +40,11 @@ from dynamo import Plugin
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 
 class DynamoBoxing(ProtTomoPicking):
-    """Manual picker from Dynamo"""
+    """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
+    direclty loaded with all the models previously saved in the disk (if any).
+    After picking, it is needed to go to:
+    Active Model > Step-by-step workflow for cropping geometry
+    And click -run all- button before closing the window"""
 
     _label = 'vectorial picking'
 
@@ -62,42 +66,16 @@ class DynamoBoxing(ProtTomoPicking):
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         # Copy input coordinates to Extra Path
-        if self.selection.get() == 0:
-            self._insertFunctionStep('copyInputCoords')
-        else:
-            self._createEmptyCatalogue()
+        self._insertFunctionStep('copyInputCoords')
 
         # Launch Boxing GUI
         self._insertFunctionStep('launchDynamoBoxingStep', interactive=True)
 
     # --------------------------- STEPS functions -----------------------------
-    def _createEmptyCatalogue(self):
-        # Initialize the catalogue
-        listTomosFile = self._getTmpPath("tomos.vll")
-        catalogue = os.path.abspath(self._getExtraPath("tomos"))
-
-        # Create list of tomos file
-        tomoFid = open(listTomosFile, 'w')
-        for tomo in self.inputTomograms.get().iterItems():
-            tomoPath = os.path.abspath(tomo.getFileName())
-            tomoFid.write(tomoPath + '\n')
-        tomoFid.close()
-
-        # Create small program to tell Dynamo to create an empty catalogue
-        codeFile = os.path.join(os.getcwd(), 'coords2model.m')
-        contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
-
-        codeFid = open(codeFile, 'w')
-        codeFid.write(contents)
-        codeFid.close()
-
-        # Tell Dynamo to create the catalogue
-        args = ' %s' % codeFile
-        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def copyInputCoords(self):
         # Initialize the catalogue
-        listTomosFile = self._getTmpPath("tomos.vll")
+        listTomosFile = self._getExtraPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
 
         # Create list of tomos file
@@ -108,36 +86,40 @@ class DynamoBoxing(ProtTomoPicking):
         tomoFid.close()
 
         # Save coordinates into .txt file for each tomogram
-        inputCoordinates = self.inputCoordinates.get()
-        inputTomograms = self.inputTomograms.get()
-        for tomo in inputTomograms:
-            outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
-            coords_tomo = []
-            for coord in inputCoordinates.iterCoordinates(tomo):
-                coords_tomo.append(coord.getPosition())
-            if coords_tomo:
-                np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
+        codeFile = self._getExtraPath('coords2model.m')
+        if self.selection.get() == 0:
+            inputCoordinates = self.inputCoordinates.get()
+            inputTomograms = self.inputTomograms.get()
+            for tomo in inputTomograms:
+                outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
+                coords_tomo = []
+                for coord in inputCoordinates.iterCoordinates(tomo):
+                    coords_tomo.append(coord.getPosition())
+                if coords_tomo:
+                    np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
 
-        # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
-        codeFile = os.path.join(os.getcwd(), 'coords2model.m')
-        contents = "dcm -create %s -fromvll %s\n" \
-                   "path='%s'\n" \
-                   "catalogue=dread(['%s' '.ctlg'])\n" \
-                   "nVolumes=length(catalogue.volumes)\n" \
-                   "for idv=1:nVolumes\n" \
-                   "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
-                   "tomoIndex=catalogue.volumes{idv}.index\n" \
-                   "[~,tomoName,~]=fileparts(tomoPath)\n" \
-                   "coordFile=[path '/' tomoName '.txt']\n" \
-                   "if ~isfile(coordFile)\n" \
-                   "continue\n" \
-                   "end\n" \
-                   "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
-                   "vesicle=dmodels.vesicle()\n" \
-                   "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
-                   "vesicle.linkCatalogue('%s','i',tomoIndex)\n" \
-                   "vesicle.saveInCatalogue()\n" \
-                   "end\n" % (catalogue, listTomosFile, self._getExtraPath(), catalogue, catalogue)
+            # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
+            contents = "dcm -create %s -fromvll %s\n" \
+                       "path='%s'\n" \
+                       "catalogue=dread(['%s' '.ctlg'])\n" \
+                       "nVolumes=length(catalogue.volumes)\n" \
+                       "for idv=1:nVolumes\n" \
+                       "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
+                       "tomoIndex=catalogue.volumes{idv}.index\n" \
+                       "[~,tomoName,~]=fileparts(tomoPath)\n" \
+                       "coordFile=[path '/' tomoName '.txt']\n" \
+                       "if ~isfile(coordFile)\n" \
+                       "continue\n" \
+                       "end\n" \
+                       "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
+                       "vesicle=dmodels.vesicle()\n" \
+                       "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
+                       "vesicle.linkCatalogue('%s','i',tomoIndex, 's', 1)\n" \
+                       "vesicle.saveInCatalogue()\n" \
+                       "end\n" \
+                       "exit\n" % (catalogue, listTomosFile, self._getExtraPath(), catalogue, catalogue)
+        else:
+            contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
 
         codeFid = open(codeFile, 'w')
         codeFid.write(contents)
