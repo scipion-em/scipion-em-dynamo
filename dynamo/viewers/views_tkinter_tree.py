@@ -213,3 +213,76 @@ class DynamoDialog(ToolbarListDialog):
         inputFid.write(content)
         inputFid.close()
         return inputFilePath
+
+class DynamoTomoDialog(ToolbarListDialog):
+    """
+    This class extend from ListDialog to allow calling
+    an Eman subprocess from a list of Tomograms.
+    """
+
+    def __init__(self, parent, path, **kwargs):
+        self.path = path
+        self.provider = kwargs.get("provider", None)
+        ToolbarListDialog.__init__(self, parent,
+                                   "Tomogram List",
+                                    allowsEmptySelection=False,
+                                    itemDoubleClick=self.doubleClickOnTomogram,
+                                    **kwargs)
+
+    def refresh_gui(self):
+        if self.proc.isAlive():
+            self.after(1000, self.refresh_gui)
+        else:
+            self.tree.update()
+
+    def doubleClickOnTomogram(self, e=None):
+        self.tomo = e
+        self.proc = threading.Thread(target=self.lanchDynamoForTomogram, args=(self.tomo,))
+        self.proc.start()
+        self.after(1000, self.refresh_gui)
+
+    def lanchDynamoForTomogram(self, tomo):
+        commandsFile = self.writeMatlabCode(tomo)
+        args = ' %s' % commandsFile
+        runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+
+    def writeMatlabCode(self, tomo):
+        # Initialization params
+        codeFilePath = os.path.join(os.getcwd(), "DynamoPicker.m")
+        catalogue = os.path.join(self.path, "tomos")
+
+        # Write code to Matlab code file
+        codeFid = open(codeFilePath, 'w')
+        content = "catalogue_name='%s'\n" \
+                  "c=dread(strcat(catalogue_name,'.ctlg'))\n" \
+                  "n=cellfun(@(c) c.fullFileName,c.volumes,'UniformOutput',false)\n" \
+                  "idt=find(cell2mat(cellfun(@(c) strcmp(c,'%s'),n,'UniformOutput',false)))\n" \
+                  "dtmslice %s -c %s \n" \
+                  "modeltrack.loadFromCatalogue('handles',c,'full',true,'select',false)\n" \
+                  "uiwait(dpkslicer.getHandles().figure_fastslicer)\n" \
+                  "models = dread(dcmodels(catalogue_name,'i', idt))\n" \
+                  "outFile='%s'\n" \
+                  "savePath='%s'\n" \
+                  "outPoints=[outFile '.txt']\n" \
+                  "outAngles=['angles_' outFile '.txt']\n" \
+                  "crop_points=[]\n" \
+                  "crop_angles=[]\n" \
+                  "for model=models\n" \
+                  "if iscell(model)\n" \
+                  "crop_points=[crop_points; model{end}.crop_points]\n" \
+                  "crop_angles=[crop_angles; model{end}.crop_angles]\n" \
+                  "else\n" \
+                  "crop_points=[crop_points; model.crop_points]\n" \
+                  "crop_angles=[crop_angles; model.crop_angles]\n" \
+                  "end\n" \
+                  "end\n" \
+                  "if ~isempty(crop_points)\n" \
+                  "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
+                  "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
+                  "end\n" \
+                  'exit\n' % (catalogue, tomo.getFileName(), tomo.getFileName(), catalogue,
+                            pwutils.removeBaseExt(tomo.getFileName()), self.path)
+        codeFid.write(content)
+        codeFid.close()
+
+        return codeFilePath

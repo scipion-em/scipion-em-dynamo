@@ -20,7 +20,7 @@
 # * 02111-1307  USA
 # *
 # *  All comments concerning this program package may be sent to the
-# *  e-mail address 'you@yourinstitution.email'
+# *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
 
@@ -34,14 +34,19 @@ from pyworkflow.gui.dialog import askYesNo
 
 from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D, Coordinate3D
+from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 
 from dynamo import Plugin
-
+from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 
 class DynamoBoxing(ProtTomoPicking):
-    """Manual picker from Dynamo"""
+    """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
+    direclty loaded with all the models previously saved in the disk (if any).
+    After picking, it is needed to go to:
+    Active Model > Step-by-step workflow for cropping geometry
+    And click -run all- button before closing the window"""
 
-    _label = 'dynamo boxer'
+    _label = 'vectorial picking'
 
     def __init__(self, **kwargs):
         ProtTomoPicking.__init__(self, **kwargs)
@@ -61,16 +66,16 @@ class DynamoBoxing(ProtTomoPicking):
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         # Copy input coordinates to Extra Path
-        if self.selection.get() == 0:
-            self._insertFunctionStep('copyInputCoords')
+        self._insertFunctionStep('copyInputCoords')
 
         # Launch Boxing GUI
         self._insertFunctionStep('launchDynamoBoxingStep', interactive=True)
 
     # --------------------------- STEPS functions -----------------------------
+
     def copyInputCoords(self):
         # Initialize the catalogue
-        listTomosFile = self._getTmpPath("tomos.vll")
+        listTomosFile = self._getExtraPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
 
         # Create list of tomos file
@@ -81,36 +86,40 @@ class DynamoBoxing(ProtTomoPicking):
         tomoFid.close()
 
         # Save coordinates into .txt file for each tomogram
-        inputCoordinates = self.inputCoordinates.get()
-        inputTomograms = self.inputTomograms.get()
-        for tomo in inputTomograms:
-            outFileCoord = self._getTmpPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
-            coords_tomo = []
-            for coord in inputCoordinates.iterCoordinates(tomo):
-                coords_tomo.append(coord.getPosition())
-            if coords_tomo:
-                np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
+        codeFile = self._getExtraPath('coords2model.m')
+        if self.selection.get() == 0:
+            inputCoordinates = self.inputCoordinates.get()
+            inputTomograms = self.inputTomograms.get()
+            for tomo in inputTomograms:
+                outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
+                coords_tomo = []
+                for coord in inputCoordinates.iterCoordinates(tomo):
+                    coords_tomo.append(coord.getPosition())
+                if coords_tomo:
+                    np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
 
-        # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
-        codeFile = os.path.join(os.getcwd(), 'coords2model.m')
-        contents = "dcm -create %s -fromvll %s\n" \
-                   "path='%s'\n" \
-                   "catalogue=dread(['%s' '.ctlg'])\n" \
-                   "nVolumes=length(catalogue.volumes)\n" \
-                   "for idv=1:nVolumes\n" \
-                   "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
-                   "tomoIndex=catalogue.volumes{idv}.index\n" \
-                   "[~,tomoName,~]=fileparts(tomoPath)\n" \
-                   "coordFile=[path '/' tomoName '.txt']\n" \
-                   "if ~isfile(coordFile)\n" \
-                   "continue\n" \
-                   "end\n" \
-                   "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
-                   "vesicle=dmodels.vesicle()\n" \
-                   "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
-                   "vesicle.linkCatalogue('%s','i',tomoIndex)\n" \
-                   "vesicle.saveInCatalogue()\n" \
-                   "end\n" % (catalogue, listTomosFile, self._getTmpPath(), catalogue, catalogue)
+            # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
+            contents = "dcm -create %s -fromvll %s\n" \
+                       "path='%s'\n" \
+                       "catalogue=dread(['%s' '.ctlg'])\n" \
+                       "nVolumes=length(catalogue.volumes)\n" \
+                       "for idv=1:nVolumes\n" \
+                       "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
+                       "tomoIndex=catalogue.volumes{idv}.index\n" \
+                       "[~,tomoName,~]=fileparts(tomoPath)\n" \
+                       "coordFile=[path '/' tomoName '.txt']\n" \
+                       "if ~isfile(coordFile)\n" \
+                       "continue\n" \
+                       "end\n" \
+                       "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
+                       "vesicle=dmodels.vesicle()\n" \
+                       "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
+                       "vesicle.linkCatalogue('%s','i',tomoIndex, 's', 1)\n" \
+                       "vesicle.saveInCatalogue()\n" \
+                       "end\n" \
+                       "exit\n" % (catalogue, listTomosFile, self._getExtraPath(), catalogue, catalogue)
+        else:
+            contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
 
         codeFid = open(codeFile, 'w')
         codeFid.write(contents)
@@ -121,20 +130,22 @@ class DynamoBoxing(ProtTomoPicking):
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def launchDynamoBoxingStep(self):
-        codeFilePath = self.writeMatlabCode()
 
-        args = ' %s' % codeFilePath
-        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+        tomoList = [tomo.clone() for tomo in self.inputTomograms.get().iterItems()]
+
+        tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "txt")
+
+        self.dlg = DynamoTomoDialog(None, self._getExtraPath(), provider=tomoProvider)
 
         # Open dialog to request confirmation to create output
-        if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, None):
+        import tkinter as tk
+        if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, tk.Frame()):
             self._createOutput()
 
-        pwutils.cleanPattern('*.m')
+        pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
         coord3DSetDict = {}
-        coord3DMap = {}
         setTomograms = self.inputTomograms.get()
         suffix = self._getOutputSuffix(SetOfCoordinates3D)
         coord3DSet = self._createSetOfCoordinates3D(setTomograms, suffix)
@@ -166,96 +177,6 @@ class DynamoBoxing(ProtTomoPicking):
         self._defineOutputs(**args)
         self._defineSourceRelation(setTomograms, coord3DSet)
         self._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
-
-    # --------------------------- DEFINE utils functions ----------------------
-    def writeMatlabCode(self):
-        # Initialization params
-        codeFilePath = os.path.join(os.getcwd(), "DynamoPicker.m")
-        listTomosFile = self._getTmpPath("tomos.vll")
-        catalogue = os.path.abspath(self._getExtraPath("tomos"))
-
-        # Create list of tomos file
-        tomoFid = open(listTomosFile, 'w')
-        for tomo in self.inputTomograms.get().iterItems():
-            tomoPath = os.path.abspath(tomo.getFileName())
-            tomoFid.write(tomoPath + '\n')
-        tomoFid.close()
-
-        # Write code to Matlab code file
-        codeFid = open(codeFilePath, 'w')
-        content = "path='%s'\n" \
-                  "savePath = '%s'\n" \
-                  "catalogue_name='%s'\n" \
-                  "if ~isfile(catalogue_name)\n" \
-                  "dcm -create %s -fromvll %s\n" \
-                  "end\n" \
-                  "hGUI=findobj(0)\n" \
-                  "hGUI.ShowHiddenHandles=true\n" \
-                  "dcm -c %s\n" \
-                  "dcm_handles=findobj(0,'name','catalogue manager: %s')\n" \
-                  "l=dynamo_read(fullfile(path,'dcmData.m'))\n" \
-                  "l=[l{:}]\n" \
-                  "eval(l)\n" \
-                  "items = []\n" \
-                  "for c=dcm_data\n" \
-                  "items(end+1)=str2num(strtrim(c{1}{1}))\n" \
-                  "end\n" \
-                  "models=cell(1,max(items))\n" \
-                  "dcmOpen=true\n" \
-                  "while dcmOpen\n" \
-                  "handles=dpkslicer.getHandles()\n" \
-                  "l=dynamo_read(fullfile(path,'waitForPicker.m'))\n" \
-                  "l=[l{:}]\n" \
-                  "eval(l)\n" \
-                  "l=dynamo_read(fullfile(path,'checkDCM.m'))\n" \
-                  "l=[l{:}]\n" \
-                  "eval(l)\n" \
-                  "end\n" \
-                  "numTomos=length(dcm_data)\n" \
-                  "for idt=1:numTomos\n" \
-                  "[~,outFile,~]=fileparts(dcm_data{idt}{end})\n" \
-                  "outPoints=[outFile '.txt']\n" \
-                  "outAngles=['angles_' outFile '.txt']\n" \
-                  "crop_points=[]\n" \
-                  "crop_angles=[]\n" \
-                  "for model=models{idt}\n" \
-                  "if iscell(model)\n" \
-                  "crop_points=[crop_points; model{end}.crop_points]\n" \
-                  "crop_angles=[crop_angles; model{end}.crop_angles]\n" \
-                  "else\n" \
-                  "crop_points=[crop_points; model.crop_points]\n" \
-                  "crop_angles=[crop_angles; model.crop_angles]\n" \
-                  "end\n" \
-                  "end\n" \
-                  "if ~isempty(crop_points)\n" \
-                  "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
-                  "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
-                  "end\n" \
-                  "end\n" % (os.path.abspath(os.getcwd()), self._getExtraPath(),
-                             catalogue, catalogue, listTomosFile, catalogue, catalogue)
-
-        codeFid.write(content)
-        codeFid.close()
-
-        # Create function files
-        functions = ['checkDCM.m', 'waitForPicker.m', 'dcmData.m', 'extractModelsCatalogue.m']
-        contents = ["try;\ndcm_handles.Name;\ndcmOpen=true;\ncatch;\ndcmOpen=false;\n"
-                    "end;\npause(0.25);\n",
-                    "if ~isempty(handles);\nfastslicer=handles.figure_fastslicer;\n"
-                    "items=split(fastslicer.Name,',');\nidx=sscanf(strtrim(items{2}),'volume index %d');\n"
-                    "uiwait(handles.figure_fastslicer);\nm=dynamo_read(fullfile(path,'extractModelsCatalogue.m'));\n"
-                    "m=[m{:}];\neval(m);\nend;\n",
-                    "aux=findobj(dcm_handles,'tag','uitable_main');\naux=aux.DisplayData();\n"
-                    "items=size(aux,1);\ndcm_data=cell(1,items);\nfor idx=1:items;\ndcm_data{idx}={aux{idx,3} aux{idx,1} aux{idx,2}};\n"
-                    "end;\n",
-                    "model=dread(dcmodels(catalogue_name,'i',idx));\n"
-                    "models{idx}=model;\n"]
-        for function, content in zip(functions, contents):
-            fid = open(os.path.join(os.getcwd(), function), 'w')
-            fid.write(content)
-            fid.close()
-
-        return codeFilePath
 
     # --------------------------- DEFINE info functions ----------------------
     def getMethods(self, output):
