@@ -99,7 +99,7 @@ class DynamoTomoDialog(ToolbarListDialog):
                   "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
                   "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
                   "end\n" \
-                  'exit' % (catalogue, tomo.getFileName(), tomo.getFileName(), catalogue,
+                  'exit\n' % (catalogue, tomo.getFileName(), tomo.getFileName(), catalogue,
                             pwutils.removeBaseExt(tomo.getFileName()), self.path)
         codeFid.write(content)
         codeFid.close()
