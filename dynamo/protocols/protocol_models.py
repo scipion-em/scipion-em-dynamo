@@ -47,7 +47,8 @@ Protocols to create models in Dynamo
 class DynamoModels(ProtAnalysis3D, ProtTomoBase):
     """Model manger from Dynamo for Mesh creation.
     After opening the desired Tomogram, a surface model will be created and loaded in Dynamo automatically.
-    Once the points of the Mesh have been defined, close Dynamo to save automatically your data."""
+    Once the points of the Mesh have been defined, close Dynamo to save automatically your data.
+    If a dialog asking to keep the models loaded in memory appears, click on 'Keep it!!' or close the dialog."""
     _label = 'model manager'
 
     def __init__(self, **args):
