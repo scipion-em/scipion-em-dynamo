@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es)
+# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
 # *
-# *  BCU, Centro Nacional de Biotecnologia, CSIC
+# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -25,7 +24,4 @@
 # *
 # **************************************************************************
 
-from .protocol_subtomo_MRA import DynamoSubTomoMRA
-from .protocol_extraction import DynamoExtraction
-from .protocol_boxing import DynamoBoxing
-from .protocol_models import DynamoModels
+from .viewers_data import DynamoDataViewer
