@@ -56,7 +56,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
             z = 0
         if subtomo.hasTransform():
             matrix = subtomo.getTransform().getMatrix()
-            tilt, narot, tdrot, shiftx, shifty, shiftz = matrix2eulerAngles(matrix)
+            tdrot, tilt, narot, shiftx, shifty, shiftz = matrix2eulerAngles(matrix)
         else:
             tilt = 0
             narot = 0
@@ -65,7 +65,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
             shifty = 0
             shiftz = 0
         fhTable.write('%d 1 0 %d %d %d %d %d %d 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
-                      % (subtomo.getObjId(), tilt, narot, tdrot, shiftx, shifty, shiftz,
+                      % (subtomo.getObjId(), shiftx, shifty, shiftz, tdrot, tilt, narot,
                          subtomo.getAcquisition().getAngleMin(), subtomo.getAcquisition().getAngleMax(), x, y, z))
 
 
@@ -77,10 +77,10 @@ def readDynTable(self, item):
     shiftx = nline.split()[3]
     shifty = nline.split()[4]
     shiftz = nline.split()[5]
-    tilt = nline.split()[6]
-    narot = nline.split()[7]
-    tdrot = nline.split()[8]
-    A = eulerAngles2matrix(tilt, narot, tdrot, shiftx, shifty, shiftz)
+    tdrot = nline.split()[6]
+    tilt = nline.split()[7]
+    narot = nline.split()[8]
+    A = eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz)
     transform = Transform()
     transform.setMatrix(A)
     item.setTransform(transform)
@@ -122,14 +122,14 @@ def matrix2eulerAngles(A):
     tilt = tilt * 180 / math.pi
     narot = narot * 180 / math.pi
     tdrot = tdrot * 180 / math.pi
-    return tilt, narot, tdrot, A[0, 3], A[1, 3], A[2, 3]
+    return tdrot, tilt, narot, A[0, 3], A[1, 3], A[2, 3]
 
 
 # euler2matrix dynamo
-def eulerAngles2matrix(tilt, narot, tdrot, shiftx, shifty, shiftz):
+def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
+    tdrot = float(tdrot)
     tilt = float(tilt)
     narot = float(narot)
-    tdrot = float(tdrot)
     tdrot = tdrot * math.pi / 180
     narot = narot * math.pi / 180
     tilt = tilt * math.pi / 180
