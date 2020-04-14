@@ -31,5 +31,5 @@ import os
 
 DYNAMO_PROGRAM = 'dynamo'
 DYNAMO_HOME = 'DYNAMO_HOME'
-DYNAMO_VERSION = '1.1.146'
+DYNAMO_VERSION = '1.1.471'
 DYNAMO_SHIPPED_MCR = 'dynamo_activate_linux_shipped_MCR.sh'
