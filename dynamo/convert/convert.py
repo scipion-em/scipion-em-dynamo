@@ -58,8 +58,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
             y = 0
             z = 0
         if subtomo.hasTransform():
-            matrix = subtomo.getTransform().getMatrix()
-            tilt, narot, tdrot, shiftx, shifty, shiftz = matrix2eulerAngles(matrix)
+            tdrot, tilt, narot, shiftx, shifty, shiftz = matrix2eulerAngles(subtomo.getTransform().getMatrix())
         else:
             tilt = 0
             narot = 0
@@ -67,9 +66,14 @@ def writeDynTable(fhTable, setOfSubtomograms):
             shiftx = 0
             shifty = 0
             shiftz = 0
-        fhTable.write('%d 1 0 %d %d %d %d %d %d 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
-                      % (subtomo.getObjId(), tilt, narot, tdrot, shiftx, shifty, shiftz,
-                         subtomo.getAcquisition().getAngleMin(), subtomo.getAcquisition().getAngleMax(), x, y, z))
+        if subtomo.hasAcquisition():
+            anglemin = subtomo.getAcquisition().getAngleMin()
+            anglemax = subtomo.getAcquisition().getAngleMax()
+        else:
+            anglemin = 0
+            anglemax = 0
+        fhTable.write('%d 1 1 %d %d %d %d %d %d 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
+                      % (subtomo.getObjId(), shiftx, shifty, shiftz, tdrot, tilt, narot, anglemin, anglemax, x, y, z))
 
 
 def readDynTable(self, item):
@@ -80,10 +84,10 @@ def readDynTable(self, item):
     shiftx = nline.split()[3]
     shifty = nline.split()[4]
     shiftz = nline.split()[5]
-    tilt = nline.split()[6]
-    narot = nline.split()[7]
-    tdrot = nline.split()[8]
-    A = eulerAngles2matrix(tilt, narot, tdrot, shiftx, shifty, shiftz)
+    tdrot = nline.split()[6]
+    tilt = nline.split()[7]
+    narot = nline.split()[8]
+    A = eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz)
     transform = Transform()
     transform.setMatrix(A)
     item.setTransform(transform)
@@ -106,6 +110,7 @@ def readDynTable(self, item):
     classId = nline.split()[21]
     item.setClassId(classId)
 
+
 def readDynCoord(tableFile, coord3DSet, tomo):
     with open(tableFile) as fhTable:
         for nline in fhTable:
@@ -114,10 +119,10 @@ def readDynCoord(tableFile, coord3DSet, tomo):
             shiftx = nline.split()[3]
             shifty = nline.split()[4]
             shiftz = nline.split()[5]
-            tilt = nline.split()[6]
-            narot = nline.split()[7]
-            tdrot = nline.split()[8]
-            A = eulerAngles2matrix(tilt, narot, tdrot, shiftx, shifty, shiftz)
+            tdrot = nline.split()[6]
+            tilt = nline.split()[7]
+            narot = nline.split()[8]
+            A = eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz)
             x = nline.split()[23]
             y = nline.split()[24]
             z = nline.split()[25]
@@ -147,14 +152,14 @@ def matrix2eulerAngles(A):
     tilt = tilt * 180 / math.pi
     narot = narot * 180 / math.pi
     tdrot = tdrot * 180 / math.pi
-    return tilt, narot, tdrot, A[0, 3], A[1, 3], A[2, 3]
+    return tdrot, tilt, narot, A[0, 3], A[1, 3], A[2, 3]
 
 
 # euler2matrix dynamo
-def eulerAngles2matrix(tilt, narot, tdrot, shiftx, shifty, shiftz):
+def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
+    tdrot = float(tdrot)
     tilt = float(tilt)
     narot = float(narot)
-    tdrot = float(tdrot)
     tdrot = tdrot * math.pi / 180
     narot = narot * math.pi / 180
     tilt = tilt * math.pi / 180
@@ -170,13 +175,13 @@ def eulerAngles2matrix(tilt, narot, tdrot, shiftx, shifty, shiftz):
     A[0, 3] = float(shiftx)
     A[1, 3] = float(shifty)
     A[2, 3] = float(shiftz)
-    A[0, 0] = costdrot * cosnarot - sintdrot * costilt * sinnarot
-    A[0, 1] = - cosnarot * sintdrot - costdrot * costilt * sinnarot
-    A[0, 2] = sinnarot * sintilt
-    A[1, 0] = costdrot * sinnarot + cosnarot * sintdrot * costilt
-    A[1, 1] = costdrot * cosnarot * costilt - sintdrot * sinnarot
-    A[1, 2] = -cosnarot * sintilt
-    A[2, 0] = sintdrot * sintilt
-    A[2, 1] = costdrot * sintilt
+    A[0, 0] = costdrot*cosnarot - sintdrot*costilt*sinnarot
+    A[0, 1] = -cosnarot*sintdrot - costdrot*costilt*sinnarot
+    A[0, 2] = sinnarot*sintilt
+    A[1, 0] = costdrot*sinnarot + cosnarot*sintdrot*costilt
+    A[1, 1] = costdrot*cosnarot*costilt - sintdrot*sinnarot
+    A[1, 2] = -cosnarot*sintilt
+    A[2, 0] = sintdrot*sintilt
+    A[2, 1] = costdrot*sintilt
     A[2, 2] = costilt
     return A
