@@ -37,6 +37,7 @@ from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
 
 from dynamo import Plugin
+from dynamo.convert import matrix2eulerAngles
 
 
 # Tomogram type constants for particle extraction
@@ -110,7 +111,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
             tomo = item.clone()
             for coord3DSet in self.inputCoordinates.get().iterCoordinates():
                 if pwutils.removeBaseExt(tomo.getFileName()) == pwutils.removeBaseExt(coord3DSet.getVolName()):
-                    angles_coord = coord3DSet.eulerAngles()
+                    angles_coord = matrix2eulerAngles(coord3DSet.getMatrix())
                     x = round(self.factor * coord3DSet.getX())
                     y = round(self.factor * coord3DSet.getY())
                     z = round(self.factor * coord3DSet.getZ())
