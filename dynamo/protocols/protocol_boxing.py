@@ -38,6 +38,7 @@ from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 
 from dynamo import Plugin
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
+from dynamo.convert import eulerAngles2matrix
 
 class DynamoBoxing(ProtTomoPicking):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
@@ -165,7 +166,8 @@ class DynamoBoxing(ProtTomoPicking):
             for idx in range(len(points)):
                 coord = Coordinate3D()
                 coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
-                coord.euler2Matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2])
+                matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
+                coord.setMatrix(matrix)
                 coord.setVolume(tomo)
                 coord3DSet.append(coord)
 
