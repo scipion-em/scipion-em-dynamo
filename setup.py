@@ -25,7 +25,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='scipion-em-dynamo',  # Required
-    version='3.0',  # Required
+    version='3.1',  # Required
     description='Scipion plugin for dynamo.',  # Required
     long_description=long_description,  # Optional
     url='https://github.com/scipion-em/scipion-em-dynamo',  # Optional
