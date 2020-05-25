@@ -65,14 +65,11 @@ class Plugin(pwem.Plugin):
         program = cls.getDynamoProgram()
         protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
 
-
-    # @classmethod
-    # def defineBinaries(cls, env):
-    #     env.addPackage(JANNI_GENMOD,
-    #                    version=JANNI_GENMOD_20190703,
-    #                    tar='void.tgz',
-    #                    commands=[("wget https://github.com/MPI-Dortmund/sphire-janni/raw/master/janni_general_models/"
-    #                               + JANNI_GENMOD_20190703_FN, JANNI_GENMOD_20190703_FN)],
-    #                    neededProgs=["wget"],
-    #                    default=True)
+    @classmethod
+    def defineBinaries(cls, env):
+        env.addPackage('dynamo',
+                       version='1.146',
+                       tar='dynamo-1.146.tar.gz',
+                       commands=[],
+                       default=True)
 
