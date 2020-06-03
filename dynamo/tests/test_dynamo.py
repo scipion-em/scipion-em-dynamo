@@ -390,6 +390,7 @@ class TestDynImportSubTomograms(BaseTest):
         setupTestProject(cls)
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.table = cls.dataset.getFile('initial.tbl')
+        cls.ctlg = cls.dataset.getFile('original.vll')
         cls.path = cls.dataset.getPath()
         cls.subtomos = cls.dataset.getFile('basename.hdf')
 
@@ -398,7 +399,8 @@ class TestDynImportSubTomograms(BaseTest):
                                       filesPath=self.subtomos,
                                       samplingRate=1.35,
                                       importFrom=2,
-                                      tablePath=self.table)
+                                      tablePath=self.table,
+                                      ctgPath=self.ctlg)
         self.launchProtocol(protImport)
         return protImport
 
@@ -417,3 +419,5 @@ class TestDynImportSubTomograms(BaseTest):
         self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 175)
         self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 134)
         self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 115)
+        self.assertTrue(output.getFirstItem().getCoordinate3D().getVolId() == 1)
+        self.assertTrue(output.getFirstItem().getVolId() == 1)
