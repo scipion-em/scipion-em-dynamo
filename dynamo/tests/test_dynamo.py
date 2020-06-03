@@ -29,7 +29,7 @@ from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
 from tomo.tests import DataSet
 from xmipp3.protocols import XmippProtCreateMask3D
-from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction
+from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos
 
 
 class TestDynamoBase(BaseTest):
@@ -46,6 +46,7 @@ class TestDynamoBase(BaseTest):
         cls.angles = cls.dataset.getFile('overview_wbp.ang')
         cls.inputSetOfSubTomogram = cls.dataset.getFile('subtomo')
         cls.smallTomogram = cls.dataset.getFile('coremask_normcorona.mrc')
+
 
 class TestSubTomogramsAlignment(BaseTest):
     """ This class check if the protocol to import sub tomograms works
@@ -251,6 +252,7 @@ class TestSubTomogramsAlignment(BaseTest):
         self.assertTrue(outputSubtomograms.getFirstItem().hasTransform())
         return dynamoAlignment
 
+
 class TestDynamoExtraction(TestDynamoBase):
     '''This class checks if the protocol to extract subtomograms
     works properly'''
@@ -308,7 +310,8 @@ class TestDynamoExtraction(TestDynamoBase):
 
         protDynamoExtractionAngles = self.newProtocol(DynamoExtraction,
                                                       objLabel='Extraction with Angles - %s' % text,
-                                                      inputTomograms=protImportTomogram.outputTomograms,                                                      inputCoordinates=coordsAngle,
+                                                      inputTomograms=protImportTomogram.outputTomograms,
+                                                      inputCoordinates=coordsAngle,
                                                       boxSize=coordsAngle.getBoxSize(),
                                                       tomoSource=tomoSource,
                                                       downFactor=downFactor)
@@ -376,3 +379,41 @@ class TestDynamoExtraction(TestDynamoBase):
         self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
 
         return protExtraction
+
+
+class TestDynImportSubTomograms(BaseTest):
+    """ This class check if the protocol to import subtomograms from Dynamo works
+     properly."""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.table = cls.dataset.getFile('initial.tbl')
+        cls.path = cls.dataset.getPath()
+        cls.subtomos = cls.dataset.getFile('basename.hdf')
+
+    def _runImportDynSubTomograms(self):
+        protImport = self.newProtocol(DynamoImportSubtomos,
+                                      filesPath=self.subtomos,
+                                      samplingRate=1.35,
+                                      importFrom=2,
+                                      tablePath=self.table)
+        self.launchProtocol(protImport)
+        return protImport
+
+    def test_import_dynamo_subtomograms(self):
+        protImport = self._runImportDynSubTomograms()
+        output = getattr(protImport, 'outputSubTomograms', None)
+        self.assertTrue(output.getSamplingRate() == 1.35)
+        self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
+        self.assertTrue(output.getDim()[0] == 32)
+        self.assertTrue(output.getDim()[1] == 32)
+        self.assertTrue(output.getDim()[2] == 32)
+        self.assertTrue(output.getFirstItem().getObjId() == 4)
+        self.assertTrue(output.getFirstItem().getClassId() == 1)
+        self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
+        self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
+        self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 175)
+        self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 134)
+        self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 115)
