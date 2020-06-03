@@ -65,16 +65,17 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         self.info("Using pattern: '%s'" % pattern)
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
-        ctlg = self._getExtraPath('dynamo_catalogue.vll')
-        copyFile(self.ctgPath.get(), ctlg)
-        fhCtlg = open(ctlg, 'r')
-        self.tomoDict = {}
-        next(fhCtlg)
-        for i, line in enumerate(fhCtlg):
-            tomoId = i+1
-            tomoName = line.rstrip()
-            self.tomoDict[tomoId] = tomoName
-        fhCtlg.close()
+        if self.ctgPath.get() != '':
+            ctlg = self._getExtraPath('dynamo_catalogue.vll')
+            copyFile(self.ctgPath.get(), ctlg)
+            fhCtlg = open(ctlg, 'r')
+            self.tomoDict = {}
+            next(fhCtlg)
+            for i, line in enumerate(fhCtlg):
+                tomoId = i+1
+                tomoName = line.rstrip()
+                self.tomoDict[tomoId] = tomoName
+            fhCtlg.close()
         imgh = ImageHandler()
         self.subtomoSet = self._createSetOfSubTomograms()
         self.subtomoSet.setSamplingRate(samplingRate)
@@ -114,9 +115,10 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         else:
             subtomo.setLocation(index, newFileName)
         readDynTable(self, subtomo)
-        scipionTomoName = self.tomoDict.get(subtomo.getVolId())
-        subtomo.setVolName(scipionTomoName)
-        subtomo.getCoordinate3D().setVolName(scipionTomoName)
+        if self.ctgPath.get() != '':
+            scipionTomoName = self.tomoDict.get(subtomo.getVolId())
+            subtomo.setVolName(scipionTomoName)
+            subtomo.getCoordinate3D().setVolName(scipionTomoName)
         self.subtomoSet.append(subtomo)
 
     def createOutputStep(self):
