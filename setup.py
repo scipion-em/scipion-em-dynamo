@@ -25,12 +25,12 @@ with open('requirements.txt') as f:
 
 setup(
     name='scipion-em-dynamo',  # Required
-    version='3.1',  # Required
+    version='3.1.1',  # Required
     description='Scipion plugin for dynamo.',  # Required
     long_description=long_description,  # Optional
     url='https://github.com/scipion-em/scipion-em-dynamo',  # Optional
-    author='you',  # Optional
-    author_email='you@yourinstitution.email',  # Optional
+    author='I2PC',  # Optional
+    author_email='scipion@cnb.csic.es',  # Optional
     keywords='scipion cryoem imageprocessing scipion-3.0',  # Optional
     packages=find_packages(),
     install_requires=[requirements],
