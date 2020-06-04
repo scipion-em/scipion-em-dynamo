@@ -98,6 +98,7 @@ def readDynTable(self, item):
     acquisition.setAngleMax(angleMax)
     item.setAcquisition(acquisition)
     volId = nline.split()[19]
+    item.setVolId(volId)
     x = nline.split()[23]
     y = nline.split()[24]
     z = nline.split()[25]
