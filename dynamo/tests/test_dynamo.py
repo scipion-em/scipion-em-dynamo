@@ -397,8 +397,7 @@ class TestDynImportSubTomograms(BaseTest):
         protImport = self.newProtocol(DynamoImportSubtomos,
                                       filesPath=self.subtomos,
                                       samplingRate=1.35,
-                                      tablePath=self.table,
-                                      ctgPath=None)
+                                      tablePath=self.table)
         self.launchProtocol(protImport)
         return protImport
 

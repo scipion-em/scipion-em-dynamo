@@ -65,7 +65,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         self.info("Using pattern: '%s'" % pattern)
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
-        if self.ctgPath.get() != '':
+        if not self.ctgPath:
             ctlg = self._getExtraPath('dynamo_catalogue.vll')
             copyFile(self.ctgPath.get(), ctlg)
             fhCtlg = open(ctlg, 'r')
@@ -115,7 +115,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         else:
             subtomo.setLocation(index, newFileName)
         readDynTable(self, subtomo)
-        if self.ctgPath.get() != '':
+        if not self.ctgPath:
             scipionTomoName = self.tomoDict.get(subtomo.getVolId())
             subtomo.setVolName(scipionTomoName)
             subtomo.getCoordinate3D().setVolName(scipionTomoName)
