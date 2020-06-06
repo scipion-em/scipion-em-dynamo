@@ -29,4 +29,4 @@ from .protocol_subtomo_MRA import DynamoSubTomoMRA
 from .protocol_extraction import DynamoExtraction
 from .protocol_boxing import DynamoBoxing
 from .protocol_models import DynamoModels
-from .protocol_import_subtomos import DynamoImportSubtomos\
+from .protocol_import_subtomos import DynamoImportSubtomos
