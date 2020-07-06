@@ -33,6 +33,7 @@ from pwem.objects import Transform
 
 from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import SubTomogram
+from tomo.utils import _getUniqueFileName
 
 from ..convert import readDynTable
 
@@ -96,7 +97,8 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
             origin = Transform()
             origin.setShifts(x / -2. * samplingRate, y / -2. * samplingRate, zDim / -2. * samplingRate)
             subtomo.setOrigin(origin)
-            newFileName = abspath(self._getVolumeFileName(fileName))
+            newFileName = _getUniqueFileName(self.getPattern(), fileName)
+            # newFileName = abspath(self._getVolumeFileName(fileName))
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
             createAbsLink(fileName, newFileName)
