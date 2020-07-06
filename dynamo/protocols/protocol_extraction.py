@@ -117,7 +117,9 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                     z = round(self.factor * coord3DSet.getZ())
                     outC.write("%d\t%d\t%d\t%d\n" % (x, y, z, idt+1))
                     outA.write("%f\t%f\t%f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
-                    coordDict.append(coord3DSet.clone())
+                    newCoord = coord3DSet.clone()
+                    newCoord.setVolume(coord3DSet.getVolume())
+                    coordDict.append(newCoord)
             if coordDict:
                 self.lines.append(coordDict)
         outC.close()
@@ -214,6 +216,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                 ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coordSet[ids])
+            subtomogram.setVolName(coordSet[ids].getVolName())
             transform = Transform()
             transform.setMatrix(coordSet[ids].getMatrix())
             subtomogram.setTransform(transform)
