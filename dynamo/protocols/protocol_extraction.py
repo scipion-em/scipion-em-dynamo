@@ -101,16 +101,15 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
         self.factor = float(samplingRateCoord / samplingRateTomo)
         self.lines = []
-        inputSet = self.getInputTomograms()
+        inputSet = self.getInputTomograms().getFiles()
         self.coordsFileName = self._getExtraPath('coords.txt')
         self.anglesFileName = self._getExtraPath('angles.txt')
         outC = open(self.coordsFileName, "w")
         outA = open(self.anglesFileName, 'w')
         for idt, item in enumerate(inputSet):
             coordDict = []
-            tomo = item.clone()
             for coord3DSet in self.inputCoordinates.get().iterCoordinates():
-                if pwutils.removeBaseExt(tomo.getFileName()) == pwutils.removeBaseExt(coord3DSet.getVolName()):
+                if pwutils.removeBaseExt(item) == pwutils.removeBaseExt(coord3DSet.getVolName()):
                     angles_coord = matrix2eulerAngles(coord3DSet.getMatrix())
                     x = round(self.factor * coord3DSet.getX())
                     y = round(self.factor * coord3DSet.getY())
