@@ -116,9 +116,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                     z = round(self.factor * coord3DSet.getZ())
                     outC.write("%d\t%d\t%d\t%d\n" % (x, y, z, idt+1))
                     outA.write("%f\t%f\t%f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
-                    newCoord = coord3DSet.clone()
-                    newCoord.setVolume(coord3DSet.getVolume())
-                    coordDict.append(newCoord)
+                    coordDict.append(coord3DSet.getObjId())
             if coordDict:
                 self.lines.append(coordDict)
         outC.close()
@@ -163,7 +161,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         codeFilePath = os.path.join(os.getcwd(), "DynamoExtraction.m")
         listTomosFile = self._getTmpPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
-        self.tomoFiles = [tomo.getFileName() for tomo in self.getInputTomograms().iterItems()]
+        self.tomoFiles = sorted(self.getInputTomograms().getFiles())
 
         # Create list of tomos file
         tomoFid = open(listTomosFile, 'w')
@@ -205,7 +203,8 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         return codeFilePath
 
     def readSetOfSubTomograms(self, workDir, outputSubTomogramsSet, coordSet):
-        for ids, subTomoFile in enumerate(glob.glob(os.path.join(workDir, '*.em'))):
+        coords = self.inputCoordinates.get()
+        for ids, subTomoFile in enumerate(sorted(glob.glob(os.path.join(workDir, '*.em')))):
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()
             subtomogram.setLocation(subTomoFile)
@@ -214,10 +213,10 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                 fnSubtomo = self._getExtraPath(os.path.basename(workDir.strip("/")) + "_downsampled_subtomo%d.mrc" % (ids+1))
                 ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
                 subtomogram.setLocation(fnSubtomo)
-            subtomogram.setCoordinate3D(coordSet[ids])
-            subtomogram.setVolName(coordSet[ids].getVolName())
+            subtomogram.setCoordinate3D(coords[coordSet[ids]])
+            subtomogram.setVolName(coords[coordSet[ids]].getVolName())
             transform = Transform()
-            transform.setMatrix(coordSet[ids].getMatrix())
+            transform.setMatrix(coords[coordSet[ids]].getMatrix())
             subtomogram.setTransform(transform)
             outputSubTomogramsSet.append(subtomogram)
         return outputSubTomogramsSet
