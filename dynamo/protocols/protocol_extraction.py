@@ -88,11 +88,16 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                       label='Downsampling factor',
                       help='If 1.0 is used, no downsample is applied. '
                            'Non-integer downsample factors are possible. ')
+        form.addParam('em2mrc', params.BooleanParam, default=False,
+                      label='Convert output into mrc files?',
+                      help='If Yes option is selected, then original em files will be'
+                           'deleted and the database filename field will point to the mrc files.')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('writeSetOfCoordinates3D')
         self._insertFunctionStep('launchDynamoExtractStep')
+        self._insertFunctionStep('convertOutputStep')
         self._insertFunctionStep('createOutputStep')
 
     # --------------------------- STEPS functions -----------------------------
@@ -129,6 +134,17 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
         pwutils.cleanPattern('*.m')
+
+    def convertOutputStep(self):
+        """Transform and delete the .em files into .mrc files if the user requests it."""
+        if self.em2mrc:
+            ih = ImageHandler()
+            for ind, tomoFile in enumerate(self.tomoFiles):
+                cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind + 1)), '')
+                pattern = os.path.join(cropPath, '*.em')
+                for subTomoFile in glob.glob(pattern):
+                    ih.convert(subTomoFile, pwutils.replaceExt(subTomoFile, 'mrc'))
+                pwutils.cleanPattern(pattern)
 
     def createOutputStep(self):
         self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
@@ -204,7 +220,10 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     def readSetOfSubTomograms(self, workDir, outputSubTomogramsSet, coordSet):
         coords = self.inputCoordinates.get()
-        for ids, subTomoFile in enumerate(sorted(glob.glob(os.path.join(workDir, '*.em')))):
+        ext = '.em'
+        if self.em2mrc:
+            ext = '.mrc'
+        for ids, subTomoFile in enumerate(sorted(glob.glob(os.path.join(workDir, '*' + ext)))):
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()
             subtomogram.setLocation(subTomoFile)
