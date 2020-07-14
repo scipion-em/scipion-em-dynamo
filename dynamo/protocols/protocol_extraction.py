@@ -224,10 +224,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     def readSetOfSubTomograms(self, workDir, outputSubTomogramsSet, coordSet):
         coords = self.inputCoordinates.get()
-        ext = '.em'
-        if self.em2mrc:
-            ext = '.mrc'
-        for ids, subTomoFile in enumerate(sorted(glob.glob(os.path.join(workDir, '*' + ext)))):
+        for ids, subTomoFile in enumerate(sorted(glob.glob(os.path.join(workDir, '*' + '.mrc')))):
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()
             subtomogram.setLocation(subTomoFile)
