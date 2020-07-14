@@ -88,10 +88,14 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                       label='Downsampling factor',
                       help='If 1.0 is used, no downsample is applied. '
                            'Non-integer downsample factors are possible. ')
-        form.addParam('em2mrc', params.BooleanParam, default=False,
-                      label='Convert output into mrc files?',
-                      help='If Yes option is selected, then original em files will be'
-                           'deleted and the database filename field will point to the mrc files.')
+
+        form.addSection(label='Preprocess')
+        form.addParam('doInvert', params.BooleanParam, default=False,
+                      label='Invert contrast?',
+                      help='Invert the contrast if your tomogram is black '
+                           'over a white background.  Xmipp, Spider, Relion '
+                           'and Eman require white particles over a black '
+                           'background.')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -136,15 +140,17 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         pwutils.cleanPattern('*.m')
 
     def convertOutputStep(self):
-        """Transform and delete the .em files into .mrc files if the user requests it."""
-        if self.em2mrc:
-            ih = ImageHandler()
+        """Transform and delete the .em files into .mrc files if the user requests it and
+        invert the generated volumes if required"""
+        if self.doInvert:
+            import xmipp3
+            program = 'xmipp_image_operate'
             for ind, tomoFile in enumerate(self.tomoFiles):
                 cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind + 1)), '')
-                pattern = os.path.join(cropPath, '*.em')
+                pattern = os.path.join(cropPath, '*.mrc')
                 for subTomoFile in glob.glob(pattern):
-                    ih.convert(subTomoFile, pwutils.replaceExt(subTomoFile, 'mrc'))
-                pwutils.cleanPattern(pattern)
+                    args = "-i %s --mult -1" % subTomoFile
+                    self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
         self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
@@ -207,7 +213,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                   "tomoCoords=coords(tags==tag,:)\n" \
                   "tomoAngles=angles(tags==tag,:)\n" \
                   "t=dynamo_table_blank(size(tomoCoords,1),'r',tomoCoords,'angles',rad2deg(tomoAngles))\n" \
-                  "dtcrop(c.volumes{tag}.fullFileName,t,strcat(savePath,num2str(tag)),box)\n" \
+                  "dtcrop(c.volumes{tag}.fullFileName,t,strcat(savePath,num2str(tag)),box,'ext','mrc')\n" \
                   "end\n" \
                    % (os.path.abspath(os.getcwd()), self._getExtraPath('Crop'),
                       catalogue,boxSize, catalogue, listTomosFile, os.path.abspath(self.coordsFileName),
@@ -273,12 +279,16 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        summary.append("Tomogram source: %s"
+        summary.append("Tomogram source: *%s*"
                        % self.getEnumText("tomoSource"))
         if self.getOutputsSize() >= 1:
-            summary.append("Particle box size: %s" % self.boxSize.get())
-            summary.append("Subtomogram extracted: %s" %
+            summary.append("Particle box size: *%s*" % self.boxSize.get())
+            summary.append("Subtomogram extracted: *%s*" %
                            self.inputCoordinates.get().getSize())
         else:
             summary.append("Output subtomograms not ready yet.")
+        if self.doInvert:
+            summary.append('*White over black.*')
+        else:
+            summary.append('*Black over white.*')
         return summary
