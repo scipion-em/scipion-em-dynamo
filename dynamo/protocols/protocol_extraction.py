@@ -89,10 +89,20 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                       help='If 1.0 is used, no downsample is applied. '
                            'Non-integer downsample factors are possible. ')
 
+        form.addSection(label='Preprocess')
+        form.addParam('doInvert', params.BooleanParam, default=False,
+                      label='Invert contrast?',
+                      help='Invert the contrast if your tomogram is black '
+                           'over a white background.  Xmipp, Spider, Relion '
+                           'and Eman require white particles over a black '
+                           'background.')
+
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('writeSetOfCoordinates3D')
         self._insertFunctionStep('launchDynamoExtractStep')
+        if self.doInvert:
+            self._insertFunctionStep('invertContrastStep')
         self._insertFunctionStep('createOutputStep')
 
     # --------------------------- STEPS functions -----------------------------
@@ -101,23 +111,22 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
         self.factor = float(samplingRateCoord / samplingRateTomo)
         self.lines = []
-        inputSet = self.getInputTomograms()
+        inputSet = self.getInputTomograms().getFiles()
         self.coordsFileName = self._getExtraPath('coords.txt')
         self.anglesFileName = self._getExtraPath('angles.txt')
         outC = open(self.coordsFileName, "w")
         outA = open(self.anglesFileName, 'w')
         for idt, item in enumerate(inputSet):
             coordDict = []
-            tomo = item.clone()
             for coord3DSet in self.inputCoordinates.get().iterCoordinates():
-                if pwutils.removeBaseExt(tomo.getFileName()) == pwutils.removeBaseExt(coord3DSet.getVolName()):
+                if pwutils.removeBaseExt(item) == pwutils.removeBaseExt(coord3DSet.getVolName()):
                     angles_coord = matrix2eulerAngles(coord3DSet.getMatrix())
                     x = round(self.factor * coord3DSet.getX())
                     y = round(self.factor * coord3DSet.getY())
                     z = round(self.factor * coord3DSet.getZ())
                     outC.write("%d\t%d\t%d\t%d\n" % (x, y, z, idt+1))
                     outA.write("%f\t%f\t%f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
-                    coordDict.append(coord3DSet.clone())
+                    coordDict.append(coord3DSet.getObjId())
             if coordDict:
                 self.lines.append(coordDict)
         outC.close()
@@ -130,6 +139,16 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
         pwutils.cleanPattern('*.m')
+        
+    def invertContrastStep(self):
+        import xmipp3
+        program = 'xmipp_image_operate'
+        for ind, tomoFile in enumerate(self.tomoFiles):
+            cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind + 1)), '')
+            pattern = os.path.join(cropPath, '*.mrc')
+            for subTomoFile in glob.glob(pattern):
+                args = "-i %s --mult -1" % subTomoFile
+                self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
         self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
@@ -162,7 +181,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         codeFilePath = os.path.join(os.getcwd(), "DynamoExtraction.m")
         listTomosFile = self._getTmpPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
-        self.tomoFiles = [tomo.getFileName() for tomo in self.getInputTomograms().iterItems()]
+        self.tomoFiles = sorted(self.getInputTomograms().getFiles())
 
         # Create list of tomos file
         tomoFid = open(listTomosFile, 'w')
@@ -192,7 +211,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                   "tomoCoords=coords(tags==tag,:)\n" \
                   "tomoAngles=angles(tags==tag,:)\n" \
                   "t=dynamo_table_blank(size(tomoCoords,1),'r',tomoCoords,'angles',rad2deg(tomoAngles))\n" \
-                  "dtcrop(c.volumes{tag}.fullFileName,t,strcat(savePath,num2str(tag)),box)\n" \
+                  "dtcrop(c.volumes{tag}.fullFileName,t,strcat(savePath,num2str(tag)),box,'ext','mrc')\n" \
                   "end\n" \
                    % (os.path.abspath(os.getcwd()), self._getExtraPath('Crop'),
                       catalogue,boxSize, catalogue, listTomosFile, os.path.abspath(self.coordsFileName),
@@ -204,7 +223,8 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         return codeFilePath
 
     def readSetOfSubTomograms(self, workDir, outputSubTomogramsSet, coordSet):
-        for ids, subTomoFile in enumerate(glob.glob(os.path.join(workDir, '*.em'))):
+        coords = self.inputCoordinates.get()
+        for ids, subTomoFile in enumerate(sorted(glob.glob(os.path.join(workDir, '*' + '.mrc')))):
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()
             subtomogram.setLocation(subTomoFile)
@@ -213,9 +233,10 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                 fnSubtomo = self._getExtraPath(os.path.basename(workDir.strip("/")) + "_downsampled_subtomo%d.mrc" % (ids+1))
                 ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
                 subtomogram.setLocation(fnSubtomo)
-            subtomogram.setCoordinate3D(coordSet[ids])
+            subtomogram.setCoordinate3D(coords[coordSet[ids]])
+            subtomogram.setVolName(coords[coordSet[ids]].getVolName())
             transform = Transform()
-            transform.setMatrix(coordSet[ids].getMatrix())
+            transform.setMatrix(coords[coordSet[ids]].getMatrix())
             subtomogram.setTransform(transform)
             outputSubTomogramsSet.append(subtomogram)
         return outputSubTomogramsSet
@@ -253,12 +274,16 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        summary.append("Tomogram source: %s"
+        summary.append("Tomogram source: *%s*"
                        % self.getEnumText("tomoSource"))
         if self.getOutputsSize() >= 1:
-            summary.append("Particle box size: %s" % self.boxSize.get())
-            summary.append("Subtomogram extracted: %s" %
+            summary.append("Particle box size: *%s*" % self.boxSize.get())
+            summary.append("Subtomogram extracted: *%s*" %
                            self.inputCoordinates.get().getSize())
         else:
             summary.append("Output subtomograms not ready yet.")
+        if self.doInvert:
+            summary.append('*White over black.*')
+        else:
+            summary.append('*Black over white.*')
         return summary
