@@ -102,14 +102,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         self._insertFunctionStep('writeSetOfCoordinates3D')
         self._insertFunctionStep('launchDynamoExtractStep')
         if self.doInvert:
-            import xmipp3
-            program = 'xmipp_image_operate'
-            for ind, tomoFile in enumerate(self.tomoFiles):
-                cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind + 1)), '')
-                pattern = os.path.join(cropPath, '*.mrc')
-                for subTomoFile in glob.glob(pattern):
-                    args = "-i %s --mult -1" % subTomoFile
-                    self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+            self._insertFunctionStep('invertContrastStep')
         self._insertFunctionStep('createOutputStep')
 
     # --------------------------- STEPS functions -----------------------------
@@ -146,6 +139,16 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
         pwutils.cleanPattern('*.m')
+        
+    def invertContrastStep(self):
+        import xmipp3
+        program = 'xmipp_image_operate'
+        for ind, tomoFile in enumerate(self.tomoFiles):
+            cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind + 1)), '')
+            pattern = os.path.join(cropPath, '*.mrc')
+            for subTomoFile in glob.glob(pattern):
+                args = "-i %s --mult -1" % subTomoFile
+                self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
         self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
