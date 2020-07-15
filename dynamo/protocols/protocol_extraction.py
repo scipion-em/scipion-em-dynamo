@@ -231,7 +231,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
             dfactor = self.downFactor.get()
             if dfactor != 1:
                 fnSubtomo = self._getExtraPath(os.path.basename(workDir.strip("/")) + "_downsampled_subtomo%d.mrc" % (ids+1))
-                ImageHandler.scaleSplines(subtomogram.getLocation(), fnSubtomo, dfactor)
+                ImageHandler.scaleSplines(subtomogram.getFileName() + ':mrc', fnSubtomo, dfactor)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coords[coordSet[ids]])
             subtomogram.setVolName(coords[coordSet[ids]].getVolName())
