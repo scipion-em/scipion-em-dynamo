@@ -29,7 +29,7 @@ import pwem
 import pyworkflow.utils as pwutils
 from .constants import *
 
-__version__ = '3.1.3'
+__version__ = '3.1.4'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
