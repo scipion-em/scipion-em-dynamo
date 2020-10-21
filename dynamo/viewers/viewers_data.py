@@ -61,8 +61,14 @@ class DynamoDataViewer(pwviewer.Viewer):
         if issubclass(cls, tomo.objects.SetOfMeshes):
             outputMeshes = obj
 
-            meshList = [item.clone() for item in outputMeshes.iterItems()]
-            meshList.reverse()
+            # meshList = [item.clone() for item in outputMeshes.iterItems()]
+
+            meshList = []
+            for item in obj.iterItems():
+                mesh = item.clone()
+                mesh.setVolume(item.getVolume())
+                meshList.append(mesh)
+            # meshList.reverse()
 
             path = self.protocol._getTmpPath()
 
