@@ -26,18 +26,17 @@
 
 import os
 import glob
+import numpy as np
 
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
-from pwem.emlib.image import ImageHandler
-from pwem.objects import Transform
 from pwem.protocols import EMProtocol
 
 from tomo.protocols import ProtTomoBase
-from tomo.objects import SubTomogram
+from tomo.objects import SetOfCoordinates3D
 
 from dynamo import Plugin
-from dynamo.convert import matrix2eulerAngles
+from dynamo.convert import matrix2eulerAngles, readDynCoord
 
 
 class DynamoSubBoxing(EMProtocol, ProtTomoBase):
@@ -102,15 +101,26 @@ class DynamoSubBoxing(EMProtocol, ProtTomoBase):
         pwutils.cleanPattern('*.m')
 
     def createOutputStep(self):
-        pass
-
+        inputCoords = self.inputCoordinates.get()
+        tomos = inputCoords.getPrecedents()
+        suffix = self._getOutputSuffix(SetOfCoordinates3D)
+        outSet = self._createSetOfCoordinates3D(tomos, suffix)
+        outSet.setBoxSize(np.loadtxt(self._getExtraPath('recBoxSize.txt')))
+        outSet.setSamplingRate(inputCoords.getSamplingRate())
+        outSet.setPrecedents(tomos)
+        for coordFile in glob.glob(self._getExtraPath('*.tbl')):
+            idt = int(''.join(filter(str.isdigit, pwutils.removeBaseExt(coordFile))))
+            readDynCoord(coordFile, outSet, tomos[idt].clone())
+        args = {}
+        args['outputCoordinates3D'] = outSet
+        self._defineOutputs(**args)
+        self._defineSourceRelation(inputCoords, outSet)
+        self._defineSourceRelation(self.inputAverage, outSet)
 
     # --------------------------- DEFINE utils functions ----------------------
     def writeMatlabCode(self):
         # Initialization params
         average = self.inputAverage.get()
-        tomo = self.inputSubTomos.get()[1].getVolName()
-        dynTable = self._getExtraPath(os.path.join('Crop', 'crop.tbl'))
         codeFilePath = self._getExtraPath("DynamoSubBoxing.m")
 
         # Write code to Matlab code file
