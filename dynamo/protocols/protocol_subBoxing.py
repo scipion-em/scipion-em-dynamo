@@ -165,7 +165,25 @@ class DynamoSubBoxing(EMProtocol, ProtTomoBase):
         pass
 
     def _methods(self):
-        pass
+        methodsMsgs = []
+        boxSize = np.loadtxt(self._getExtraPath('recBoxSize.txt'))
+        if self.getOutputsSize() >= 1:
+            methodsMsgs.append("Particle box size: *%s*" % boxSize)
+            methodsMsgs.append("Total particles found: *%s*" %
+                           self.outputCoordinates3D.getSize())
+            methodsMsgs.append("Symmetry: *%s*" % self.symmetry.get())
+        else:
+            methodsMsgs.append("Output coordinates not ready yet.")
+        return methodsMsgs
 
     def _summary(self):
-        pass
+        summary = []
+        boxSize = np.loadtxt(self._getExtraPath('recBoxSize.txt'))
+        if self.getOutputsSize() >= 1:
+            summary.append("Particle box size: *%s*" % boxSize)
+            summary.append("Total particles found: *%s*" %
+                           self.outputCoordinates3D.getSize())
+            summary.append("Symmetry: *%s*" % self.symmetry.get())
+        else:
+            summary.append("Output coordinates not ready yet.")
+        return summary
