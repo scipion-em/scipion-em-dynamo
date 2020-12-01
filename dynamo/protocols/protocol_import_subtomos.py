@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from os.path import abspath, basename
+from os.path import abspath, basename, isfile
 
 from pyworkflow.protocol.params import PathParam
 from pyworkflow.utils.path import createAbsLink, copyFile
@@ -66,12 +66,12 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         self.info("Using pattern: '%s'" % pattern)
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
-        if not self.ctgPath:
+        if self.ctgPath:
             ctlg = self._getExtraPath('dynamo_catalogue.vll')
             copyFile(self.ctgPath.get(), ctlg)
             fhCtlg = open(ctlg, 'r')
             self.tomoDict = {}
-            next(fhCtlg)
+            # next(fhCtlg)
             for i, line in enumerate(fhCtlg):
                 tomoId = i+1
                 tomoName = line.rstrip()
@@ -117,10 +117,10 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         else:
             subtomo.setLocation(index, newFileName)
         readDynTable(self, subtomo)
-        if not self.ctgPath:
+        if self.ctgPath:
             scipionTomoName = self.tomoDict.get(subtomo.getVolId())
             subtomo.setVolName(scipionTomoName)
-            subtomo.getCoordinate3D().setVolName(scipionTomoName)
+            # subtomo.getCoordinate3D().setVolName(scipionTomoName)
         self.subtomoSet.append(subtomo)
 
     def createOutputStep(self):
@@ -156,3 +156,13 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         else:
             baseFileName = "import_" + str(basename(fileName)).split(":")[0]
         return self._getExtraPath(baseFileName)
+
+    def _validate(self):
+        errors = []
+        if not list(self.iterFiles()):
+            errors.append('No files matching the pattern %s were found.' % self.getPattern())
+        if not self.tablePath.get() or not isfile(self.tablePath.get()):
+            errors.append("Could not find specified dynamo catalogue file")
+        if not self.ctgPath.get() or not isfile(self.ctgPath.get()):
+            errors.append(" Could not find the specified catalogue path")
+        return errors
