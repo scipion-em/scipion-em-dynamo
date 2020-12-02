@@ -23,11 +23,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import math
+import math, h5py, os
 import numpy as np
 from pwem import Domain
 from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform
+from pyworkflow.utils.process import runJob
+from dynamo import Plugin
 Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
 
@@ -186,3 +188,35 @@ def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
     A[2, 1] = costdrot*sintilt
     A[2, 2] = costilt
     return A
+
+def readDynCatalogue(ctlg_path, save_path):
+    # MatLab script to convert an object into a structure
+    matPath = os.path.join(save_path, 'structure.mat')
+    codeFilePath = os.path.join(save_path, 'convert.m')
+    codeFid = open(codeFilePath, 'w')
+    content = "c=dread('%s')\n" \
+              "save('%s','c','-v7.3');" % (os.path.abspath(ctlg_path),
+                                           os.path.abspath(matPath))
+    codeFid.write(content)
+    codeFid.close()
+    args = ' %s' % codeFilePath
+    runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+
+    # Read MatLab binary into Python
+    volumes = []
+    file = h5py.File(matPath)
+    subsystem = file['#subsystem#']
+    mcos = subsystem['MCOS']
+    end = (len(mcos[0]) - 17) / 11
+    numTomos = 0
+    while numTomos < (end + 1):
+        if numTomos == 0:
+            init = 17 + 11 * numTomos - 12
+        else:
+            init = 17 + 11 * numTomos - 13
+        ref = mcos[0][init]
+        obj = subsystem[ref]
+        volume = ''.join(chr(i) for i in obj[:])
+        volumes.append(volume)
+        numTomos += 1
+    return volumes

@@ -35,7 +35,7 @@ from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import SubTomogram
 from tomo.utils import _getUniqueFileName
 
-from ..convert import readDynTable
+from ..convert import readDynTable, readDynCatalogue
 
 
 class DynamoImportSubtomos(ProtTomoImportFiles):
@@ -67,16 +67,10 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
         if self.ctgPath:
-            ctlg = self._getExtraPath('dynamo_catalogue.vll')
-            copyFile(self.ctgPath.get(), ctlg)
-            fhCtlg = open(ctlg, 'r')
             self.tomoDict = {}
-            # next(fhCtlg)
-            for i, line in enumerate(fhCtlg):
-                tomoId = i+1
-                tomoName = line.rstrip()
-                self.tomoDict[tomoId] = tomoName
-            fhCtlg.close()
+            volumes = readDynCatalogue(self.ctgPath.get(), self._getExtraPath())
+            for idt, tomoName in enumerate(volumes):
+                self.tomoDict[idt+1] = tomoName
         imgh = ImageHandler()
         self.subtomoSet = self._createSetOfSubTomograms()
         self.subtomoSet.setSamplingRate(samplingRate)
