@@ -23,8 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import math, h5py, os
+import math, os
 import numpy as np
+from scipy.io import loadmat
 from pwem import Domain
 from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform
@@ -195,7 +196,12 @@ def readDynCatalogue(ctlg_path, save_path):
     codeFilePath = os.path.join(save_path, 'convert.m')
     codeFid = open(codeFilePath, 'w')
     content = "c=dread('%s')\n" \
-              "save('%s','c','-v7.3');" % (os.path.abspath(ctlg_path),
+              "s=struct(c)\n" \
+              "volumes=c.volumes\n" \
+              "for idv=1:length(volumes)\n" \
+              "s.volumes{idv}=struct(volumes{idv})\n" \
+              "end\n" \
+              "save('%s','s','-v7');" % (os.path.abspath(ctlg_path),
                                            os.path.abspath(matPath))
     codeFid.write(content)
     codeFid.close()
@@ -203,20 +209,4 @@ def readDynCatalogue(ctlg_path, save_path):
     runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     # Read MatLab binary into Python
-    volumes = []
-    file = h5py.File(matPath)
-    subsystem = file['#subsystem#']
-    mcos = subsystem['MCOS']
-    end = (len(mcos[0]) - 17) / 11
-    numTomos = 0
-    while numTomos < (end + 1):
-        if numTomos == 0:
-            init = 17 + 11 * numTomos - 12
-        else:
-            init = 17 + 11 * numTomos - 13
-        ref = mcos[0][init]
-        obj = subsystem[ref]
-        volume = ''.join(chr(i) for i in obj[:])
-        volumes.append(volume)
-        numTomos += 1
-    return volumes
+    return loadmat(matPath, struct_as_record=False, squeeze_me=True)['s']

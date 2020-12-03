@@ -25,6 +25,7 @@
 # **************************************************************************
 
 from os.path import abspath, basename, isfile
+import numpy as np
 
 from pyworkflow.protocol.params import PathParam
 from pyworkflow.utils.path import createAbsLink, copyFile
@@ -68,9 +69,12 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         subtomo.setSamplingRate(samplingRate)
         if self.ctgPath:
             self.tomoDict = {}
-            volumes = readDynCatalogue(self.ctgPath.get(), self._getExtraPath())
-            for idt, tomoName in enumerate(volumes):
-                self.tomoDict[idt+1] = tomoName
+            tdb = readDynCatalogue(self.ctgPath.get(), self._getExtraPath())
+            if isinstance(tdb.volumes, np.ndarray):
+                for idv, volume in enumerate(tdb.volumes):
+                    self.tomoDict[idv+1] = volume.file
+            else:
+                self.tomoDict[1] = tdb.volumes.file
         imgh = ImageHandler()
         self.subtomoSet = self._createSetOfSubTomograms()
         self.subtomoSet.setSamplingRate(samplingRate)
