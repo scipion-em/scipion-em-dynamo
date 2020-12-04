@@ -157,7 +157,9 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
 
     def _validate(self):
         errors = []
-        if not list(self.iterFiles()):
+        try:
+            next(self.iterFiles())
+        except StopIteration:
             errors.append('No files matching the pattern %s were found.' % self.getPattern())
         if not self.tablePath.get() or not isfile(self.tablePath.get()):
             errors.append("Could not find specified dynamo catalogue file")
