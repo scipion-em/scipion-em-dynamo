@@ -67,7 +67,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         self.info("Using pattern: '%s'" % pattern)
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
-        if self.ctgPath:
+        if self.ctgPath.get():
             self.tomoDict = {}
             tdb = readDynCatalogue(self.ctgPath.get(), self._getExtraPath())
             if isinstance(tdb.volumes, np.ndarray):
@@ -115,7 +115,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         else:
             subtomo.setLocation(index, newFileName)
         readDynTable(self, subtomo)
-        if self.ctgPath:
+        if self.ctgPath.get():
             scipionTomoName = self.tomoDict.get(subtomo.getVolId())
             subtomo.setVolName(scipionTomoName)
             # subtomo.getCoordinate3D().setVolName(scipionTomoName)
@@ -161,6 +161,11 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
             errors.append('No files matching the pattern %s were found.' % self.getPattern())
         if not self.tablePath.get() or not isfile(self.tablePath.get()):
             errors.append("Could not find specified dynamo catalogue file")
-        if not self.ctgPath.get() or not isfile(self.ctgPath.get()):
-            errors.append(" Could not find the specified catalogue path")
         return errors
+
+    def _warnings(self):
+        warnings = []
+        if not self.ctgPath.get() or not isfile(self.ctgPath.get()):
+            warnings.append("Catalogue not specified. SubTomograms can still be imported but they won't be "
+                            "associated to any Tomogram.")
+        return warnings
