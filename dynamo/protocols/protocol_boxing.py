@@ -38,7 +38,7 @@ from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 
 from dynamo import Plugin
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo.convert import textFile2Coords
+from dynamo.convert import textFile2Coords, matrix2eulerAngles
 
 class DynamoBoxing(ProtTomoPicking):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
@@ -93,11 +93,16 @@ class DynamoBoxing(ProtTomoPicking):
             inputTomograms = self.inputTomograms.get()
             for tomo in inputTomograms:
                 outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
+                outFileAngle = self._getExtraPath('angles_' + pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
                 coords_tomo = []
+                angles_tomo = []
                 for coord in inputCoordinates.iterCoordinates(tomo):
                     coords_tomo.append(coord.getPosition())
+                    angles_shifts = matrix2eulerAngles(coord.getMatrix())
+                    angles_tomo.append(angles_shifts[:3])
                 if coords_tomo:
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
+                    np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
             # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
             contents = "dcm -create %s -fromvll %s\n" \

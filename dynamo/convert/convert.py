@@ -200,7 +200,7 @@ def textFile2Coords(protocol, setTomograms, outPath):
     for tomo in setTomograms.iterItems():
         outPoints = pwutils.join(outPath, pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
         outAngles = pwutils.join(outPath, 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-        if not os.path.isfile(outPoints):
+        if not os.path.isfile(outPoints) or not os.path.isfile(outAngles):
             continue
 
         # Populate Set of 3D Coordinates with 3D Coordinates

@@ -39,7 +39,7 @@ import tomo.objects
 from tomo.viewers.views_tkinter_tree import MeshesTreeProvider, TomogramsTreeProvider
 
 from dynamo.viewers.views_tkinter_tree import DynamoDialog, DynamoTomoDialog
-from dynamo.convert import textFile2Coords
+from dynamo.convert import textFile2Coords, matrix2eulerAngles
 from dynamo import Plugin
 
 
@@ -99,18 +99,23 @@ class DynamoDataViewer(pwviewer.Viewer):
 
             # Create list of tomos file
             tomoFid = open(listTomosFile, 'w')
-            for tomogram in tomos.iterItems():
-                tomoPath = os.path.abspath(tomogram.getFileName())
+            for tomoFile in tomos.getFiles():
+                tomoPath = os.path.abspath(tomoFile)
                 tomoFid.write(tomoPath + '\n')
             tomoFid.close()
 
-            for tomogram in tomos:
+            for tomogram in tomoList:
                 outFileCoord = os.path.join(path, pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
+                outFileAngle = os.path.join(path, 'angles_' + pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
                 coords_tomo = []
+                angles_tomo = []
                 for coord in outputCoords.iterCoordinates(tomogram):
                     coords_tomo.append(coord.getPosition())
+                    angles_shifts = matrix2eulerAngles(coord.getMatrix())
+                    angles_tomo.append(angles_shifts[:3])
                 if coords_tomo:
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
+                    np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
             codeFile = os.path.join(path, 'coords2model.m')
             # Create small program to tell Dynamo to save the coordinates in a Vesicle Model
