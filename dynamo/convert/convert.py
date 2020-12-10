@@ -25,10 +25,13 @@
 # **************************************************************************
 import math, os
 import numpy as np
+from scipy.io import loadmat
 from pwem import Domain
 from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform
 import pyworkflow.utils as pwutils
+from pyworkflow.utils.process import runJob
+from dynamo import Plugin
 Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
 
@@ -187,6 +190,27 @@ def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
     A[2, 1] = costdrot*sintilt
     A[2, 2] = costilt
     return A
+
+def readDynCatalogue(ctlg_path, save_path):
+    # MatLab script to convert an object into a structure
+    matPath = os.path.join(save_path, 'structure.mat')
+    codeFilePath = os.path.join(save_path, 'convert.m')
+    codeFid = open(codeFilePath, 'w')
+    content = "c=dread('%s')\n" \
+              "s=struct(c)\n" \
+              "volumes=c.volumes\n" \
+              "for idv=1:length(volumes)\n" \
+              "s.volumes{idv}=struct(volumes{idv})\n" \
+              "end\n" \
+              "save('%s','s','-v7');" % (os.path.abspath(ctlg_path),
+                                           os.path.abspath(matPath))
+    codeFid.write(content)
+    codeFid.close()
+    args = ' %s' % codeFilePath
+    runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+
+    # Read MatLab binary into Python
+    return loadmat(matPath, struct_as_record=False, squeeze_me=True)['s']
 
 def textFile2Coords(protocol, setTomograms, outPath):
     from tomo.objects import SetOfCoordinates3D
