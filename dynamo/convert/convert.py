@@ -29,6 +29,7 @@ from scipy.io import loadmat
 from pwem import Domain
 from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform
+import pyworkflow.utils as pwutils
 from pyworkflow.utils.process import runJob
 from dynamo import Plugin
 Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
@@ -210,3 +211,38 @@ def readDynCatalogue(ctlg_path, save_path):
 
     # Read MatLab binary into Python
     return loadmat(matPath, struct_as_record=False, squeeze_me=True)['s']
+
+def textFile2Coords(protocol, setTomograms, outPath):
+    from tomo.objects import SetOfCoordinates3D
+    coord3DSetDict = {}
+    suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
+    coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
+    coord3DSet.setName("tomoCoord")
+    coord3DSet.setPrecedents(setTomograms)
+    coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
+    coord3DSet.setBoxSize(protocol.boxSize.get())
+    for tomo in setTomograms.iterItems():
+        outPoints = pwutils.join(outPath, pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
+        outAngles = pwutils.join(outPath, 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
+        if not os.path.isfile(outPoints) or not os.path.isfile(outAngles):
+            continue
+
+        # Populate Set of 3D Coordinates with 3D Coordinates
+        points = np.loadtxt(outPoints, delimiter=' ')
+        angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' '))
+        for idx in range(len(points)):
+            coord = Coordinate3D()
+            coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
+            matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
+            coord.setMatrix(matrix)
+            coord.setVolume(tomo)
+            coord3DSet.append(coord)
+
+        coord3DSetDict['00'] = coord3DSet
+
+    name = protocol.OUTPUT_PREFIX + suffix
+    args = {}
+    args[name] = coord3DSet
+    protocol._defineOutputs(**args)
+    protocol._defineSourceRelation(setTomograms, coord3DSet)
+    protocol._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)

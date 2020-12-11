@@ -259,7 +259,7 @@ class DynamoTomoDialog(ToolbarListDialog):
                   "c=dread(strcat(catalogue_name,'.ctlg'))\n" \
                   "n=cellfun(@(c) c.fullFileName,c.volumes,'UniformOutput',false)\n" \
                   "idt=find(cell2mat(cellfun(@(c) strcmp(c,'%s'),n,'UniformOutput',false)))\n" \
-                  "dtmslice %s -c %s \n" \
+                  "eval(strcat('dtmslice @{%s}',num2str(idt)))\n" \
                   "modeltrack.loadFromCatalogue('handles',c,'full',true,'select',false)\n" \
                   "uiwait(dpkslicer.getHandles().figure_fastslicer)\n" \
                   "models = dread(dcmodels(catalogue_name,'i', idt))\n" \
@@ -282,7 +282,7 @@ class DynamoTomoDialog(ToolbarListDialog):
                   "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
                   "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
                   "end\n" \
-                  'exit\n' % (catalogue, tomo.getFileName(), tomo.getFileName(), catalogue,
+                  'exit\n' % (catalogue, os.path.abspath(tomo.getFileName()), catalogue,
                             pwutils.removeBaseExt(tomo.getFileName()), self.path)
         codeFid.write(content)
         codeFid.close()
