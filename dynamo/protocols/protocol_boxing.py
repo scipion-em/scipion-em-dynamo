@@ -38,7 +38,7 @@ from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 
 from dynamo import Plugin
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo.convert import eulerAngles2matrix
+from dynamo.convert import textFile2Coords, matrix2eulerAngles
 
 class DynamoBoxing(ProtTomoPicking):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
@@ -93,11 +93,16 @@ class DynamoBoxing(ProtTomoPicking):
             inputTomograms = self.inputTomograms.get()
             for tomo in inputTomograms:
                 outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
+                outFileAngle = self._getExtraPath('angles_' + pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
                 coords_tomo = []
+                angles_tomo = []
                 for coord in inputCoordinates.iterCoordinates(tomo):
                     coords_tomo.append(coord.getPosition())
+                    angles_shifts = matrix2eulerAngles(coord.getMatrix())
+                    angles_tomo.append(angles_shifts[:3])
                 if coords_tomo:
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
+                    np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
             # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
             contents = "dcm -create %s -fromvll %s\n" \
@@ -146,39 +151,40 @@ class DynamoBoxing(ProtTomoPicking):
         pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
-        coord3DSetDict = {}
-        setTomograms = self.inputTomograms.get()
-        suffix = self._getOutputSuffix(SetOfCoordinates3D)
-        coord3DSet = self._createSetOfCoordinates3D(setTomograms, suffix)
-        coord3DSet.setName("tomoCoord")
-        coord3DSet.setPrecedents(setTomograms)
-        coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
-        coord3DSet.setBoxSize(self.boxSize.get())
-        for tomo in setTomograms.iterItems():
-            outPoints = pwutils.join(self._getExtraPath(), pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-            outAngles = pwutils.join(self._getExtraPath(), 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-            if not os.path.isfile(outPoints):
-                continue
-
-            # Populate Set of 3D Coordinates with 3D Coordinates
-            points = np.loadtxt(outPoints, delimiter=' ')
-            angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' '))
-            for idx in range(len(points)):
-                coord = Coordinate3D()
-                coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
-                matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
-                coord.setMatrix(matrix)
-                coord.setVolume(tomo)
-                coord3DSet.append(coord)
-
-            coord3DSetDict['00'] = coord3DSet
-
-        name = self.OUTPUT_PREFIX + suffix
-        args = {}
-        args[name] = coord3DSet
-        self._defineOutputs(**args)
-        self._defineSourceRelation(setTomograms, coord3DSet)
-        self._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
+        textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath())
+        # coord3DSetDict = {}
+        # setTomograms = self.inputTomograms.get()
+        # suffix = self._getOutputSuffix(SetOfCoordinates3D)
+        # coord3DSet = self._createSetOfCoordinates3D(setTomograms, suffix)
+        # coord3DSet.setName("tomoCoord")
+        # coord3DSet.setPrecedents(setTomograms)
+        # coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
+        # coord3DSet.setBoxSize(self.boxSize.get())
+        # for tomo in setTomograms.iterItems():
+        #     outPoints = pwutils.join(self._getExtraPath(), pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
+        #     outAngles = pwutils.join(self._getExtraPath(), 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
+        #     if not os.path.isfile(outPoints):
+        #         continue
+        #
+        #     # Populate Set of 3D Coordinates with 3D Coordinates
+        #     points = np.loadtxt(outPoints, delimiter=' ')
+        #     angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' '))
+        #     for idx in range(len(points)):
+        #         coord = Coordinate3D()
+        #         coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
+        #         matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
+        #         coord.setMatrix(matrix)
+        #         coord.setVolume(tomo)
+        #         coord3DSet.append(coord)
+        #
+        #     coord3DSetDict['00'] = coord3DSet
+        #
+        # name = self.OUTPUT_PREFIX + suffix
+        # args = {}
+        # args[name] = coord3DSet
+        # self._defineOutputs(**args)
+        # self._defineSourceRelation(setTomograms, coord3DSet)
+        # self._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
 
     # --------------------------- DEFINE info functions ----------------------
     def getMethods(self, output):
