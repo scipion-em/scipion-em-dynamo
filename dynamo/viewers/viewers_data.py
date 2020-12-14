@@ -78,7 +78,7 @@ class DynamoDataViewer(pwviewer.Viewer):
                 meshList.append(mesh)
             # meshList.reverse()
 
-            path = self.protocol._getTmpPath()
+            path = self.protocol._getExtraPath()
 
             meshProvider = MeshesTreeProvider(meshList,)
 
@@ -90,7 +90,7 @@ class DynamoDataViewer(pwviewer.Viewer):
 
             tomoList = [item.clone() for item in tomos.iterItems()]
 
-            path = self.protocol._getTmpPath()
+            path = self.protocol._getExtraPath()
 
             tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
 
