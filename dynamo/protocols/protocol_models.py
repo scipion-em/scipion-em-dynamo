@@ -85,12 +85,13 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
             outFile = self._getExtraPath(tomoName + '.txt')
             if os.path.isfile(outFile):
                 data = np.loadtxt(outFile, delimiter=',')
-                groups = np.unique(data[:, 3]).astype(int)
-                for group in groups:
-                    mesh = Mesh(group=group, path=outFile)
-                    mesh.setVolume(tomo.clone())
+                for coord in data:
+                    mesh = Mesh()
+                    mesh.setPosition(coord[0], coord[1], coord[2])
+                    mesh.setGroupId(coord[3])
+                    mesh.setVolume(tomo)
                     outSet.append(mesh)
-        outSet.setVolumes(self.inputTomograms.get())
+        outSet.setPrecedents(self.inputTomograms.get())
         name = self.OUTPUT_PREFIX
         args = {name: outSet}
         self._defineOutputs(**args)
