@@ -36,7 +36,7 @@ from pyworkflow.utils.properties import Message
 from dynamo.viewers.views_tkinter_tree import DynamoDialog
 
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
-from tomo.objects import Mesh
+from tomo.objects import MeshPoint
 from tomo.protocols import ProtTomoBase
 
 
@@ -86,7 +86,7 @@ class DynamoModels(ProtAnalysis3D, ProtTomoBase):
             if os.path.isfile(outFile):
                 data = np.loadtxt(outFile, delimiter=',')
                 for coord in data:
-                    mesh = Mesh()
+                    mesh = MeshPoint()
                     mesh.setPosition(coord[0], coord[1], coord[2])
                     mesh.setGroupId(coord[3])
                     mesh.setVolume(tomo)
