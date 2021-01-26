@@ -147,7 +147,7 @@ class DynamoSubBoxing(EMProtocol, ProtTomoBase):
                   "for tag=unique(tags)\n" \
                   "tomoCoords=coords(tags==tag,:)\n" \
                   "tomoAngles=angles(tags==tag,:)\n" \
-                  "t=dynamo_table_blank(size(tomoCoords,1),'r',tomoCoords,'angles',rad2deg(tomoAngles))\n" \
+                  "t=dynamo_table_blank(size(tomoCoords,1),'r',tomoCoords,'angles',tomoAngles)\n" \
                   "ts=dynamo_subboxing_table(t,rSubunitFromCenter,'sym','%s')\n" \
                   "dynamo_write(ts,['%s','_ID',num2str(tag),'.tbl'])\n" \
                   "end\n" \
