@@ -236,6 +236,7 @@ def textFile2Coords(protocol, setTomograms, outPath):
             matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
             coord.setMatrix(matrix)
             coord.setVolume(tomo)
+            coord.setGroupId(points[idx, 3])
             coord3DSet.append(coord)
 
         coord3DSetDict['00'] = coord3DSet

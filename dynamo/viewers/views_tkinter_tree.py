@@ -269,13 +269,15 @@ class DynamoTomoDialog(ToolbarListDialog):
                   "outAngles=['angles_' outFile '.txt']\n" \
                   "crop_points=[]\n" \
                   "crop_angles=[]\n" \
+                  "model_id=0\n" \
                   "for model=models\n" \
+                  "model_id=model_id+1\n" \
                   "if iscell(model)\n" \
-                  "crop_points=[crop_points; model{end}.crop_points]\n" \
-                  "crop_angles=[crop_angles; model{end}.crop_angles]\n" \
+                  "crop_points=[crop_points; [model{end}.crop_points model_id*ones(length(model{end}.crop_points),1)]]\n" \
+                  "crop_angles=[crop_angles; [model{end}.crop_angles model_id*ones(length(model{end}.crop_angles),1)]]\n" \
                   "else\n" \
-                  "crop_points=[crop_points; model.crop_points]\n" \
-                  "crop_angles=[crop_angles; model.crop_angles]\n" \
+                  "crop_points=[crop_points; [model.crop_points model_id*ones(length(model.crop_points),1)]]\n" \
+                  "crop_angles=[crop_angles; [model.crop_angles model_id*ones(length(model.crop_angles),1)]]\n" \
                   "end\n" \
                   "end\n" \
                   "if ~isempty(crop_points)\n" \
