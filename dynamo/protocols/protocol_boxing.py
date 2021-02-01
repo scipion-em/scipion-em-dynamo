@@ -150,7 +150,7 @@ class DynamoBoxing(ProtTomoPicking):
         pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
-        textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath())
+        textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath(), False, True)
 
     # --------------------------- DEFINE info functions ----------------------
     def getMethods(self, output):

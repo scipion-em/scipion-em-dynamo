@@ -158,6 +158,4 @@ class DynamoDataViewer(pwviewer.Viewer):
             if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
                 textFile2Coords(self.protocol, outputCoords.getPrecedents(), path)
 
-            pwutils.cleanPattern(os.path.join(path, '*'))
-
         return views

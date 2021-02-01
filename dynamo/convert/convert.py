@@ -31,8 +31,10 @@ from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.process import runJob
+import pyworkflow.object as pwobj
 from dynamo import Plugin
 Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
+MeshPoint = Domain.importFromPlugin("tomo.objects", "MeshPoint")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
 
 
@@ -212,29 +214,40 @@ def readDynCatalogue(ctlg_path, save_path):
     # Read MatLab binary into Python
     return loadmat(matPath, struct_as_record=False, squeeze_me=True)['s']
 
-def textFile2Coords(protocol, setTomograms, outPath):
-    from tomo.objects import SetOfCoordinates3D
+def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False):
+    from tomo.objects import SetOfCoordinates3D, SetOfMeshes
     coord3DSetDict = {}
-    suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
-    coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
+    if mesh:
+        suffix = protocol._getOutputSuffix(SetOfMeshes)
+        coord3DSet = protocol._createSetOfMeshes(suffix)
+    else:
+        suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
+        coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
     coord3DSet.setName("tomoCoord")
     coord3DSet.setPrecedents(setTomograms)
     coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
     coord3DSet.setBoxSize(protocol.boxSize.get())
+    coord3DSet.catalogue_path = pwobj.String(os.path.join(outPath, "tomos.ctlg"))
     for tomo in setTomograms.iterItems():
         outPoints = pwutils.join(outPath, pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
         outAngles = pwutils.join(outPath, 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-        if not os.path.isfile(outPoints) or not os.path.isfile(outAngles):
+        if not os.path.isfile(outPoints):
+            continue
+        if not os.path.isfile(outAngles) and directions:
             continue
 
         # Populate Set of 3D Coordinates with 3D Coordinates
         points = np.loadtxt(outPoints, delimiter=' ')
-        angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' '))
+        angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' ')) if directions else None
         for idx in range(len(points)):
-            coord = Coordinate3D()
+            if mesh:
+                coord = Coordinate3D()
+            else:
+                coord = MeshPoint()
             coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
-            matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
-            coord.setMatrix(matrix)
+            if directions:
+                matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
+                coord.setMatrix(matrix)
             coord.setVolume(tomo)
             coord.setGroupId(points[idx, 3])
             coord3DSet.append(coord)
