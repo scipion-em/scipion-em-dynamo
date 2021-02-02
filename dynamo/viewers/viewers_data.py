@@ -38,7 +38,7 @@ from pyworkflow.utils.process import runJob
 import tomo.objects
 from tomo.viewers.views_tkinter_tree import MeshesTreeProvider, TomogramsTreeProvider
 
-from dynamo.viewers.views_tkinter_tree import DynamoDialog, DynamoTomoDialog
+from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 from dynamo.convert import textFile2Coords, matrix2eulerAngles
 from dynamo import Plugin
 

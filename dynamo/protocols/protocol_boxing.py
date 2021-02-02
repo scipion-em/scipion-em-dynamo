@@ -42,9 +42,9 @@ from dynamo.convert import textFile2Coords, matrix2eulerAngles
 class DynamoBoxing(ProtTomoPicking):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
     direclty loaded with all the models previously saved in the disk (if any).
-    After picking, it is needed to go to:
-    Active Model > Step-by-step workflow for cropping geometry
-    And click -run all- button before closing the window"""
+    This pixcking will only safe the "user points" defined in a set of models. It is possible to
+    create several models at once in a given tomogram. Once the coordinates are defined,
+    the models are automatically saved in the catalogue and registered."""
 
     _label = 'vectorial picking'
 
@@ -160,12 +160,6 @@ class DynamoBoxing(ProtTomoPicking):
 
     def _methods(self):
         methodsMsgs = []
-        if self.inputTomograms is None:
-            return ['Input tomogram not available yet.']
-
-        methodsMsgs.append("Input tomograms imported of dims %s." %(
-                              str(self.inputTomograms.get().getDim())))
-
         if self.getOutputsSize() >= 1:
             for key, output in self.iterOutputAttributes():
                 msg = self.getMethods(output)
