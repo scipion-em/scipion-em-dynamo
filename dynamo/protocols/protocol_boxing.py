@@ -42,9 +42,12 @@ from dynamo.convert import textFile2Coords, matrix2eulerAngles
 class DynamoBoxing(ProtTomoPicking):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
     direclty loaded with all the models previously saved in the disk (if any).
-    This pixcking will only safe the "user points" defined in a set of models. It is possible to
+    This picking will only save the "user points" defined in a set of models. It is possible to
     create several models at once in a given tomogram. Once the coordinates are defined,
-    the models are automatically saved in the catalogue and registered."""
+    the models are automatically saved in the catalogue and registered.
+
+    Currently the following Dynamo models are supported:
+        - Ellipsoidal Vesicle"""
 
     _label = 'vectorial picking'
 

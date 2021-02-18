@@ -224,7 +224,6 @@ def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False
         suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
         coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
     coord3DSet.setName("tomoCoord")
-    # coord3DSet.setPrecedents(setTomograms)
     coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
     coord3DSet.setBoxSize(protocol.boxSize.get())
     coord3DSet.catalogue_path = pwobj.String(os.path.join(outPath, "tomos.ctlg"))
