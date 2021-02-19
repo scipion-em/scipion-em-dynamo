@@ -94,7 +94,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     # --------------------------- STEPS functions -----------------------------
     def applyWorkflowStep(self):
         inputMeshes = self.inputMeshes.get()
-        catalogue_path = os.path.abspath(pwutils.removeExt(inputMeshes.catalogue_path.get()))
+        catalogue_path = os.path.abspath(pwutils.removeExt(inputMeshes._dynCatalogue.get()))
         self.volIds = inputMeshes.aggregate(["MAX"], "_volId", ["_volId"])
         for d in self.volIds:
             volId = d['_volId']

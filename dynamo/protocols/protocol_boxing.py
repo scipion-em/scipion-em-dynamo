@@ -51,6 +51,8 @@ class DynamoBoxing(ProtTomoPicking):
 
     _label = 'vectorial picking'
 
+    OUTPUT_PREFIX = 'outputMeshes'
+
     def __init__(self, **kwargs):
         ProtTomoPicking.__init__(self, **kwargs)
 
@@ -60,23 +62,23 @@ class DynamoBoxing(ProtTomoPicking):
 
         form.addParam('boxSize', IntParam, label="Box Size")
         form.addParam('selection', EnumParam, choices=['Yes', 'No'], default=1,
-                      label='Modify previous coordinates?', display=EnumParam.DISPLAY_HLIST,
-                      help='This option allows to add and/or remove coordinates to a previous SetOfCoordinates')
-        form.addParam('inputCoordinates', PointerParam, label="Input Coordinates", condition='selection == 0',
-                      allowsNull=True, pointerClass='SetOfCoordinates3D',
-                      help='Select the previous SetOfCoordinates you want to modify')
+                      label='Modify previous meshes?', display=EnumParam.DISPLAY_HLIST,
+                      help='This option allows to add and/or remove coordinates to a previous SetOfMeshes')
+        form.addParam('inputMeshes', PointerParam, label="Input Meshes", condition='selection == 0',
+                      allowsNull=True, pointerClass='SetOfMeshes',
+                      help='Select the previous SetOfMeshes you want to modify')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         # Copy input coordinates to Extra Path
-        self._insertFunctionStep('copyInputCoords')
+        self._insertFunctionStep('copyInputMeshes')
 
         # Launch Boxing GUI
         self._insertFunctionStep('launchDynamoBoxingStep', interactive=True)
 
     # --------------------------- STEPS functions -----------------------------
 
-    def copyInputCoords(self):
+    def copyInputMeshes(self):
         # Initialize the catalogue
         listTomosFile = self._getExtraPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
@@ -91,22 +93,17 @@ class DynamoBoxing(ProtTomoPicking):
         # Save coordinates into .txt file for each tomogram
         codeFile = self._getExtraPath('coords2model.m')
         if self.selection.get() == 0:
-            inputCoordinates = self.inputCoordinates.get()
+            inputMeshes = self.inputMeshes.get()
             inputTomograms = self.inputTomograms.get()
-            for tomo in inputTomograms:
+            for tomo in inputTomograms.iterItems(iterate=False):
                 outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
-                outFileAngle = self._getExtraPath('angles_' + pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
                 coords_tomo = []
-                angles_tomo = []
-                for coord in inputCoordinates.iterCoordinates(tomo):
-                    coords_tomo.append(coord.getPosition())
-                    angles_shifts = matrix2eulerAngles(coord.getMatrix())
-                    angles_tomo.append(angles_shifts[:3])
+                for coord in inputMeshes.iterCoordinates(tomo.getObjId()):
+                    coords_tomo.append(list(coord.getPosition()) + [coord.getGroupId()])
                 if coords_tomo:
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
-                    np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
-            # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
+            # Create small program to tell Dynamo to save the inputMeshes in a Ellipsoidal Vesicle Model
             contents = "dcm -create %s -fromvll %s\n" \
                        "path='%s'\n" \
                        "catalogue=dread(['%s' '.ctlg'])\n" \
@@ -119,13 +116,19 @@ class DynamoBoxing(ProtTomoPicking):
                        "if ~isfile(coordFile)\n" \
                        "continue\n" \
                        "end\n" \
-                       "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
-                       "vesicle=dmodels.vesicle()\n" \
+                       "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n" \
+                       "idm_vec=unique(coords_ids(:,4))'\n" \
+                       "for idm=idm_vec\n" \
+                       "model_name=['model_',num2str(idm)]\n" \
+                       "coords=coords_ids(coords_ids(:,4)==idm,1:3)\n" \
+                       "vesicle=dmodels.ellipsoidalVesicle()\n" \
+                       "vesicle.name=model_name\n" \
                        "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
-                       "vesicle.linkCatalogue('%s','i',tomoIndex, 's', 1)\n" \
+                       "vesicle.linkCatalogue('%s','i',tomoIndex,'s',1)\n" \
                        "vesicle.saveInCatalogue()\n" \
                        "end\n" \
-                       "exit\n" % (catalogue, listTomosFile, self._getExtraPath(), catalogue, catalogue)
+                       "end\n" \
+                       "exit\n" % (catalogue, listTomosFile, os.path.abspath(self._getExtraPath()), catalogue, catalogue)
         else:
             contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
 

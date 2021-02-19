@@ -36,6 +36,8 @@ from dynamo import Plugin
 Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
 MeshPoint = Domain.importFromPlugin("tomo.objects", "MeshPoint")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
+SetOfCoordinates3D = Domain.importFromPlugin("tomo.objects", "SetOfCoordinates3D")
+SetOfMeshes = Domain.importFromPlugin("tomo.objects", "SetOfMeshes")
 
 
 def writeVolume(volume, outputFn):
@@ -215,8 +217,6 @@ def readDynCatalogue(ctlg_path, save_path):
     return loadmat(matPath, struct_as_record=False, squeeze_me=True)['s']
 
 def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False):
-    from tomo.objects import SetOfCoordinates3D, SetOfMeshes
-    coord3DSetDict = {}
     if mesh:
         suffix = protocol._getOutputSuffix(SetOfMeshes)
         coord3DSet = protocol._createSetOfMeshes(setTomograms, suffix)
@@ -226,7 +226,7 @@ def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False
     coord3DSet.setName("tomoCoord")
     coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
     coord3DSet.setBoxSize(protocol.boxSize.get())
-    coord3DSet.catalogue_path = pwobj.String(os.path.join(outPath, "tomos.ctlg"))
+    coord3DSet._dynCatalogue = pwobj.String(os.path.join(outPath, "tomos.ctlg"))
     for tomo in setTomograms.iterItems():
         outPoints = pwutils.join(outPath, pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
         outAngles = pwutils.join(outPath, 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
@@ -240,9 +240,9 @@ def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False
         angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' ')) if directions else None
         for idx in range(len(points)):
             if mesh:
-                coord = Coordinate3D()
-            else:
                 coord = MeshPoint()
+            else:
+                coord = Coordinate3D()
             coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
             if directions:
                 matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
@@ -251,11 +251,8 @@ def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False
             coord.setGroupId(points[idx, 3])
             coord3DSet.append(coord)
 
-        coord3DSetDict['00'] = coord3DSet
-
     name = protocol.OUTPUT_PREFIX + suffix
-    args = {}
-    args[name] = coord3DSet
+    args = {name: coord3DSet}
     protocol._defineOutputs(**args)
     protocol._defineSourceRelation(setTomograms, coord3DSet)
     protocol._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
