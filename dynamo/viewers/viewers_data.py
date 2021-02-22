@@ -38,7 +38,7 @@ from pyworkflow.utils.process import runJob
 import tomo.objects
 from tomo.viewers.views_tkinter_tree import MeshesTreeProvider, TomogramsTreeProvider
 
-from dynamo.viewers.views_tkinter_tree import DynamoDialog, DynamoTomoDialog
+from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 from dynamo.convert import textFile2Coords, matrix2eulerAngles
 from dynamo import Plugin
 
@@ -66,25 +66,7 @@ class DynamoDataViewer(pwviewer.Viewer):
         views = []
         cls = type(obj)
 
-        if issubclass(cls, tomo.objects.SetOfMeshes):
-            outputMeshes = obj
-
-            # meshList = [item.clone() for item in outputMeshes.iterItems()]
-
-            meshList = []
-            for item in obj.iterItems():
-                mesh = item.clone()
-                mesh.setVolume(item.getVolume().clone())
-                meshList.append(mesh)
-            # meshList.reverse()
-
-            path = self.protocol._getExtraPath()
-
-            meshProvider = MeshesTreeProvider(meshList,)
-
-            setView = DynamoDialog(self._tkRoot, path, True, provider=meshProvider,)
-
-        elif issubclass(cls, tomo.objects.SetOfCoordinates3D):
+        if issubclass(cls, tomo.objects.SetOfCoordinates3D) or issubclass(cls, tomo.objects.SetOfMeshes):
             outputCoords = obj
             tomos = outputCoords.getPrecedents()
 
@@ -157,7 +139,5 @@ class DynamoDataViewer(pwviewer.Viewer):
             frame = tk.Frame()
             if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
                 textFile2Coords(self.protocol, outputCoords.getPrecedents(), path)
-
-            pwutils.cleanPattern(os.path.join(path, '*'))
 
         return views
