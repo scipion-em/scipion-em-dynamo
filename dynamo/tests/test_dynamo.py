@@ -28,6 +28,7 @@
 from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
 from tomo.tests import DataSet
+import tomo.constants as const
 from xmipp3.protocols import XmippProtCreateMask3D
 from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos
 
@@ -413,6 +414,6 @@ class TestDynImportSubTomograms(BaseTest):
         self.assertTrue(output.getFirstItem().getClassId() == 1)
         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 175)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 134)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 115)
+        self.assertTrue(output.getFirstItem().getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER) == 175)
+        self.assertTrue(output.getFirstItem().getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER) == 134)
+        self.assertTrue(output.getFirstItem().getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER) == 115)

@@ -34,6 +34,7 @@ from pyworkflow.gui.dialog import askYesNo
 
 from tomo.protocols import ProtTomoPicking
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
+import tomo.constants as const
 
 from dynamo import Plugin
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
@@ -99,7 +100,7 @@ class DynamoBoxing(ProtTomoPicking):
                 outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
                 coords_tomo = []
                 for coord in inputMeshes.iterCoordinates(tomo.getObjId()):
-                    coords_tomo.append(list(coord.getPosition()) + [coord.getGroupId()])
+                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
                 if coords_tomo:
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
 

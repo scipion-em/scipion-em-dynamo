@@ -34,6 +34,7 @@ from pwem.protocols import EMProtocol
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfCoordinates3D
+import tomo.constants as const
 
 from dynamo import Plugin
 from dynamo.convert import matrix2eulerAngles, readDynCoord
@@ -81,9 +82,9 @@ class DynamoSubBoxing(EMProtocol, ProtTomoBase):
             for coord3DSet in coords.iterCoordinates():
                 if pwutils.removeBaseExt(item) == pwutils.removeBaseExt(coord3DSet.getVolName()):
                     angles_coord = matrix2eulerAngles(coord3DSet.getMatrix())
-                    x = round(self.factor * coord3DSet.getX())
-                    y = round(self.factor * coord3DSet.getY())
-                    z = round(self.factor * coord3DSet.getZ())
+                    x = round(self.factor * coord3DSet.getX(const.BOTTOM_LEFT_CORNER))
+                    y = round(self.factor * coord3DSet.getY(const.BOTTOM_LEFT_CORNER))
+                    z = round(self.factor * coord3DSet.getZ(const.BOTTOM_LEFT_CORNER))
                     outC.write("%d\t%d\t%d\t%d\n" % (x, y, z, idt + 1))
                     outA.write("%f\t%f\t%f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
                     coordDict.append(coord3DSet.getObjId())

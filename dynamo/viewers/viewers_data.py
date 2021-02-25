@@ -37,6 +37,7 @@ from pyworkflow.utils.process import runJob
 
 import tomo.objects
 from tomo.viewers.views_tkinter_tree import MeshesTreeProvider, TomogramsTreeProvider
+import tomo.constants as const
 
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 from dynamo.convert import textFile2Coords, matrix2eulerAngles
@@ -92,7 +93,7 @@ class DynamoDataViewer(pwviewer.Viewer):
                 coords_tomo = []
                 angles_tomo = []
                 for coord in outputCoords.iterCoordinates(tomogram):
-                    coords_tomo.append(coord.getPosition())
+                    coords_tomo.append(coord.getPosition(const.BOTTOM_LEFT_CORNER))
                     angles_shifts = matrix2eulerAngles(coord.getMatrix())
                     angles_tomo.append(angles_shifts[:3])
                 if coords_tomo:

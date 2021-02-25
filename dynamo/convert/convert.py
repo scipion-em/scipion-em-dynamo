@@ -38,6 +38,7 @@ MeshPoint = Domain.importFromPlugin("tomo.objects", "MeshPoint")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
 SetOfCoordinates3D = Domain.importFromPlugin("tomo.objects", "SetOfCoordinates3D")
 SetOfMeshes = Domain.importFromPlugin("tomo.objects", "SetOfMeshes")
+import tomo.constants as const
 
 
 def writeVolume(volume, outputFn):
@@ -58,9 +59,9 @@ def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
 def writeDynTable(fhTable, setOfSubtomograms):
     for subtomo in setOfSubtomograms.iterItems():
         if subtomo.hasCoordinate3D():
-            x = subtomo.getCoordinate3D().getX()
-            y = subtomo.getCoordinate3D().getY()
-            z = subtomo.getCoordinate3D().getZ()
+            x = subtomo.getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER)
+            y = subtomo.getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER)
+            z = subtomo.getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER)
         else:
             x = 0
             y = 0
@@ -112,9 +113,11 @@ def readDynTable(self, item):
     z = nline.split()[25]
     coordinate3d = Coordinate3D()
     coordinate3d.setVolId(volId)
-    coordinate3d.setX(float(x))
-    coordinate3d.setY(float(y))
-    coordinate3d.setZ(float(z))
+    # FIXME: We are not setting a Tomogram here so the test will fail
+    # FIXME: Is it possible to tell from where the Tomogram is coming from?
+    coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
+    coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
+    coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
     item.setCoordinate3D(coordinate3d)
     classId = nline.split()[21]
     item.setClassId(classId)
@@ -135,11 +138,11 @@ def readDynCoord(tableFile, coord3DSet, tomo):
             x = nline.split()[23]
             y = nline.split()[24]
             z = nline.split()[25]
-            coordinate3d.setX(float(x))
-            coordinate3d.setY(float(y))
-            coordinate3d.setZ(float(z))
-            coordinate3d.setMatrix(A)
             coordinate3d.setVolume(tomo)
+            coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setMatrix(A)
             coord3DSet.append(coordinate3d)
 
 
@@ -243,11 +246,11 @@ def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False
                 coord = MeshPoint()
             else:
                 coord = Coordinate3D()
-            coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
+            coord.setVolume(tomo)
+            coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2], const.BOTTOM_LEFT_CORNER)
             if directions:
                 matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
                 coord.setMatrix(matrix)
-            coord.setVolume(tomo)
             coord.setGroupId(points[idx, 3])
             coord3DSet.append(coord)
 
