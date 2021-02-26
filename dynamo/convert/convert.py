@@ -85,7 +85,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
                       % (subtomo.getObjId(), shiftx, shifty, shiftz, tdrot, tilt, narot, anglemin, anglemax, x, y, z))
 
 
-def readDynTable(self, item):
+def readDynTable(self, item, tomo):
     nline = next(self.fhTable)
     nline = nline.rstrip()
     id = int(nline.split()[0])
@@ -106,15 +106,15 @@ def readDynTable(self, item):
     acquisition.setAngleMin(angleMin)
     acquisition.setAngleMax(angleMax)
     item.setAcquisition(acquisition)
-    volId = nline.split()[19]
-    item.setVolId(volId)
+    # volId = nline.split()[19]
+    item.setVolId(tomo.getObjId())
+    item.setVolume(tomo)
     x = nline.split()[23]
     y = nline.split()[24]
     z = nline.split()[25]
     coordinate3d = Coordinate3D()
-    coordinate3d.setVolId(volId)
-    # FIXME: We are not setting a Tomogram here so the test will fail
-    # FIXME: Is it possible to tell from where the Tomogram is coming from?
+    coordinate3d.setVolId(tomo.getObjId())
+    coordinate3d.setVolume(tomo)
     coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
     coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
     coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)

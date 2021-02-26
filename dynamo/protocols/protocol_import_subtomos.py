@@ -33,7 +33,7 @@ from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 
 from tomo.protocols.protocol_base import ProtTomoImportFiles
-from tomo.objects import SubTomogram
+from tomo.objects import SubTomogram, Tomogram
 from tomo.utils import _getUniqueFileName
 
 from ..convert import readDynTable, readDynCatalogue
@@ -67,14 +67,46 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         self.info("Using pattern: '%s'" % pattern)
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
+        self.tomoSet = self._createSetOfTomograms()
+        self.tomoSet.setSamplingRate(samplingRate)
         if self.ctgPath.get():
             self.tomoDict = {}
             tdb = readDynCatalogue(self.ctgPath.get(), self._getExtraPath())
             if isinstance(tdb.volumes, np.ndarray):
                 for idv, volume in enumerate(tdb.volumes):
+                    tomo = Tomogram()
+                    tomo.setSamplingRate(samplingRate)
+                    tomo.setLocation(volume.file)
+                    x, y, z = tomo.getDim()
+                    origin = Transform()
+                    origin.setShifts(x / -2. * samplingRate,
+                                     y / -2. * samplingRate,
+                                     z / -2. * samplingRate)
+                    tomo.setOrigin(origin)
+                    self.tomoSet.append(tomo)
                     self.tomoDict[idv+1] = volume.file
             else:
+                tomo = Tomogram()
+                tomo.setSamplingRate(samplingRate)
+                tomo.setLocation(tdb.volumes.file)
+                x, y, z = tomo.getDim()
+                origin = Transform()
+                origin.setShifts(x / -2. * samplingRate,
+                                 y / -2. * samplingRate,
+                                 z / -2. * samplingRate)
+                tomo.setOrigin(origin)
+                self.tomoSet.append(tomo)
                 self.tomoDict[1] = tdb.volumes.file
+        else:
+            tomo = Tomogram()
+            tomo.setSamplingRate(samplingRate)
+            x, y, z = 1000, 1000, 1000
+            origin = Transform()
+            origin.setShifts(x / -2. * samplingRate,
+                             y / -2. * samplingRate,
+                             z / -2. * samplingRate)
+            tomo.setOrigin(origin)
+            self.tomoSet.append(tomo)
         imgh = ImageHandler()
         self.subtomoSet = self._createSetOfSubTomograms()
         self.subtomoSet.setSamplingRate(samplingRate)
@@ -82,19 +114,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         copyFile(self.tablePath.get(), dynTable)
         self.fhTable = open(dynTable, 'r')
         for fileName, fileId in self.iterFiles():
-            x, y, z, n = imgh.getDimensions(fileName)
-            if fileName.endswith('.mrc') or fileName.endswith('.map'):
-                fileName += ':mrc'
-                if z == 1 and n != 1:
-                    zDim = n
-                    n = 1
-                else:
-                    zDim = z
-            else:
-                zDim = z
-            origin = Transform()
-            origin.setShifts(x / -2. * samplingRate, y / -2. * samplingRate, zDim / -2. * samplingRate)
-            subtomo.setOrigin(origin)
+            _, _, _, n = imgh.getDimensions(fileName)
             newFileName = _getUniqueFileName(self.getPattern(), fileName)
             # newFileName = abspath(self._getVolumeFileName(fileName))
             if fileName.endswith(':mrc'):
@@ -114,11 +134,15 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
             subtomo.setFileName(newFileName)
         else:
             subtomo.setLocation(index, newFileName)
-        readDynTable(self, subtomo)
         if self.ctgPath.get():
             scipionTomoName = self.tomoDict.get(subtomo.getVolId())
+            tomo = self.tomoSet[subtomo.getVolId()] if len(self.tomoDict) > 1 \
+                   else self.tomoSet.getFirstItem()
             subtomo.setVolName(scipionTomoName)
             # subtomo.getCoordinate3D().setVolName(scipionTomoName)
+        else:
+            tomo = self.tomoSet.getFirstItem()
+        readDynTable(self, subtomo, tomo.clone())
         self.subtomoSet.append(subtomo)
 
     def createOutputStep(self):
