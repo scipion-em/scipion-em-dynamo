@@ -85,7 +85,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
                       % (subtomo.getObjId(), shiftx, shifty, shiftz, tdrot, tilt, narot, anglemin, anglemax, x, y, z))
 
 
-def readDynTable(self, item, tomo):
+def readDynTable(self, item, tomoSet):
     nline = next(self.fhTable)
     nline = nline.rstrip()
     id = int(nline.split()[0])
@@ -106,9 +106,13 @@ def readDynTable(self, item, tomo):
     acquisition.setAngleMin(angleMin)
     acquisition.setAngleMax(angleMax)
     item.setAcquisition(acquisition)
-    # volId = nline.split()[19]
-    item.setVolId(tomo.getObjId())
-    item.setVolume(tomo)
+    volId = int(nline.split()[19]) + 1
+    item.setVolId(volId)
+    tomo = tomoSet[volId] if tomoSet.getSize() > 1 \
+           else tomoSet.getFirstItem()
+    tomoOrigin = tomo.getOrigin()
+    item.setVolName(tomo.getFileName())
+    item.setOrigin(tomoOrigin)
     x = nline.split()[23]
     y = nline.split()[24]
     z = nline.split()[25]
