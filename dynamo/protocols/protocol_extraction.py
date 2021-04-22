@@ -27,6 +27,7 @@
 import os
 import glob
 
+from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 from pwem.emlib.image import ImageHandler
@@ -50,6 +51,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
     """Extraction of subtomograms using Dynamo"""
 
     _label = 'vectorial extraction'
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)

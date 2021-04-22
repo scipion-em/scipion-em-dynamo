@@ -27,6 +27,7 @@
 
 import os
 
+from pyworkflow import BETA
 from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 
@@ -43,6 +44,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     models created by the user to create the corresponding cropping meshes needed to extract the crop points"""
 
     _label = 'model workflow'
+    _devStatus = BETA
 
     modelChoices = ["Ellipsoidal vesicle"]
     modelNames = ["ellipsoidalVesicle"]

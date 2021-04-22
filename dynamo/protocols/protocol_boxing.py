@@ -27,6 +27,7 @@
 import os
 import numpy as np
 
+from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
 from pyworkflow.utils.properties import Message
@@ -51,6 +52,7 @@ class DynamoBoxing(ProtTomoPicking):
         - Ellipsoidal Vesicle"""
 
     _label = 'vectorial picking'
+    _devStatus = BETA
 
     OUTPUT_PREFIX = 'outputMeshes'
 

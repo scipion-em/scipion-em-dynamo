@@ -25,6 +25,7 @@
 # **************************************************************************
 
 
+from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import Message
 
@@ -42,6 +43,7 @@ class DynamoImportTomograms(ProtTomoImportFiles):
     binary MatLab object into an Structure which can be afterwards read by Python.'''
 
     _label = 'import tomograms from Dynamo'
+    _devStatus = BETA
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):

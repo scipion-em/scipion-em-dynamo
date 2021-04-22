@@ -30,6 +30,7 @@ from os.path import join
 from shutil import copy
 from pwem import Domain
 from pwem.objects.data import Volume, VolumeMask
+from pyworkflow import BETA
 from pyworkflow.object import Set
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.utils.path import makePath
@@ -45,6 +46,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     """ This protocol will align subtomograms using Dynamo MRA Subtomogram Averaging"""
 
     _label = 'Subtomogram alignment'
+    _devStatus = BETA
 
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)

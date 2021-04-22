@@ -28,6 +28,7 @@ import os
 import glob
 import numpy as np
 
+from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
@@ -44,6 +45,7 @@ class DynamoSubBoxing(EMProtocol, ProtTomoBase):
     """SubBoxing using Dynamo"""
 
     _label = 'subBoxing'
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)

@@ -26,6 +26,7 @@
 
 from os.path import basename, isfile
 
+from pyworkflow import BETA
 from pyworkflow.protocol.params import PathParam, PointerParam
 from pyworkflow.utils.path import createAbsLink, copyFile
 from pwem.emlib.image import ImageHandler
@@ -42,6 +43,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
     A Dynamo catalogue can be also imported in order to relate subtomograms with their original tomograms. """
 
     _label = 'import subtomos from Dynamo'
+    _devStatus = BETA
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
