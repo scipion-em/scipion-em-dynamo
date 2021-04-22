@@ -85,7 +85,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
                       % (subtomo.getObjId(), shiftx, shifty, shiftz, tdrot, tilt, narot, anglemin, anglemax, x, y, z))
 
 
-def readDynTable(self, item, tomoSet):
+def readDynTable(self, item, tomoSet=None):
     nline = next(self.fhTable)
     nline = nline.rstrip()
     id = int(nline.split()[0])
@@ -108,23 +108,24 @@ def readDynTable(self, item, tomoSet):
     item.setAcquisition(acquisition)
     volId = int(nline.split()[19]) + 1
     item.setVolId(volId)
-    tomo = tomoSet[volId] if tomoSet.getSize() > 1 \
-           else tomoSet.getFirstItem()
-    tomoOrigin = tomo.getOrigin()
-    item.setVolName(tomo.getFileName())
-    item.setOrigin(tomoOrigin)
-    x = nline.split()[23]
-    y = nline.split()[24]
-    z = nline.split()[25]
-    coordinate3d = Coordinate3D()
-    coordinate3d.setVolId(tomo.getObjId())
-    coordinate3d.setVolume(tomo)
-    coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
-    coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
-    coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
-    item.setCoordinate3D(coordinate3d)
     classId = nline.split()[21]
     item.setClassId(classId)
+    if tomoSet != None:
+        tomo = tomoSet[volId] if tomoSet.getSize() > 1 \
+               else tomoSet.getFirstItem()
+        tomoOrigin = tomo.getOrigin()
+        item.setVolName(tomo.getFileName())
+        item.setOrigin(tomoOrigin)
+        coordinate3d = Coordinate3D()
+        coordinate3d.setVolId(tomo.getObjId())
+        coordinate3d.setVolume(tomo)
+        x = nline.split()[23]
+        y = nline.split()[24]
+        z = nline.split()[25]
+        coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+        item.setCoordinate3D(coordinate3d)
 
 
 def readDynCoord(tableFile, coord3DSet, tomo):
