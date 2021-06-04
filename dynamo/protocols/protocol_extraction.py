@@ -290,7 +290,5 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         else:
             summary.append("Output subtomograms not ready yet.")
         if self.doInvert:
-            summary.append('*White over black.*')
-        else:
-            summary.append('*Black over white.*')
+            summary.append('*Contrast was inverted.*')
         return summary
