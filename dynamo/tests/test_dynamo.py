@@ -28,6 +28,7 @@
 from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
 from tomo.tests import DataSet
+import tomo.constants as const
 from xmipp3.protocols import XmippProtCreateMask3D
 from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos
 
@@ -392,17 +393,27 @@ class TestDynImportSubTomograms(BaseTest):
         cls.table = cls.dataset.getFile('initial.tbl')
         cls.path = cls.dataset.getPath()
         cls.subtomos = cls.dataset.getFile('basename.hdf')
+        cls.tomo = cls.dataset.getFile('tomo1')
 
-    def _runImportDynSubTomograms(self):
+    def _runImportDynSubTomograms(self, tomos):
         protImport = self.newProtocol(DynamoImportSubtomos,
                                       filesPath=self.subtomos,
                                       samplingRate=1.35,
-                                      tablePath=self.table)
+                                      tablePath=self.table,
+                                      tomoSet=tomos)
         self.launchProtocol(protImport)
         return protImport
 
+    def _runImportTomograms(self):
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                              filesPath=self.tomo,
+                                              samplingRate=1.35)
+        self.launchProtocol(protImportTomogram)
+        return protImportTomogram
+
     def test_import_dynamo_subtomograms(self):
-        protImport = self._runImportDynSubTomograms()
+        protImportTomogram = self._runImportTomograms()
+        protImport = self._runImportDynSubTomograms(protImportTomogram.outputTomograms)
         output = getattr(protImport, 'outputSubTomograms', None)
         self.assertTrue(output.getSamplingRate() == 1.35)
         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
@@ -413,6 +424,6 @@ class TestDynImportSubTomograms(BaseTest):
         self.assertTrue(output.getFirstItem().getClassId() == 1)
         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 175)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 134)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 115)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER), 175, delta=1)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER), 134, delta=1)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER), 115, delta=1)

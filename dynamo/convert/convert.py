@@ -38,6 +38,7 @@ MeshPoint = Domain.importFromPlugin("tomo.objects", "MeshPoint")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
 SetOfCoordinates3D = Domain.importFromPlugin("tomo.objects", "SetOfCoordinates3D")
 SetOfMeshes = Domain.importFromPlugin("tomo.objects", "SetOfMeshes")
+import tomo.constants as const
 
 
 def writeVolume(volume, outputFn):
@@ -58,9 +59,9 @@ def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
 def writeDynTable(fhTable, setOfSubtomograms):
     for subtomo in setOfSubtomograms.iterItems():
         if subtomo.hasCoordinate3D():
-            x = subtomo.getCoordinate3D().getX()
-            y = subtomo.getCoordinate3D().getY()
-            z = subtomo.getCoordinate3D().getZ()
+            x = subtomo.getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER)
+            y = subtomo.getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER)
+            z = subtomo.getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER)
         else:
             x = 0
             y = 0
@@ -84,7 +85,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
                       % (subtomo.getObjId(), shiftx, shifty, shiftz, tdrot, tilt, narot, anglemin, anglemax, x, y, z))
 
 
-def readDynTable(self, item):
+def readDynTable(self, item, tomoSet=None):
     nline = next(self.fhTable)
     nline = nline.rstrip()
     id = int(nline.split()[0])
@@ -105,19 +106,26 @@ def readDynTable(self, item):
     acquisition.setAngleMin(angleMin)
     acquisition.setAngleMax(angleMax)
     item.setAcquisition(acquisition)
-    volId = nline.split()[19]
+    volId = int(nline.split()[19]) + 1
     item.setVolId(volId)
-    x = nline.split()[23]
-    y = nline.split()[24]
-    z = nline.split()[25]
-    coordinate3d = Coordinate3D()
-    coordinate3d.setVolId(volId)
-    coordinate3d.setX(float(x))
-    coordinate3d.setY(float(y))
-    coordinate3d.setZ(float(z))
-    item.setCoordinate3D(coordinate3d)
     classId = nline.split()[21]
     item.setClassId(classId)
+    if tomoSet != None:
+        tomo = tomoSet[volId] if tomoSet.getSize() > 1 \
+               else tomoSet.getFirstItem()
+        tomoOrigin = tomo.getOrigin()
+        item.setVolName(tomo.getFileName())
+        item.setOrigin(tomoOrigin)
+        coordinate3d = Coordinate3D()
+        coordinate3d.setVolId(tomo.getObjId())
+        coordinate3d.setVolume(tomo)
+        x = nline.split()[23]
+        y = nline.split()[24]
+        z = nline.split()[25]
+        coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+        item.setCoordinate3D(coordinate3d)
 
 
 def readDynCoord(tableFile, coord3DSet, tomo):
@@ -135,11 +143,11 @@ def readDynCoord(tableFile, coord3DSet, tomo):
             x = nline.split()[23]
             y = nline.split()[24]
             z = nline.split()[25]
-            coordinate3d.setX(float(x))
-            coordinate3d.setY(float(y))
-            coordinate3d.setZ(float(z))
-            coordinate3d.setMatrix(A)
             coordinate3d.setVolume(tomo)
+            coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setMatrix(A)
             coord3DSet.append(coordinate3d)
 
 
@@ -243,11 +251,11 @@ def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False
                 coord = MeshPoint()
             else:
                 coord = Coordinate3D()
-            coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
+            coord.setVolume(tomo)
+            coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2], const.BOTTOM_LEFT_CORNER)
             if directions:
                 matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
                 coord.setMatrix(matrix)
-            coord.setVolume(tomo)
             coord.setGroupId(points[idx, 3])
             coord3DSet.append(coord)
 

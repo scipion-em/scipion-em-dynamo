@@ -24,19 +24,18 @@
 # *
 # **************************************************************************
 
-from os.path import abspath, basename, isfile
-import numpy as np
+from os.path import basename, isfile
 
-from pyworkflow.protocol.params import PathParam
+from pyworkflow import BETA
+from pyworkflow.protocol.params import PathParam, PointerParam
 from pyworkflow.utils.path import createAbsLink, copyFile
 from pwem.emlib.image import ImageHandler
-from pwem.objects import Transform
 
 from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import SubTomogram
 from tomo.utils import _getUniqueFileName
 
-from ..convert import readDynTable, readDynCatalogue
+from ..convert import readDynTable
 
 
 class DynamoImportSubtomos(ProtTomoImportFiles):
@@ -44,6 +43,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
     A Dynamo catalogue can be also imported in order to relate subtomograms with their original tomograms. """
 
     _label = 'import subtomos from Dynamo'
+    _devStatus = BETA
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -52,10 +52,9 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
                       label="Dynamo table file:",
                       help='Select dynamo table (.tbl) to link dynamo metadata to the subtomograms that will be '
                            'imported to Scipion. ')
-        form.addParam('ctgPath', PathParam,
-                      label="Dynamo catalogue file:", allowsNull=True,
-                      help='Select dynamo catalogue (.ctg) to link original tomograms to the subtomograms that will be '
-                           'imported to Scipion. ')
+        form.addParam('tomoSet', PointerParam, pointerClass='SetOfTomograms',
+                      label="Tomograms:",
+                      help="Select the Tomograms used to extract the SubTomograms")
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -67,14 +66,6 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         self.info("Using pattern: '%s'" % pattern)
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
-        if self.ctgPath.get():
-            self.tomoDict = {}
-            tdb = readDynCatalogue(self.ctgPath.get(), self._getExtraPath())
-            if isinstance(tdb.volumes, np.ndarray):
-                for idv, volume in enumerate(tdb.volumes):
-                    self.tomoDict[idv+1] = volume.file
-            else:
-                self.tomoDict[1] = tdb.volumes.file
         imgh = ImageHandler()
         self.subtomoSet = self._createSetOfSubTomograms()
         self.subtomoSet.setSamplingRate(samplingRate)
@@ -82,21 +73,8 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         copyFile(self.tablePath.get(), dynTable)
         self.fhTable = open(dynTable, 'r')
         for fileName, fileId in self.iterFiles():
-            x, y, z, n = imgh.getDimensions(fileName)
-            if fileName.endswith('.mrc') or fileName.endswith('.map'):
-                fileName += ':mrc'
-                if z == 1 and n != 1:
-                    zDim = n
-                    n = 1
-                else:
-                    zDim = z
-            else:
-                zDim = z
-            origin = Transform()
-            origin.setShifts(x / -2. * samplingRate, y / -2. * samplingRate, zDim / -2. * samplingRate)
-            subtomo.setOrigin(origin)
+            _, _, _, n = imgh.getDimensions(fileName)
             newFileName = _getUniqueFileName(self.getPattern(), fileName)
-            # newFileName = abspath(self._getVolumeFileName(fileName))
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
             createAbsLink(fileName, newFileName)
@@ -109,16 +87,13 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
 
     def _addSubtomogram(self, subtomo, newFileName, index=None):
         """ adds a subtomogram to a set """
+        tomoSet = self.tomoSet.get()
         subtomo.cleanObjId()
         if index is None:
             subtomo.setFileName(newFileName)
         else:
             subtomo.setLocation(index, newFileName)
-        readDynTable(self, subtomo)
-        if self.ctgPath.get():
-            scipionTomoName = self.tomoDict.get(subtomo.getVolId())
-            subtomo.setVolName(scipionTomoName)
-            # subtomo.getCoordinate3D().setVolName(scipionTomoName)
+        readDynTable(self, subtomo, tomoSet)
         self.subtomoSet.append(subtomo)
 
     def createOutputStep(self):
@@ -164,10 +139,3 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
         if not self.tablePath.get() or not isfile(self.tablePath.get()):
             errors.append("Could not find specified dynamo catalogue file")
         return errors
-
-    def _warnings(self):
-        warnings = []
-        if not self.ctgPath.get() or not isfile(self.ctgPath.get()):
-            warnings.append("Catalogue not specified. SubTomograms can still be imported but they won't be "
-                            "associated to any Tomogram.")
-        return warnings
