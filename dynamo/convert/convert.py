@@ -23,13 +23,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import math
+import math, os
 import numpy as np
+from scipy.io import loadmat
 from pwem import Domain
 from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform
+import pyworkflow.utils as pwutils
+from pyworkflow.utils.process import runJob
+import pyworkflow.object as pwobj
+from dynamo import Plugin
 Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
+MeshPoint = Domain.importFromPlugin("tomo.objects", "MeshPoint")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
+SetOfCoordinates3D = Domain.importFromPlugin("tomo.objects", "SetOfCoordinates3D")
+SetOfMeshes = Domain.importFromPlugin("tomo.objects", "SetOfMeshes")
+import tomo.constants as const
 
 
 def writeVolume(volume, outputFn):
@@ -50,9 +59,9 @@ def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
 def writeDynTable(fhTable, setOfSubtomograms):
     for subtomo in setOfSubtomograms.iterItems():
         if subtomo.hasCoordinate3D():
-            x = subtomo.getCoordinate3D().getX()
-            y = subtomo.getCoordinate3D().getY()
-            z = subtomo.getCoordinate3D().getZ()
+            x = subtomo.getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER)
+            y = subtomo.getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER)
+            z = subtomo.getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER)
         else:
             x = 0
             y = 0
@@ -76,7 +85,7 @@ def writeDynTable(fhTable, setOfSubtomograms):
                       % (subtomo.getObjId(), shiftx, shifty, shiftz, tdrot, tilt, narot, anglemin, anglemax, x, y, z))
 
 
-def readDynTable(self, item):
+def readDynTable(self, item, tomoSet=None):
     nline = next(self.fhTable)
     nline = nline.rstrip()
     id = int(nline.split()[0])
@@ -97,19 +106,26 @@ def readDynTable(self, item):
     acquisition.setAngleMin(angleMin)
     acquisition.setAngleMax(angleMax)
     item.setAcquisition(acquisition)
-    volId = nline.split()[19]
+    volId = int(nline.split()[19]) + 1
     item.setVolId(volId)
-    x = nline.split()[23]
-    y = nline.split()[24]
-    z = nline.split()[25]
-    coordinate3d = Coordinate3D()
-    coordinate3d.setVolId(volId)
-    coordinate3d.setX(float(x))
-    coordinate3d.setY(float(y))
-    coordinate3d.setZ(float(z))
-    item.setCoordinate3D(coordinate3d)
     classId = nline.split()[21]
     item.setClassId(classId)
+    if tomoSet != None:
+        tomo = tomoSet[volId] if tomoSet.getSize() > 1 \
+               else tomoSet.getFirstItem()
+        tomoOrigin = tomo.getOrigin()
+        item.setVolName(tomo.getFileName())
+        item.setOrigin(tomoOrigin)
+        coordinate3d = Coordinate3D()
+        coordinate3d.setVolId(tomo.getObjId())
+        coordinate3d.setVolume(tomo)
+        x = nline.split()[23]
+        y = nline.split()[24]
+        z = nline.split()[25]
+        coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+        item.setCoordinate3D(coordinate3d)
 
 
 def readDynCoord(tableFile, coord3DSet, tomo):
@@ -127,11 +143,11 @@ def readDynCoord(tableFile, coord3DSet, tomo):
             x = nline.split()[23]
             y = nline.split()[24]
             z = nline.split()[25]
-            coordinate3d.setX(float(x))
-            coordinate3d.setY(float(y))
-            coordinate3d.setZ(float(z))
-            coordinate3d.setMatrix(A)
             coordinate3d.setVolume(tomo)
+            coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setMatrix(A)
             coord3DSet.append(coordinate3d)
 
 
@@ -186,3 +202,65 @@ def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
     A[2, 1] = costdrot*sintilt
     A[2, 2] = costilt
     return A
+
+def readDynCatalogue(ctlg_path, save_path):
+    # MatLab script to convert an object into a structure
+    matPath = os.path.join(save_path, 'structure.mat')
+    codeFilePath = os.path.join(save_path, 'convert.m')
+    codeFid = open(codeFilePath, 'w')
+    content = "c=dread('%s')\n" \
+              "s=struct(c)\n" \
+              "volumes=c.volumes\n" \
+              "for idv=1:length(volumes)\n" \
+              "s.volumes{idv}=struct(volumes{idv})\n" \
+              "end\n" \
+              "save('%s','s','-v7');" % (os.path.abspath(ctlg_path),
+                                           os.path.abspath(matPath))
+    codeFid.write(content)
+    codeFid.close()
+    args = ' %s' % codeFilePath
+    runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+
+    # Read MatLab binary into Python
+    return loadmat(matPath, struct_as_record=False, squeeze_me=True)['s']
+
+def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False):
+    if mesh:
+        suffix = protocol._getOutputSuffix(SetOfMeshes)
+        coord3DSet = protocol._createSetOfMeshes(setTomograms, suffix)
+    else:
+        suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
+        coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
+    coord3DSet.setName("tomoCoord")
+    coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
+    coord3DSet.setBoxSize(protocol.boxSize.get())
+    coord3DSet._dynCatalogue = pwobj.String(os.path.join(outPath, "tomos.ctlg"))
+    for tomo in setTomograms.iterItems():
+        outPoints = pwutils.join(outPath, pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
+        outAngles = pwutils.join(outPath, 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
+        if not os.path.isfile(outPoints):
+            continue
+        if not os.path.isfile(outAngles) and directions:
+            continue
+
+        # Populate Set of 3D Coordinates with 3D Coordinates
+        points = np.loadtxt(outPoints, delimiter=' ')
+        angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' ')) if directions else None
+        for idx in range(len(points)):
+            if mesh:
+                coord = MeshPoint()
+            else:
+                coord = Coordinate3D()
+            coord.setVolume(tomo)
+            coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2], const.BOTTOM_LEFT_CORNER)
+            if directions:
+                matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
+                coord.setMatrix(matrix)
+            coord.setGroupId(points[idx, 3])
+            coord3DSet.append(coord)
+
+    name = protocol.OUTPUT_PREFIX + suffix
+    args = {name: coord3DSet}
+    protocol._defineOutputs(**args)
+    protocol._defineSourceRelation(setTomograms, coord3DSet)
+    protocol._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)

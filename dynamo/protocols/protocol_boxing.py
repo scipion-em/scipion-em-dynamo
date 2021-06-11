@@ -27,27 +27,34 @@
 import os
 import numpy as np
 
+from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 
 from tomo.protocols import ProtTomoPicking
-from tomo.objects import SetOfCoordinates3D, Coordinate3D
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
+import tomo.constants as const
 
 from dynamo import Plugin
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo.convert import eulerAngles2matrix
+from dynamo.convert import textFile2Coords, matrix2eulerAngles
 
 class DynamoBoxing(ProtTomoPicking):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
     direclty loaded with all the models previously saved in the disk (if any).
-    After picking, it is needed to go to:
-    Active Model > Step-by-step workflow for cropping geometry
-    And click -run all- button before closing the window"""
+    This picking will only save the "user points" defined in a set of models. It is possible to
+    create several models at once in a given tomogram. Once the coordinates are defined,
+    the models are automatically saved in the catalogue and registered.
+
+    Currently the following Dynamo models are supported:
+        - Ellipsoidal Vesicle"""
 
     _label = 'vectorial picking'
+    _devStatus = BETA
+
+    OUTPUT_PREFIX = 'outputMeshes'
 
     def __init__(self, **kwargs):
         ProtTomoPicking.__init__(self, **kwargs)
@@ -58,23 +65,23 @@ class DynamoBoxing(ProtTomoPicking):
 
         form.addParam('boxSize', IntParam, label="Box Size")
         form.addParam('selection', EnumParam, choices=['Yes', 'No'], default=1,
-                      label='Modify previous coordinates?', display=EnumParam.DISPLAY_HLIST,
-                      help='This option allows to add and/or remove coordinates to a previous SetOfCoordinates')
-        form.addParam('inputCoordinates', PointerParam, label="Input Coordinates", condition='selection == 0',
-                      allowsNull=True, pointerClass='SetOfCoordinates3D',
-                      help='Select the previous SetOfCoordinates you want to modify')
+                      label='Modify previous meshes?', display=EnumParam.DISPLAY_HLIST,
+                      help='This option allows to add and/or remove coordinates to a previous SetOfMeshes')
+        form.addParam('inputMeshes', PointerParam, label="Input Meshes", condition='selection == 0',
+                      allowsNull=True, pointerClass='SetOfMeshes',
+                      help='Select the previous SetOfMeshes you want to modify')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         # Copy input coordinates to Extra Path
-        self._insertFunctionStep('copyInputCoords')
+        self._insertFunctionStep('copyInputMeshes')
 
         # Launch Boxing GUI
         self._insertFunctionStep('launchDynamoBoxingStep', interactive=True)
 
     # --------------------------- STEPS functions -----------------------------
 
-    def copyInputCoords(self):
+    def copyInputMeshes(self):
         # Initialize the catalogue
         listTomosFile = self._getExtraPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
@@ -89,17 +96,17 @@ class DynamoBoxing(ProtTomoPicking):
         # Save coordinates into .txt file for each tomogram
         codeFile = self._getExtraPath('coords2model.m')
         if self.selection.get() == 0:
-            inputCoordinates = self.inputCoordinates.get()
+            inputMeshes = self.inputMeshes.get()
             inputTomograms = self.inputTomograms.get()
-            for tomo in inputTomograms:
+            for tomo in inputTomograms.iterItems(iterate=False):
                 outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
                 coords_tomo = []
-                for coord in inputCoordinates.iterCoordinates(tomo):
-                    coords_tomo.append(coord.getPosition())
+                for coord in inputMeshes.iterCoordinates(tomo.getObjId()):
+                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
                 if coords_tomo:
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
 
-            # Create small program to tell Dynamo to save the inputCoordinates in a Vesicle Model
+            # Create small program to tell Dynamo to save the inputMeshes in a Ellipsoidal Vesicle Model
             contents = "dcm -create %s -fromvll %s\n" \
                        "path='%s'\n" \
                        "catalogue=dread(['%s' '.ctlg'])\n" \
@@ -112,13 +119,19 @@ class DynamoBoxing(ProtTomoPicking):
                        "if ~isfile(coordFile)\n" \
                        "continue\n" \
                        "end\n" \
-                       "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
-                       "vesicle=dmodels.vesicle()\n" \
+                       "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n" \
+                       "idm_vec=unique(coords_ids(:,4))'\n" \
+                       "for idm=idm_vec\n" \
+                       "model_name=['model_',num2str(idm)]\n" \
+                       "coords=coords_ids(coords_ids(:,4)==idm,1:3)\n" \
+                       "vesicle=dmodels.ellipsoidalVesicle()\n" \
+                       "vesicle.name=model_name\n" \
                        "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
-                       "vesicle.linkCatalogue('%s','i',tomoIndex, 's', 1)\n" \
+                       "vesicle.linkCatalogue('%s','i',tomoIndex,'s',1)\n" \
                        "vesicle.saveInCatalogue()\n" \
                        "end\n" \
-                       "exit\n" % (catalogue, listTomosFile, self._getExtraPath(), catalogue, catalogue)
+                       "end\n" \
+                       "exit\n" % (catalogue, listTomosFile, os.path.abspath(self._getExtraPath()), catalogue, catalogue)
         else:
             contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
 
@@ -146,39 +159,7 @@ class DynamoBoxing(ProtTomoPicking):
         pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
-        coord3DSetDict = {}
-        setTomograms = self.inputTomograms.get()
-        suffix = self._getOutputSuffix(SetOfCoordinates3D)
-        coord3DSet = self._createSetOfCoordinates3D(setTomograms, suffix)
-        coord3DSet.setName("tomoCoord")
-        coord3DSet.setPrecedents(setTomograms)
-        coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
-        coord3DSet.setBoxSize(self.boxSize.get())
-        for tomo in setTomograms.iterItems():
-            outPoints = pwutils.join(self._getExtraPath(), pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-            outAngles = pwutils.join(self._getExtraPath(), 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-            if not os.path.isfile(outPoints):
-                continue
-
-            # Populate Set of 3D Coordinates with 3D Coordinates
-            points = np.loadtxt(outPoints, delimiter=' ')
-            angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' '))
-            for idx in range(len(points)):
-                coord = Coordinate3D()
-                coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2])
-                matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
-                coord.setMatrix(matrix)
-                coord.setVolume(tomo)
-                coord3DSet.append(coord)
-
-            coord3DSetDict['00'] = coord3DSet
-
-        name = self.OUTPUT_PREFIX + suffix
-        args = {}
-        args[name] = coord3DSet
-        self._defineOutputs(**args)
-        self._defineSourceRelation(setTomograms, coord3DSet)
-        self._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
+        textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath(), False, True)
 
     # --------------------------- DEFINE info functions ----------------------
     def getMethods(self, output):
@@ -188,12 +169,6 @@ class DynamoBoxing(ProtTomoPicking):
 
     def _methods(self):
         methodsMsgs = []
-        if self.inputTomograms is None:
-            return ['Input tomogram not available yet.']
-
-        methodsMsgs.append("Input tomograms imported of dims %s." %(
-                              str(self.inputTomograms.get().getDim())))
-
         if self.getOutputsSize() >= 1:
             for key, output in self.iterOutputAttributes():
                 msg = self.getMethods(output)

@@ -26,7 +26,7 @@
 
 from pwem.wizards import EmWizard
 
-from dynamo.protocols import DynamoExtraction
+from dynamo.protocols import DynamoExtraction, DynamoModelWorkflow
 
 
 # =============================================================================
@@ -54,5 +54,30 @@ class DynamoExtractionWizard(EmWizard):
 
         if DynamoExtractProt.downFactor.get() != 1:
             boxSize = float(boxSize/DynamoExtractProt.downFactor.get())
+
+        form.setVar('boxSize', boxSize)
+
+
+# =============================================================================
+# MODEL WORKFLOW
+# =============================================================================
+
+class DynamoModelWorkflowWizard(EmWizard):
+    _targets = [(DynamoModelWorkflow, ['boxSize'])]
+
+    def show(self, form):
+        DynamoModelWorkflowProt = form.protocol
+        inputMeshes = DynamoModelWorkflowProt.inputMeshes.get()
+        if not inputMeshes:
+            print('You must specify input meshes')
+            return
+
+        aux = inputMeshes.getBoxSize()
+        if not aux % 2 == 0:
+            aux += 1
+        boxSize = aux
+        if not boxSize:
+            print('These coordinates do not have box size. Please, enter box size manually.')
+            return
 
         form.setVar('boxSize', boxSize)

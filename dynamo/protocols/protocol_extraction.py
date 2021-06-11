@@ -27,6 +27,7 @@
 import os
 import glob
 
+from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 from pwem.emlib.image import ImageHandler
@@ -35,6 +36,7 @@ from pwem.protocols import EMProtocol
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
+import tomo.constants as const
 
 from dynamo import Plugin
 from dynamo.convert import matrix2eulerAngles
@@ -49,6 +51,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
     """Extraction of subtomograms using Dynamo"""
 
     _label = 'vectorial extraction'
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -97,12 +100,16 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                            'and Eman require white particles over a black '
                            'background.')
 
+        form.addParallelSection(threads=1, mpi=0)
+
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
+        self.tomoFiles = sorted(self.getInputTomograms().getFiles())
         self._insertFunctionStep('writeSetOfCoordinates3D')
         self._insertFunctionStep('launchDynamoExtractStep')
         if self.doInvert:
-            self._insertFunctionStep('invertContrastStep')
+            for ind, _ in enumerate(self.tomoFiles):
+                self._insertFunctionStep('invertContrastStep', ind)
         self._insertFunctionStep('createOutputStep')
 
     # --------------------------- STEPS functions -----------------------------
@@ -111,7 +118,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
         self.factor = float(samplingRateCoord / samplingRateTomo)
         self.lines = []
-        inputSet = self.getInputTomograms().getFiles()
+        inputSet = sorted(self.getInputTomograms().getFiles())
         self.coordsFileName = self._getExtraPath('coords.txt')
         self.anglesFileName = self._getExtraPath('angles.txt')
         outC = open(self.coordsFileName, "w")
@@ -121,9 +128,9 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
             for coord3DSet in self.inputCoordinates.get().iterCoordinates():
                 if pwutils.removeBaseExt(item) == pwutils.removeBaseExt(coord3DSet.getVolName()):
                     angles_coord = matrix2eulerAngles(coord3DSet.getMatrix())
-                    x = round(self.factor * coord3DSet.getX())
-                    y = round(self.factor * coord3DSet.getY())
-                    z = round(self.factor * coord3DSet.getZ())
+                    x = round(self.factor * coord3DSet.getX(const.BOTTOM_LEFT_CORNER))
+                    y = round(self.factor * coord3DSet.getY(const.BOTTOM_LEFT_CORNER))
+                    z = round(self.factor * coord3DSet.getZ(const.BOTTOM_LEFT_CORNER))
                     outC.write("%d\t%d\t%d\t%d\n" % (x, y, z, idt+1))
                     outA.write("%f\t%f\t%f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
                     coordDict.append(coord3DSet.getObjId())
@@ -140,15 +147,15 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
         pwutils.cleanPattern('*.m')
         
-    def invertContrastStep(self):
+    def invertContrastStep(self, ind):
         import xmipp3
         program = 'xmipp_image_operate'
-        for ind, tomoFile in enumerate(self.tomoFiles):
-            cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind + 1)), '')
-            pattern = os.path.join(cropPath, '*.mrc')
-            for subTomoFile in glob.glob(pattern):
-                args = "-i %s --mult -1" % subTomoFile
-                self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+        # for ind, _ in enumerate(self.tomoFiles):
+        cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind + 1)), '')
+        pattern = os.path.join(cropPath, '*.mrc')
+        for subTomoFile in glob.glob(pattern):
+            args = "-i %s --mult -1" % subTomoFile
+            self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
         self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
@@ -181,7 +188,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         codeFilePath = os.path.join(os.getcwd(), "DynamoExtraction.m")
         listTomosFile = self._getTmpPath("tomos.vll")
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
-        self.tomoFiles = sorted(self.getInputTomograms().getFiles())
+        # self.tomoFiles = sorted(self.getInputTomograms().getFiles())
 
         # Create list of tomos file
         tomoFid = open(listTomosFile, 'w')
@@ -207,7 +214,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                   "angles=readmatrix('%s')\n" \
                   "coords=aux(:,1:3)\n" \
                   "tags=aux(:,4)'\n" \
-                  "for tag=unique(tags)\n" \
+                  "parfor(tag=unique(tags),%d)\n" \
                   "tomoCoords=coords(tags==tag,:)\n" \
                   "tomoAngles=angles(tags==tag,:)\n" \
                   "t=dynamo_table_blank(size(tomoCoords,1),'r',tomoCoords,'angles',rad2deg(tomoAngles))\n" \
@@ -215,7 +222,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                   "end\n" \
                    % (os.path.abspath(os.getcwd()), self._getExtraPath('Crop'),
                       catalogue,boxSize, catalogue, listTomosFile, os.path.abspath(self.coordsFileName),
-                      os.path.abspath(self.anglesFileName))
+                      os.path.abspath(self.anglesFileName), self.numberOfThreads.get())
 
         codeFid.write(content)
         codeFid.close()
@@ -283,7 +290,5 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         else:
             summary.append("Output subtomograms not ready yet.")
         if self.doInvert:
-            summary.append('*White over black.*')
-        else:
-            summary.append('*Black over white.*')
+            summary.append('*Contrast was inverted.*')
         return summary
