@@ -23,8 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+import numpy as np
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import Message
@@ -132,7 +131,8 @@ class DynamoImportTomograms(ProtTomoImportFiles):
         tdb = readDynCatalogue(self.ctgPath.get(), self._getExtraPath())
 
         # Append Catalogue Tomograms to output set
-        for idv, volume in enumerate(tdb.volumes):
+        volumes_structs = tdb.volumes if isinstance(tdb.volumes, np.ndarray) else [tdb.volumes]
+        for idv, volume in enumerate(volumes_structs):
             tomo.cleanObjId()
             tomo.setLocation(volume.file)
             x, y, z = tomo.getDim()
