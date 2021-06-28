@@ -27,7 +27,6 @@
 
 import os
 
-import param
 from pyworkflow import BETA
 from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
