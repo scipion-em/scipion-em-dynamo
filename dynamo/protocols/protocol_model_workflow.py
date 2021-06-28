@@ -175,7 +175,9 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                       "m.crop_mesh_parameter=%d\n" \
                       "m.mesh_maximum_triangles=%d\n" \
                       "m.subdivision_iterations=%d\n" \
+                      "if isempty(m.center)\n" \
                       "m.center=mean(m.points)\n" \
+                      "end\n" \
                       "m.createMesh()\n" \
                       "m.refineMesh()\n" \
                       "m.createCropMesh()\n" \
