@@ -158,7 +158,6 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                                   self.maxTr.get())
         elif self.modelType.get() == 1:
             content = "path='%s'\n" \
-                      "auto=%i\n" \
                       "crop_points=[]\n" \
                       "crop_angles=[]\n" \
                       "modelId=0\n" \
@@ -188,7 +187,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                       "end\n" \
                       "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
                       "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
-                      "exit\n" % (catalogue_path, self.auto.get(), outPath, os.path.abspath(self._getExtraPath()),
+                      "exit\n" % (catalogue_path, outPath, os.path.abspath(self._getExtraPath()),
                                   volId, self.meshParameter.get(), self.cropping.get(),
                                   self.maxTr.get(), self.subDivision.get())
 
