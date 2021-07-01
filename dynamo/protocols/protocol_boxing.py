@@ -54,8 +54,8 @@ class DynamoBoxing(ProtTomoPicking):
     _label = 'vectorial picking'
     _devStatus = BETA
 
-    modelChoices = ["Ellipsoidal vesicle", "Surface"]
-    modelNames = {modelChoices[0]: "ellipsoidalVesicle", modelChoices[1]: "surface"}
+    modelChoices = ["Ellipsoidal Vesicle", "Surface", "General"]
+    modelNames = {modelChoices[0]: "ellipsoidalVesicle", modelChoices[1]: "surface", modelChoices[2]: "general"}
     OUTPUT_PREFIX = 'outputMeshes'
 
     def __init__(self, **kwargs):
