@@ -54,6 +54,8 @@ class DynamoBoxing(ProtTomoPicking):
     _label = 'vectorial picking'
     _devStatus = BETA
 
+    modelChoices = ["Ellipsoidal Vesicle", "Surface", "General"]
+    modelNames = {modelChoices[0]: "ellipsoidalVesicle", modelChoices[1]: "surface", modelChoices[2]: "general"}
     OUTPUT_PREFIX = 'outputMeshes'
 
     def __init__(self, **kwargs):
@@ -70,6 +72,10 @@ class DynamoBoxing(ProtTomoPicking):
         form.addParam('inputMeshes', PointerParam, label="Input Meshes", condition='selection == 0',
                       allowsNull=True, pointerClass='SetOfMeshes',
                       help='Select the previous SetOfMeshes you want to modify')
+        form.addParam('modelType', EnumParam,
+                      choices=self.modelChoices, default=0,
+                      label='Model type',
+                      help='Select the type of model defined in the Tomograms.')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -124,14 +130,15 @@ class DynamoBoxing(ProtTomoPicking):
                        "for idm=idm_vec\n" \
                        "model_name=['model_',num2str(idm)]\n" \
                        "coords=coords_ids(coords_ids(:,4)==idm,1:3)\n" \
-                       "vesicle=dmodels.ellipsoidalVesicle()\n" \
+                       "vesicle=dmodels.%s()\n" \
                        "vesicle.name=model_name\n" \
                        "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
                        "vesicle.linkCatalogue('%s','i',tomoIndex,'s',1)\n" \
                        "vesicle.saveInCatalogue()\n" \
                        "end\n" \
                        "end\n" \
-                       "exit\n" % (catalogue, listTomosFile, os.path.abspath(self._getExtraPath()), catalogue, catalogue)
+                       "exit\n" % (catalogue, listTomosFile, os.path.abspath(self._getExtraPath()), catalogue,
+                                   self.modelNames[self.modelChoices[self.modelType.get()]], catalogue)
         else:
             contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
 

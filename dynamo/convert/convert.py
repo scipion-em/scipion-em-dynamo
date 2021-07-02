@@ -215,7 +215,7 @@ def readDynCatalogue(ctlg_path, save_path):
               "s.volumes{idv}=struct(volumes{idv})\n" \
               "end\n" \
               "save('%s','s','-v7');" % (os.path.abspath(ctlg_path),
-                                           os.path.abspath(matPath))
+                                         os.path.abspath(matPath))
     codeFid.write(content)
     codeFid.close()
     args = ' %s' % codeFilePath
@@ -245,7 +245,7 @@ def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False
 
         # Populate Set of 3D Coordinates with 3D Coordinates
         points = np.loadtxt(outPoints, delimiter=' ')
-        angles = np.deg2rad(np.loadtxt(outAngles, delimiter=' ')) if directions else None
+        angles = np.loadtxt(outAngles, delimiter=' ') if directions else None
         for idx in range(len(points)):
             if mesh:
                 coord = MeshPoint()
