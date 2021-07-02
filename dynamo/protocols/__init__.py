@@ -32,3 +32,4 @@ from .protocol_import_subtomos import DynamoImportSubtomos
 from .protocol_subBoxing import DynamoSubBoxing
 from .protocol_model_workflow import DynamoModelWorkflow
 from .protocol_import_tomograms import DynamoImportTomograms
+from .protocol_bin_tomograms import DynamoBinTomograms

@@ -161,11 +161,12 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
         self.outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() * self.downFactor.get())
         self.outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
-        acquisition = TomoAcquisition()
-        acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
-        acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
-        acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
-        self.outputSubTomogramsSet.setAcquisition(acquisition)
+        if self.getInputTomograms().getFirstItem().getAcquisition():
+            acquisition = TomoAcquisition()
+            acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
+            acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
+            acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
+            self.outputSubTomogramsSet.setAcquisition(acquisition)
         for ind, tomoFile in enumerate(self.tomoFiles):
             cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind+1)), '')
             if os.path.isdir(cropPath):
