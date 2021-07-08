@@ -32,11 +32,12 @@ from pwem.objects import Transform
 
 from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import Tomogram
+from tomo.protocols.protocol_base import ProtTomoImportAcquisition
 
 from ..convert import readDynCatalogue
 
 
-class DynamoImportTomograms(ProtTomoImportFiles):
+class DynamoImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     '''This protocols imports a series of Tomogram stored in a Dynamo catalogue into Scipion.
     In order to avoid handling a MatLab binary, the script relies on MatLab itself to turn a
     binary MatLab object into an Structure which can be afterwards read by Python.'''
@@ -109,6 +110,7 @@ class DynamoImportTomograms(ProtTomoImportFiles):
                       label="y", help="offset along y axis (Angstroms)")
         form.addParam('z', params.FloatParam, condition='setOrigCoord',
                       label="z", help="offset along z axis (Angstroms)")
+        ProtTomoImportAcquisition._defineParams(self, form)
 
     # ----------------------- INSERT STEPS functions --------------------------
     def _insertAllSteps(self):
@@ -118,6 +120,7 @@ class DynamoImportTomograms(ProtTomoImportFiles):
     def importDynamoTomogramsStep(self, samplingRate):
         """ Copy images matching the filename pattern. Register other parameters."""
         # self.info("Using pattern: '%s'" % pattern)
+        self._parseAcquisitionData()
 
         # Create a Volume template object
         tomo = Tomogram()
@@ -141,6 +144,7 @@ class DynamoImportTomograms(ProtTomoImportFiles):
                              y / -2. * samplingRate,
                              z / -2. * samplingRate)
             tomo.setOrigin(origin)
+            tomo.setAcquisition(self._extractAcquisitionParameters(tomo.getFileName()))
             tomoSet.append(tomo)
 
         self._defineOutputs(outputTomograms=tomoSet)

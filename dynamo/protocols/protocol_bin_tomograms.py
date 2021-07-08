@@ -99,6 +99,7 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
             tomo.cleanObjId()
             tomo.setLocation(binned_scipion_path)
             tomo.setOrigin(inTomo.getOrigin())
+            tomo.setAcquisition(inTomo.getAcquisition())
             binned_tomos.append(tomo)
 
         args = {self.OUTPUT_PREFIX: binned_tomos}
