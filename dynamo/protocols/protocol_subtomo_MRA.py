@@ -67,7 +67,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addSection(label='Templates')
         form.addParam('mra', BooleanParam, label='Perform MRA', default=False,
                       help="If selected, multi-reference alignment (MRA) is performed")
-        form.addParam('generateTemplate', BooleanParam, default=False, label='Generate reference template(s):',
+        form.addParam('generateTemplate', BooleanParam, default=True, label='Generate reference template(s):',
                       help="Generate a reference template based on parameters")
         form.addParam('nref', IntParam, label='Number of references for MRA', default=2,
                       condition="mra and generateTemplate",
