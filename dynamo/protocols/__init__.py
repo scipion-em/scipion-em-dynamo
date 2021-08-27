@@ -33,3 +33,4 @@ from .protocol_subBoxing import DynamoSubBoxing
 from .protocol_model_workflow import DynamoModelWorkflow
 from .protocol_import_tomograms import DynamoImportTomograms
 from .protocol_bin_tomograms import DynamoBinTomograms
+from .protocol_coords_to_model import DynamoCoordsToModel
