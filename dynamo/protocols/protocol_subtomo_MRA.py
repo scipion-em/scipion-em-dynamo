@@ -218,6 +218,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'estimation provided for the first iteration of the round. The origin of the shifts will '
                            'change at each round. 4:  limits are understood from the estimation provided for the first '
                            'iteration')
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
 
@@ -272,7 +273,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                   "dvput('%s', 'low', '%s');" % (self.projName, self.low) + \
                   "dvput('%s', 'high', '%s');" % (self.projName, self.high) + \
                   "dvput('%s', 'lim', '%s');" % (self.projName, self.lim) + \
-                  "dvput('%s', 'limm', '%s');" % (self.projName, self.limm)
+                  "dvput('%s', 'limm', '%s');" % (self.projName, self.limm) + \
+                  "dvput('%s', 'destination', 'standalone');" % self.projName + \
+                  "dvput('%s', 'cores', %d);" % (self.projName, self.numberOfThreads.get()) + \
+                  "dvput('%s', 'mwa', 0);" % self.projName
+                  # "dvput('%s', 'destination', 'matlab_gpu');" % (self.projName) + \
+                  # "dvput('%s', 'gpu_identifier_set', 0);" % (self.projName)
+                  # Above lines will be useful for GPU execution in the future
 
         template = self.templateRef.get()
         fmask = self.fmask.get()

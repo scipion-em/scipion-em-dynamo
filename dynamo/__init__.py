@@ -47,6 +47,7 @@ class Plugin(pwem.Plugin):
         """ Create the needed environment for Dynamo programs. """
         environ = pwutils.Environ(os.environ)
         dyn_home = cls.getHome()
+        # For GPU, we need to add to LD_LIBRARY_PATH the path to Cuda/lib
         environ.update({
             'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
             'LD_LIBRARY_PATH': dyn_home + '/MCRLinux/runtime/glnxa64:' + dyn_home + '/MCRLinux/bin/glnxa64:' +
@@ -68,6 +69,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
+        # For GPU, we will need to compile GPU binaries (see GPU page in Dynamo wiki for the steps)
         env.addPackage('dynamo',
                        version='1.146',
                        tar='dynamo-1.146.tar.gz',
