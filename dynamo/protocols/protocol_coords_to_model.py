@@ -117,7 +117,10 @@ class DynamoCoordsToModel(EMProtocol, ProtTomoBase):
             outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
             coords_tomo = []
             for coord in coords.iterCoordinates(tomo.getObjId()):
-                coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
+                if coord.getGroupId() is not None:
+                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
+                else:
+                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [1])
             if coords_tomo:
                 np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
 
