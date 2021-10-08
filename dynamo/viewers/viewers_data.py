@@ -100,40 +100,6 @@ class DynamoDataViewer(pwviewer.Viewer):
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
                     np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
-            codeFile = os.path.join(path, 'coords2model.m')
-            # Create small program to tell Dynamo to save the coordinates in a Vesicle Model
-            contents = "h=waitbar(0,'Please wait, loading data in Dynamo...')\n" \
-                       "dcm -create %s -fromvll %s\n" \
-                       "path='%s'\n" \
-                       "catalogue=dread(['%s' '.ctlg'])\n" \
-                       "nVolumes=length(catalogue.volumes)\n" \
-                       "for idv=1:nVolumes\n" \
-                       "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
-                       "tomoIndex=catalogue.volumes{idv}.index\n" \
-                       "[~,tomoName,~]=fileparts(tomoPath)\n" \
-                       "coordFile=[path '/' tomoName '.txt']\n" \
-                       "if ~isfile(coordFile)\n" \
-                       "waitbar(idv/nVolumes,h)\n" \
-                       "continue\n" \
-                       "end\n" \
-                       "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
-                       "vesicle=dmodels.vesicle()\n" \
-                       "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
-                       "vesicle.linkCatalogue('%s','i',tomoIndex, 's', 1)\n" \
-                       "vesicle.saveInCatalogue()\n" \
-                       "waitbar(idv/nVolumes,h)\n" \
-                       "end\n" \
-                       "delete(h)\n" \
-                       "exit\n" % (catalogue, listTomosFile, path, catalogue, catalogue)
-
-            codeFid = open(codeFile, 'w')
-            codeFid.write(contents)
-            codeFid.close()
-
-            args = ' %s' % codeFile
-            print(os.getcwd())
-            runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
-
             self.dlg = DynamoTomoDialog(self._tkRoot, path, provider=tomoProvider)
 
             import tkinter as tk
