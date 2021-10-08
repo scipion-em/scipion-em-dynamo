@@ -51,7 +51,7 @@ class Plugin(pwem.Plugin):
         environ.update({
             'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
             'LD_LIBRARY_PATH': dyn_home + '/MCRLinux/runtime/glnxa64:' + dyn_home + '/MCRLinux/bin/glnxa64:' +
-                               dyn_home + '/MCRLinux/sys/os/glnxa64',
+                               dyn_home + '/MCRLinux/sys/os/glnxa64:' + pwem.Config.CUDA_LIB,
             'DYNAMO_ROOT': dyn_home
         }, position=pwutils.Environ.BEGIN)
         return environ
@@ -69,10 +69,15 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        # For GPU, we will need to compile GPU binaries (see GPU page in Dynamo wiki for the steps)
+        # For GPU, we need to compile the CUDA binaries to ensure full compatibility
+        SW_EM = env.getEmFolder()
+        dyn_folder = 'dynamo-%s' % DYNAMO_VERSION
+        compile_cuda = "cd %s/%s/cuda && make clean && ./config.sh && make all && touch cuda_compiled" % (SW_EM, dyn_folder)
+        commands = [(compile_cuda, '%s/%s/cuda/cuda_compiled' % (SW_EM, dyn_folder))]
+
         env.addPackage('dynamo',
                        version='1.146',
                        tar='dynamo-1.146.tar.gz',
-                       commands=[],
+                       commands=commands,
                        default=True)
 

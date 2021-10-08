@@ -90,16 +90,16 @@ class DynamoImportTomograms(ProtTomoImportFiles):
                            "This is particularly relevant for loading "
                            "fragments/subunits of the whole volume.\n",
                       default=False)
-        line = form.addLine('Offset',
-                            help="A wizard will suggest you possible "
-                                 "coordinates for the ORIGIN. In MRC volume "
-                                 "files, the ORIGIN coordinates will be "
-                                 "obtained from the file header.\n "
-                                 "In case you prefer set your own ORIGIN "
-                                 "coordinates, write them here. You have to "
-                                 "provide the map center coordinates in "
-                                 "Angstroms (pixels x sampling).\n",
-                            condition='setOrigCoord')
+        form.addLine('Offset',
+                     help="A wizard will suggest you possible "
+                          "coordinates for the ORIGIN. In MRC volume "
+                          "files, the ORIGIN coordinates will be "
+                          "obtained from the file header.\n "
+                          "In case you prefer set your own ORIGIN "
+                          "coordinates, write them here. You have to "
+                          "provide the map center coordinates in "
+                          "Angstroms (pixels x sampling).\n",
+                     condition='setOrigCoord')
         # line.addParam would produce a nicer looking form
         # but them the wizard icon is drawn outside the visible
         # window. Until this bug is fixed form is a better option

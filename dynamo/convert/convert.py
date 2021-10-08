@@ -33,6 +33,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow.utils.process import runJob
 import pyworkflow.object as pwobj
 from dynamo import Plugin
+
 Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
 MeshPoint = Domain.importFromPlugin("tomo.objects", "MeshPoint")
 TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
@@ -53,7 +54,7 @@ def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
             ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
     if name == 'ix':  # write the INDEX of the object in the name
         for ix, volume in enumerate(setOfVolumes):
-            ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, int(ix+1)))
+            ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, int(ix + 1)))
 
 
 def writeDynTable(fhTable, setOfSubtomograms):
@@ -192,16 +193,17 @@ def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
     A[0, 3] = float(shiftx)
     A[1, 3] = float(shifty)
     A[2, 3] = float(shiftz)
-    A[0, 0] = costdrot*cosnarot - sintdrot*costilt*sinnarot
-    A[0, 1] = -cosnarot*sintdrot - costdrot*costilt*sinnarot
-    A[0, 2] = sinnarot*sintilt
-    A[1, 0] = costdrot*sinnarot + cosnarot*sintdrot*costilt
-    A[1, 1] = costdrot*cosnarot*costilt - sintdrot*sinnarot
-    A[1, 2] = -cosnarot*sintilt
-    A[2, 0] = sintdrot*sintilt
-    A[2, 1] = costdrot*sintilt
+    A[0, 0] = costdrot * cosnarot - sintdrot * costilt * sinnarot
+    A[0, 1] = -cosnarot * sintdrot - costdrot * costilt * sinnarot
+    A[0, 2] = sinnarot * sintilt
+    A[1, 0] = costdrot * sinnarot + cosnarot * sintdrot * costilt
+    A[1, 1] = costdrot * cosnarot * costilt - sintdrot * sinnarot
+    A[1, 2] = -cosnarot * sintilt
+    A[2, 0] = sintdrot * sintilt
+    A[2, 1] = costdrot * sintilt
     A[2, 2] = costilt
     return A
+
 
 def readDynCatalogue(ctlg_path, save_path):
     # MatLab script to convert an object into a structure
@@ -223,6 +225,7 @@ def readDynCatalogue(ctlg_path, save_path):
 
     # Read MatLab binary into Python
     return loadmat(matPath, struct_as_record=False, squeeze_me=True)['s']
+
 
 def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False):
     if mesh:
