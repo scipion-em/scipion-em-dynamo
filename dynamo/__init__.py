@@ -25,6 +25,7 @@
 # **************************************************************************
 
 from os.path import join
+import subprocess
 import pwem
 import pyworkflow.utils as pwutils
 from .constants import *
@@ -70,9 +71,43 @@ class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
         # For GPU, we need to compile the CUDA binaries to ensure full compatibility
+        # First, we check if CUDA is installed in the system
+        preMsgs = []
+        cudaMsgs = []
+        nvidiaDriverVer = None
+        if os.environ.get('CUDA', 'True') == 'True':
+            try:
+                nvidiaDriverVer = subprocess.Popen(["nvidia-smi",
+                                                    "--query-gpu=driver_version",
+                                                    "--format=csv,noheader"],
+                                                   env=cls.getEnviron(),
+                                                   stdout=subprocess.PIPE
+                                                   ).stdout.read().decode('utf-8').split(".")[0]
+            except Exception as e:
+                preMsgs.append(str(e))
+
+        if nvidiaDriverVer is not None:
+            preMsgs.append("CUDA support find. Driver version: %s" % nvidiaDriverVer)
+            msg = "Dynamo installed with CUDA SUPPORT."
+            cudaMsgs.append(msg)
+            useGpu = True
+        else:
+            preMsgs.append("CUDA will NOT be USED. (not found)")
+            msg = ("Dynamo installed without GPU. Just CPU computations "
+                   "enabled (slow computations). To enable CUDA, "
+                   "set CUDA=True in 'scipion.conf' file")
+            cudaMsgs.append(msg)
+            useGpu = False
+
         SW_EM = env.getEmFolder()
         dyn_folder = 'dynamo-%s' % DYNAMO_VERSION
-        compile_cuda = "cd %s/%s/cuda && make clean && ./config.sh && make all && touch cuda_compiled" % (SW_EM, dyn_folder)
+
+        compile_cuda = "echo ' > %s' && " % preMsgs
+        if useGpu:
+            compile_cuda += "cd %s/%s/cuda && make clean && ./config.sh && " \
+                            "make all && " \
+                            "touch cuda_compiled && " % (SW_EM, dyn_folder)
+        compile_cuda += "echo ' > %s'" % cudaMsgs
         commands = [(compile_cuda, '%s/%s/cuda/cuda_compiled' % (SW_EM, dyn_folder))]
 
         env.addPackage('dynamo',
