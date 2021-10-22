@@ -46,6 +46,7 @@ class DynamoSubBoxing(EMProtocol, ProtTomoBase):
 
     _label = 'subBoxing'
     _devStatus = BETA
+    OUTPUT_PREFIX = ""
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
