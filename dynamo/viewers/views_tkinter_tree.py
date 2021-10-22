@@ -46,14 +46,17 @@ class DynamoTomoDialog(ToolbarListDialog):
         self.provider = kwargs.get("provider", None)
         ToolbarListDialog.__init__(self, parent,
                                    "Tomogram List",
-                                    allowsEmptySelection=False,
-                                    itemDoubleClick=self.doubleClickOnTomogram,
-                                    **kwargs)
+                                   allowsEmptySelection=False,
+                                   itemDoubleClick=self.doubleClickOnTomogram,
+                                   allowSelect=False,
+                                   **kwargs)
 
     def refresh_gui(self):
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
+            outPath = os.path.join(self.path, pwutils.removeBaseExt(self.tomo.getFileName()) + '.txt')
+            self.tomo.count = np.loadtxt(outPath, delimiter=' ').shape[0]
             self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
@@ -70,7 +73,7 @@ class DynamoTomoDialog(ToolbarListDialog):
     def writeMatlabCode(self, tomo):
         # Initialization params
         codeFilePath = os.path.join(os.getcwd(), "DynamoPicker.m")
-        catalogue = os.path.join(self.path, "tomos")
+        catalogue = os.path.join(self.path, "tomos_viewer")
 
         # Write code to Matlab code file
         codeFid = open(codeFilePath, 'w')
@@ -101,8 +104,8 @@ class DynamoTomoDialog(ToolbarListDialog):
                   "if ~isempty(crop_points)\n" \
                   "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
                   "end\n" \
-                  "exit\n" % (catalogue, os.path.abspath(tomo.getFileName()), catalogue,
-                            pwutils.removeBaseExt(tomo.getFileName()), self.path)
+                  "exit\n" % (os.path.abspath(catalogue), os.path.abspath(tomo.getFileName()), catalogue,
+                              pwutils.removeBaseExt(tomo.getFileName()), self.path)
         # "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
         # "crop_angles=[crop_angles; [model{end}.crop_angles model_id*ones(length(model{end}.crop_angles),1)]]\n" \
         # "crop_angles=[crop_angles; [model.crop_angles model_id*ones(length(model.crop_angles),1)]]\n" \
