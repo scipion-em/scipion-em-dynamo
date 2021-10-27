@@ -73,7 +73,7 @@ class DynamoTomoDialog(ToolbarListDialog):
     def writeMatlabCode(self, tomo):
         # Initialization params
         codeFilePath = os.path.join(os.getcwd(), "DynamoPicker.m")
-        catalogue = os.path.join(self.path, "tomos_viewer")
+        catalogue = os.path.join(self.path, "tomos")
 
         # Write code to Matlab code file
         codeFid = open(codeFilePath, 'w')
