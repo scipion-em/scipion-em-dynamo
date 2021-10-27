@@ -144,10 +144,12 @@ def readDynCoord(tableFile, coord3DSet, tomo):
             x = nline.split()[23]
             y = nline.split()[24]
             z = nline.split()[25]
+            groupId = nline.split()[21]
             coordinate3d.setVolume(tomo)
             coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
             coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
             coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setGroupId(int(groupId))
             coordinate3d.setMatrix(A)
             coord3DSet.append(coordinate3d)
 
