@@ -25,12 +25,14 @@
 # *
 # **************************************************************************
 
+
+import os
 from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
 from tomo.tests import DataSet
 import tomo.constants as const
 from xmipp3.protocols import XmippProtCreateMask3D
-from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos
+from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoCoordsToModel
 
 
 class TestDynamoBase(BaseTest):
@@ -71,7 +73,8 @@ class TestSubTomogramsAlignment(BaseTest):
         particles = protImport.outputSubTomograms
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
-                                     generateTemplate=True)
+                                     generateTemplate=True,
+                                     useGpu=False)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.averageSubTomogram,
@@ -83,7 +86,8 @@ class TestSubTomogramsAlignment(BaseTest):
         particles = protImport.outputSubTomograms
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
-                                     templateRef=protImport)
+                                     templateRef=protImport,
+                                     useGpu=False)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.averageSubTomogram,
@@ -97,7 +101,8 @@ class TestSubTomogramsAlignment(BaseTest):
                                      inputVolumes=particles,
                                      templateRef=particles,
                                      mra=True,
-                                     fmask=particles)
+                                     fmask=particles,
+                                     useGpu=False)
         alignment.fmask.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.AverageRef1,
@@ -111,7 +116,8 @@ class TestSubTomogramsAlignment(BaseTest):
                                      inputVolumes=particles,
                                      mra=True,
                                      generateTemplate=True,
-                                     nref=4)
+                                     nref=4,
+                                     useGpu=False)
         alignment.fmask.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.AverageRef1,
@@ -134,7 +140,8 @@ class TestSubTomogramsAlignment(BaseTest):
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
                                      templateRef=protImport,
-                                     mask=protMask.outputMask)
+                                     mask=protMask.outputMask,
+                                     useGpu=False)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.averageSubTomogram,
@@ -160,7 +167,8 @@ class TestSubTomogramsAlignment(BaseTest):
                                      mask=protMask.outputMask,
                                      cmask=protMask.outputMask,
                                      fmask=protMask.outputMask,
-                                     smask=protMask.outputMask)
+                                     smask=protMask.outputMask,
+                                     useGpu=False)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.averageSubTomogram,
@@ -183,7 +191,8 @@ class TestSubTomogramsAlignment(BaseTest):
         alignment = self.newProtocol(DynamoSubTomoMRA,
                                      inputVolumes=particles,
                                      generateTemplate=True,
-                                     fmask=protMask.outputMask)
+                                     fmask=protMask.outputMask,
+                                     useGpu=False)
         alignment.templateRef.setExtended("outputSubTomograms.1")
         self.launchProtocol(alignment)
         self.assertIsNotNone(alignment.averageSubTomogram,
@@ -263,7 +272,7 @@ class TestDynamoExtraction(TestDynamoBase):
         setupTestProject(cls)
         TestDynamoBase.setData()
 
-    def _runExtraction(self, tomoSource = 0, downFactor = 1, text=''):
+    def _runExtraction(self, tomoSource=0, downFactor=1, text=''):
 
         protImportTomogram = self.newProtocol(ProtImportTomograms,
                                               filesPath=self.tomogram,
@@ -276,7 +285,6 @@ class TestDynamoExtraction(TestDynamoBase):
 
         protImportCoordinatesNoAngles = self.newProtocol(ProtImportCoordinates3D,
                                                          objLabel='Coordinates without Angles',
-                                                         auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
                                                          filesPath=self.emanCoords,
                                                          importTomograms=protImportTomogram.outputTomograms,
                                                          filesPattern='', boxSize=32,
@@ -284,7 +292,6 @@ class TestDynamoExtraction(TestDynamoBase):
 
         protImportCoordinatesAngles = self.newProtocol(ProtImportCoordinates3D,
                                                        objLabel='Coordinates with Angles',
-                                                       auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
                                                        filesPath=self.dynCoords,
                                                        importTomograms=protImportTomogram.outputTomograms,
                                                        filesPattern='', boxSize=32, importAngles=True,
@@ -337,7 +344,7 @@ class TestDynamoExtraction(TestDynamoBase):
         return protExtraction
 
     def test_Extraction_Other(self):
-        protExtraction = self._runExtraction(tomoSource = 1, text='OtherSource')
+        protExtraction = self._runExtraction(tomoSource=1, text='OtherSource')
 
         outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
         self.assertTrue(outputNoAngles)
@@ -352,7 +359,7 @@ class TestDynamoExtraction(TestDynamoBase):
         return protExtraction
 
     def test_Extraction_DownSampling(self):
-        protExtraction = self._runExtraction(downFactor = 2, text='DownSampling')
+        protExtraction = self._runExtraction(downFactor=2, text='DownSampling')
 
         outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
         self.assertTrue(outputNoAngles)
@@ -367,7 +374,7 @@ class TestDynamoExtraction(TestDynamoBase):
         return protExtraction
 
     def test_Extraction_All(self):
-        protExtraction = self._runExtraction(tomoSource = 1, downFactor = 2, text='AllOptions')
+        protExtraction = self._runExtraction(tomoSource=1, downFactor=2, text='AllOptions')
 
         outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
         self.assertTrue(outputNoAngles)
@@ -427,3 +434,53 @@ class TestDynImportSubTomograms(BaseTest):
         self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER), 175, delta=1)
         self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER), 134, delta=1)
         self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER), 115, delta=1)
+
+class TestDynamoCoordsToModel(TestDynamoBase):
+    '''This class checks if the protocol to convert a SetOfCoordinates3D to a Dynamo
+    model works properly'''
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        TestDynamoBase.setData()
+
+    def _runCoordsToModel(self):
+
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                              filesPath=self.tomogram,
+                                              samplingRate=5)
+
+        self.launchProtocol(protImportTomogram)
+
+        self.assertIsNotNone(protImportTomogram.outputTomograms,
+                             "There was a problem with tomogram output")
+
+        protImportCoordinates = self.newProtocol(ProtImportCoordinates3D,
+                                                 objLabel='Initial coordinates',
+                                                 filesPath=self.dynCoords,
+                                                 importTomograms=protImportTomogram.outputTomograms,
+                                                 filesPattern='', boxSize=32, importAngles=True,
+                                                 samplingRate=5)
+
+        self.launchProtocol(protImportCoordinates)
+
+        coords = protImportCoordinates.outputCoordinates
+
+        self.assertIsNotNone(coords,
+                             "There was a problem with coordinates 3d output")
+
+        protDynamoCoordsToModel = self.newProtocol(DynamoCoordsToModel,
+                                                   objLabel='Coords to Dynamo model conversion',
+                                                   inputCoords=coords)
+
+        self.launchProtocol(protDynamoCoordsToModel)
+        return protDynamoCoordsToModel
+
+    def test_coords_to_model(self):
+        protCoordsToModel = self._runCoordsToModel()
+
+        outputMeshes = getattr(protCoordsToModel, 'outputMeshes', None)
+        self.assertTrue(outputMeshes)
+        self.assertTrue(os.path.isfile(outputMeshes._dynCatalogue.get()))
+
+        return protCoordsToModel
