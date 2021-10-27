@@ -25,6 +25,7 @@
 # *
 # **************************************************************************
 
+import os.path
 from os import rename, remove
 from os.path import join
 from shutil import copy
@@ -300,7 +301,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         if template is not None:
             if isinstance(template, Volume):
                 writeVolume(template, join(self._getExtraPath(), 'template'))
-                content += "dvput('%s', 'template', 'template.em');" % self.projName
+                content += "dvput('%s', 'template', 'template.mrc');" % self.projName
                 content += "dvput('%s', 'table', 'initial.tbl');" % self.projName
             else:
                 makePath(self._getExtraPath('templates'))
@@ -338,7 +339,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                     if self.compensateMissingWedge.get():
                         content += "dynamo_table_randomize_azimuth('initial.tbl','o','initial.tbl');"
                     content += "dynamo_average('data','table','initial.tbl','o'," \
-                               "'templates/template_initial_ref_%03d.mrc');" % int(ix+1)
+                               "'templates/template_initial_ref_%03d.em');" % int(ix+1)
                     copy(join(self._getExtraPath(), 'initial.tbl'),
                          join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % int(ix+1)))
                 content += "dvput('%s', 'template', 'templates');" % self.projName
@@ -388,9 +389,12 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             else:
                 numberOfrefs = self.nref.get()
             for iref in range(numberOfrefs):
-                rename(join(self._getExtraPath(), 'templates/particle_%05d.em' % int(iref+1)),
-                       join(self._getExtraPath(), 'templates/template_initial_ref_%03d.em' % int(iref+1)))
-                remove(join(self._getExtraPath(), 'templates/template_initial_ref_%03d.mrc' % int(iref+1)))
+                # TODO: Check if particle_%05d.em files are saved at some point in templates folder
+                # TODO: or if we are trying to convert templates/template_initial_ref_%03d.mrc to em format
+                if os.path.isfile(self._getExtraPath('templates/particle_%05d.em' % int(iref+1))):
+                    rename(join(self._getExtraPath(), 'templates/particle_%05d.em' % int(iref+1)),
+                           join(self._getExtraPath(), 'templates/template_initial_ref_%03d.em' % int(iref+1)))
+                    remove(join(self._getExtraPath(), 'templates/template_initial_ref_%03d.mrc' % int(iref+1)))
 
     def alignStep(self):
         fhCommands2 = open(self._getExtraPath("commands2.doc"), 'w')
