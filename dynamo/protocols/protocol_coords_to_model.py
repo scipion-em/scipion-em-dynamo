@@ -48,7 +48,7 @@ class DynamoCoordsToModel(EMProtocol, ProtTomoBase):
     _label = 'coords to model'
     _devStatus = BETA
 
-    OUTPUT_PREFIX = 'output3DCoordinates'
+    OUTPUT_PREFIX = 'outputMeshes'
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
