@@ -218,11 +218,11 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                   "parfor(tag=unique(tags),%d)\n" \
                   "tomoCoords=coords(tags==tag,:)\n" \
                   "tomoAngles=angles(tags==tag,:)\n" \
-                  "t=dynamo_table_blank(size(tomoCoords,1),'r',tomoCoords,'angles',rad2deg(tomoAngles))\n" \
+                  "t=dynamo_table_blank(size(tomoCoords,1),'r',tomoCoords,'angles',tomoAngles)\n" \
                   "dtcrop(c.volumes{tag}.fullFileName,t,strcat(savePath,num2str(tag)),box,'ext','mrc')\n" \
                   "end\n" \
                    % (os.path.abspath(os.getcwd()), self._getExtraPath('Crop'),
-                      catalogue,boxSize, catalogue, listTomosFile, os.path.abspath(self.coordsFileName),
+                      catalogue, boxSize, catalogue, listTomosFile, os.path.abspath(self.coordsFileName),
                       os.path.abspath(self.anglesFileName), self.numberOfThreads.get())
 
         codeFid.write(content)
