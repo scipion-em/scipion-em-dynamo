@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import os.path
 from os.path import join
 import subprocess
 import pwem
@@ -114,5 +114,12 @@ class Plugin(pwem.Plugin):
                        version='1.146',
                        tar='dynamo-1.146.tar.gz',
                        commands=commands,
-                       default=True)
+                       default=False)
+
+        # Dynamo 1.1.532
+        commands = [("cd cuda && make clean && ./config.sh %s && make all && touch cuda_compiled" % os.path.dirname(pwem.Config.CUDA_LIB), 'cuda/cuda_compiled')]
+        env.addPackage('dynamo', version='1.1.532',
+                       tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
+                       createBuildDir = True,
+                       commands=commands)
 

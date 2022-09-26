@@ -27,6 +27,8 @@
 
 
 import os
+
+from pyworkflow.object import Pointer
 from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
 from tomo.tests import DataSet
@@ -311,10 +313,11 @@ class TestDynamoExtraction(TestDynamoBase):
         protDynamoExtractionNoAngles = self.newProtocol(DynamoExtraction,
                                                         objLabel='Extraction without Angles - %s' % text,
                                                         inputTomograms=protImportTomogram.outputTomograms,
-                                                        inputCoordinates=coordsNoAngle,
                                                         boxSize=coordsNoAngle.getBoxSize(),
                                                         tomoSource=tomoSource,
                                                         downFactor=downFactor)
+
+        protDynamoExtractionNoAngles.inputCoordinates= Pointer(protImportCoordinatesNoAngles, extended='outputCoordinates')
 
         protDynamoExtractionAngles = self.newProtocol(DynamoExtraction,
                                                       objLabel='Extraction with Angles - %s' % text,
@@ -324,6 +327,8 @@ class TestDynamoExtraction(TestDynamoBase):
                                                       tomoSource=tomoSource,
                                                       downFactor=downFactor)
 
+        protDynamoExtractionAngles.inputCoordinates = Pointer(protImportCoordinatesAngles, extended='outputCoordinates')
+
         self.launchProtocol(protDynamoExtractionNoAngles)
         self.launchProtocol(protDynamoExtractionAngles)
         return protDynamoExtractionNoAngles, protDynamoExtractionAngles
@@ -331,60 +336,60 @@ class TestDynamoExtraction(TestDynamoBase):
     def test_Extraction_SameAsPicking(self):
         protExtraction = self._runExtraction(text='SameAsPicking')
 
-        outputNoAngles = getattr( protExtraction[0], 'outputSetOfSubtomogram', None)
+        outputNoAngles = getattr( protExtraction[0], 'Subtomograms', None)
         self.assertTrue(outputNoAngles)
         self.assertTrue(outputNoAngles.hasCoordinates3D())
-        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputNoAngles._coordsPointer.hasExtended())
 
-        outputAngles = getattr( protExtraction[1], 'outputSetOfSubtomogram', None)
+        outputAngles = getattr( protExtraction[1], 'Subtomograms', None)
         self.assertTrue(outputAngles)
         self.assertTrue(outputAngles.hasCoordinates3D())
-        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputAngles._coordsPointer.hasExtended())
 
         return protExtraction
 
     def test_Extraction_Other(self):
         protExtraction = self._runExtraction(tomoSource=1, text='OtherSource')
 
-        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        outputNoAngles = getattr(protExtraction[0], 'Subtomograms', None)
         self.assertTrue(outputNoAngles)
         self.assertTrue(outputNoAngles.hasCoordinates3D())
-        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputNoAngles._coordsPointer.hasExtended())
 
-        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        outputAngles = getattr(protExtraction[1], 'Subtomograms', None)
         self.assertTrue(outputAngles)
         self.assertTrue(outputAngles.hasCoordinates3D())
-        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputAngles._coordsPointer.hasExtended())
 
         return protExtraction
 
     def test_Extraction_DownSampling(self):
         protExtraction = self._runExtraction(downFactor=2, text='DownSampling')
 
-        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        outputNoAngles = getattr(protExtraction[0], 'Subtomograms', None)
         self.assertTrue(outputNoAngles)
         self.assertTrue(outputNoAngles.hasCoordinates3D())
-        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputNoAngles._coordsPointer.hasExtended())
 
-        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        outputAngles = getattr(protExtraction[1], 'Subtomograms', None)
         self.assertTrue(outputAngles)
         self.assertTrue(outputAngles.hasCoordinates3D())
-        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputAngles._coordsPointer.hasExtended())
 
         return protExtraction
 
     def test_Extraction_All(self):
         protExtraction = self._runExtraction(tomoSource=1, downFactor=2, text='AllOptions')
 
-        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        outputNoAngles = getattr(protExtraction[0], 'Subtomograms', None)
         self.assertTrue(outputNoAngles)
         self.assertTrue(outputNoAngles.hasCoordinates3D())
-        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputNoAngles._coordsPointer.hasExtended())
 
-        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        outputAngles = getattr(protExtraction[1], 'Subtomograms', None)
         self.assertTrue(outputAngles)
         self.assertTrue(outputAngles.hasCoordinates3D())
-        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputAngles._coordsPointer.hasExtended())
 
         return protExtraction
 
