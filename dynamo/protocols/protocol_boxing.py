@@ -152,7 +152,16 @@ class DynamoBoxing(ProtTomoPicking):
 
     def launchDynamoBoxingStep(self):
 
-        tomoList = [tomo.clone() for tomo in self.inputTomograms.get().iterItems()]
+        tomoList = []
+        for tomo in self.inputTomograms.get().iterItems():
+            tomogram = tomo.clone()
+            tomoName = pwutils.removeBaseExt(tomo.getFileName())
+            outFile = self._getExtraPath(tomoName + '.txt')
+            if os.path.isfile(outFile):
+                tomogram.count = np.loadtxt(outFile, delimiter=' ').shape[0]
+            else:
+                tomogram.count = 0
+            tomoList.append(tomogram)
 
         tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "txt")
 

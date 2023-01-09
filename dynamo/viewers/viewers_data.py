@@ -71,14 +71,20 @@ class DynamoDataViewer(pwviewer.Viewer):
             outputCoords = obj
             tomos = outputCoords.getPrecedents()
 
-            tomoList = [item.clone() for item in tomos.iterItems()]
+            volIds = outputCoords.aggregate(["MAX", "COUNT"], "_volId", ["_volId"])
+            volIds = [(d['_volId'], d["COUNT"]) for d in volIds]
+
+            tomoList = []
+            for objId in volIds:
+                tomogram = tomos[objId[0]].clone()
+                tomogram.count = objId[1]
+                tomoList.append(tomogram)
 
             path = self.protocol._getExtraPath()
 
             tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
 
             listTomosFile = os.path.join(path, "tomos.vll")
-            catalogue = os.path.abspath(os.path.join(path, "tomos"))
 
             # Create list of tomos file
             tomoFid = open(listTomosFile, 'w')
@@ -89,56 +95,59 @@ class DynamoDataViewer(pwviewer.Viewer):
 
             for tomogram in tomoList:
                 outFileCoord = os.path.join(path, pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
-                outFileAngle = os.path.join(path, 'angles_' + pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
+                # outFileAngle = os.path.join(path, 'angles_' + pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
                 coords_tomo = []
-                angles_tomo = []
+                # angles_tomo = []
                 for coord in outputCoords.iterCoordinates(tomogram):
-                    coords_tomo.append(coord.getPosition(const.BOTTOM_LEFT_CORNER))
-                    angles_shifts = matrix2eulerAngles(coord.getMatrix())
-                    angles_tomo.append(angles_shifts[:3])
+                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
+                    # angles_shifts = matrix2eulerAngles(coord.getMatrix())
+                    # angles_tomo.append(angles_shifts[:3])
                 if coords_tomo:
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
-                    np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
+                    # np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
-            codeFile = os.path.join(path, 'coords2model.m')
-            # Create small program to tell Dynamo to save the coordinates in a Vesicle Model
-            contents = "h=waitbar(0,'Please wait, loading data in Dynamo...')\n" \
-                       "dcm -create %s -fromvll %s\n" \
-                       "path='%s'\n" \
-                       "catalogue=dread(['%s' '.ctlg'])\n" \
-                       "nVolumes=length(catalogue.volumes)\n" \
-                       "for idv=1:nVolumes\n" \
-                       "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
-                       "tomoIndex=catalogue.volumes{idv}.index\n" \
-                       "[~,tomoName,~]=fileparts(tomoPath)\n" \
-                       "coordFile=[path '/' tomoName '.txt']\n" \
-                       "if ~isfile(coordFile)\n" \
-                       "waitbar(idv/nVolumes,h)\n" \
-                       "continue\n" \
-                       "end\n" \
-                       "coords=readmatrix(coordFile,'Delimiter',' ')\n" \
-                       "vesicle=dmodels.vesicle()\n" \
-                       "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
-                       "vesicle.linkCatalogue('%s','i',tomoIndex, 's', 1)\n" \
-                       "vesicle.saveInCatalogue()\n" \
-                       "waitbar(idv/nVolumes,h)\n" \
-                       "end\n" \
-                       "delete(h)\n" \
-                       "exit\n" % (catalogue, listTomosFile, path, catalogue, catalogue)
 
-            codeFid = open(codeFile, 'w')
-            codeFid.write(contents)
-            codeFid.close()
-
-            args = ' %s' % codeFile
-            print(os.getcwd())
-            runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+            # Create a catalogue with the Coordinates to be visualized
+            catalogue = os.path.abspath(os.path.join(path, "tomos"))
+            if not os.path.isdir(catalogue):
+                codeFile = os.path.abspath(self.protocol._getExtraPath('writectlg.m'))
+                contents = "dcm -create %s -fromvll %s\n" \
+                           "path='%s'\n" \
+                           "catalogue=dread(['%s' '.ctlg'])\n" \
+                           "nVolumes=length(catalogue.volumes)\n" \
+                           "for idv=1:nVolumes\n" \
+                           "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
+                           "tomoIndex=catalogue.volumes{idv}.index\n" \
+                           "[~,tomoName,~]=fileparts(tomoPath)\n" \
+                           "coordFile=[path '/' tomoName '.txt']\n" \
+                           "if ~isfile(coordFile)\n" \
+                           "continue\n" \
+                           "end\n" \
+                           "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n" \
+                           "idm_vec=unique(coords_ids(:,4))'\n" \
+                           "for idm=idm_vec\n" \
+                           "model_name=['model_',num2str(idm)]\n" \
+                           "coords=coords_ids(coords_ids(:,4)==idm,1:4)\n" \
+                           "general=dmodels.general()\n" \
+                           "general.name=model_name\n" \
+                           "addPoint(general,coords(:,1:3),coords(:,4))\n" \
+                           "general.linkCatalogue('%s','i',tomoIndex,'s',1)\n" \
+                           "general.saveInCatalogue()\n" \
+                           "end\n" \
+                           "end\n" \
+                           "exit\n" % (catalogue, os.path.abspath(listTomosFile),
+                                       os.path.abspath(path), catalogue, catalogue)
+                codeFid = open(codeFile, 'w')
+                codeFid.write(contents)
+                codeFid.close()
+                args = ' %s' % codeFile
+                runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
             self.dlg = DynamoTomoDialog(self._tkRoot, path, provider=tomoProvider)
 
             import tkinter as tk
             frame = tk.Frame()
             if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
-                textFile2Coords(self.protocol, outputCoords.getPrecedents(), path)
+                textFile2Coords(self.protocol, outputCoords.getPrecedents(), path, directions=False)
 
         return views

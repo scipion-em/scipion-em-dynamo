@@ -25,17 +25,21 @@
 # *
 # **************************************************************************
 
+import os.path
 from os import rename, remove
 from os.path import join
 from shutil import copy
 from pwem import Domain
+from pwem.emlib.image import ImageHandler
 from pwem.objects.data import Volume, VolumeMask
 from pyworkflow import BETA
 from pyworkflow.object import Set
+from pyworkflow.protocol import GPU_LIST, USE_GPU
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
-from pyworkflow.utils.path import makePath
+from pyworkflow.utils.path import makePath, cleanPattern
 from dynamo import Plugin
 from dynamo.convert import writeVolume, writeSetOfVolumes, writeDynTable, readDynTable
+
 ProtTomoSubtomogramAveraging = Domain.importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
 AverageSubTomogram = Domain.importFromPlugin("tomo.objects", "AverageSubTomogram")
 SetOfSubTomograms = Domain.importFromPlugin("tomo.objects", "SetOfSubTomograms")
@@ -55,6 +59,14 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def _defineParams(self, form):
         form.addSection(label='Input subtomograms')
+        form.addHidden(USE_GPU, BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation.\
+                                   Select the one you want to use.")
+        form.addHidden(GPU_LIST, StringParam, default='0',
+                       expertLevel=LEVEL_ADVANCED,
+                       label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used")
         form.addParam('inputVolumes', PointerParam, pointerClass="SetOfSubTomograms", label='Set of subtomograms',
                       help="Set of subtomograms to align with dynamo")
         form.addParam('sym', StringParam, default='c1', label='Symmetry group',
@@ -218,6 +230,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'estimation provided for the first iteration of the round. The origin of the shifts will '
                            'change at each round. 4:  limits are understood from the estimation provided for the first '
                            'iteration')
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
 
@@ -234,6 +247,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         makePath(fnDirData)
         fnRoot = join(fnDirData, "particle_")
         inputVols = self.inputVolumes.get()
+        # writeSetOfEm(inputVols, fnRoot, self)
         writeSetOfVolumes(inputVols, fnRoot, 'id')
         pcaInt = int(self.pca.get())
         mraInt = int(self.mra.get())
@@ -272,7 +286,15 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                   "dvput('%s', 'low', '%s');" % (self.projName, self.low) + \
                   "dvput('%s', 'high', '%s');" % (self.projName, self.high) + \
                   "dvput('%s', 'lim', '%s');" % (self.projName, self.lim) + \
-                  "dvput('%s', 'limm', '%s');" % (self.projName, self.limm)
+                  "dvput('%s', 'limm', '%s');" % (self.projName, self.limm) + \
+                  "dvput('%s', 'destination', 'standalone');" % self.projName + \
+                  "dvput('%s', 'cores', %d);" % (self.projName, self.numberOfThreads.get()) + \
+                  "dvput('%s', 'mwa', 0);" % self.projName
+
+        if self.useGpu.get():
+            content += "dvput('%s', 'destination', 'standalone_gpu');" % (self.projName) + \
+                       "dvput('%s', 'gpu_motor', 'spp');" % (self.projName) + \
+                       "dvput('%s', 'gpu_identifier_set', %s);" % (self.projName, self.getGpuList())
 
         template = self.templateRef.get()
         fmask = self.fmask.get()
@@ -304,8 +326,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                                "'initial.tbl');"
                 if self.compensateMissingWedge.get():
                     content += "dynamo_table_randomize_azimuth('initial.tbl','o','initial.tbl');"
-                content += "dynamo_average('data','table','initial.tbl','o','template.mrc');"
-                content += "dvput('%s', 'template', 'template.mrc');" % self.projName
+                content += "dynamo_average('data','table','initial.tbl','o','template.em');"
+                content += "dvput('%s', 'template', 'template.em');" % self.projName
                 content += "dvput('%s', 'table', 'initial.tbl');" % self.projName
 
             else:
@@ -317,7 +339,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                     if self.compensateMissingWedge.get():
                         content += "dynamo_table_randomize_azimuth('initial.tbl','o','initial.tbl');"
                     content += "dynamo_average('data','table','initial.tbl','o'," \
-                               "'templates/template_initial_ref_%03d.mrc');" % int(ix+1)
+                               "'templates/template_initial_ref_%03d.em');" % int(ix+1)
                     copy(join(self._getExtraPath(), 'initial.tbl'),
                          join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % int(ix+1)))
                 content += "dvput('%s', 'template', 'templates');" % self.projName
@@ -350,12 +372,16 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             content += "dvput('%s', 'smask', 'smask.mrc');" % self.projName
 
         content += "dynamo_data_format('templates/template_initial_ref_*.mrc'," \
-                   "'templates','modus','convert','extension','.em');"
+                   "'templates','modus','convert','extension','.em');" \
+                   "dynamo_data_format('data/particle_*.mrc'," \
+                   "'data','modus','convert','extension','.em');"
 
         fhCommands.write(content)
         fhCommands.close()
 
         Plugin.runDynamo(self, 'commands1.doc', cwd=self._getExtraPath())
+
+        cleanPattern(self._getExtraPath(join('data', 'particle_*.mrc')))
 
         if mraInt == 1:
             if self.generateTemplate.get() == 0:
@@ -363,9 +389,12 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             else:
                 numberOfrefs = self.nref.get()
             for iref in range(numberOfrefs):
-                rename(join(self._getExtraPath(), 'templates/particle_%05d.em' % int(iref+1)),
-                       join(self._getExtraPath(), 'templates/template_initial_ref_%03d.em' % int(iref+1)))
-                remove(join(self._getExtraPath(), 'templates/template_initial_ref_%03d.mrc' % int(iref+1)))
+                # TODO: Check if particle_%05d.em files are saved at some point in templates folder
+                # TODO: or if we are trying to convert templates/template_initial_ref_%03d.mrc to em format
+                if os.path.isfile(self._getExtraPath('templates/particle_%05d.em' % int(iref+1))):
+                    rename(join(self._getExtraPath(), 'templates/particle_%05d.em' % int(iref+1)),
+                           join(self._getExtraPath(), 'templates/template_initial_ref_%03d.em' % int(iref+1)))
+                    remove(join(self._getExtraPath(), 'templates/template_initial_ref_%03d.mrc' % int(iref+1)))
 
     def alignStep(self):
         fhCommands2 = open(self._getExtraPath("commands2.doc"), 'w')
