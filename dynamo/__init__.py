@@ -49,13 +49,15 @@ class Plugin(pwem.Plugin):
         environ = pwutils.Environ(os.environ)
         dyn_home = cls.getHome()
         # For GPU, we need to add to LD_LIBRARY_PATH the path to Cuda/lib
+        paths = (dyn_home + '/MCRLinux/runtime/glnxa64',
+                 dyn_home + '/MCRLinux/bin/glnxa64',
+                 dyn_home + '/MCRLinux/sys/os/glnxa64',
+                 dyn_home + '/MCRLinux/sys/opengl/lib/glnxa64',
+                 pwem.Config.CUDA_LIB)
+
         environ.update({
             'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
-            'LD_LIBRARY_PATH': ":".join(dyn_home + '/MCRLinux/runtime/glnxa64',
-                                        dyn_home + '/MCRLinux/bin/glnxa64',
-                                        dyn_home + '/MCRLinux/sys/os/glnxa64',
-                                        dyn_home + '/MCRLinux/sys/opengl/lib/glnxa64',
-                                        pwem.Config.CUDA_LIB),
+            'LD_LIBRARY_PATH': ":".join(paths),
             'DYNAMO_ROOT': dyn_home
         }, position=pwutils.Environ.BEGIN)
         return environ
