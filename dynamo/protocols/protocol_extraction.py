@@ -173,7 +173,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                 coordSet = self.lines[ind]
                 outputSet = self.readSetOfSubTomograms(cropPath, self.outputSubTomogramsSet, coordSet)
 
-        self._defineOutputs(outputSetOfSubtomogram=outputSet)
+        self._defineOutputs(Subtomograms=outputSet)
         self._defineSourceRelation(self.inputCoordinates, outputSet)
 
     # --------------------------- DEFINE utils functions ----------------------
