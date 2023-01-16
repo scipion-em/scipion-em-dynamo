@@ -106,43 +106,6 @@ class DynamoDataViewer(pwviewer.Viewer):
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
                     # np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
-
-            # Create a catalogue with the Coordinates to be visualized
-            catalogue = os.path.abspath(os.path.join(path, "tomos"))
-            if not os.path.isdir(catalogue):
-                codeFile = os.path.abspath(self.protocol._getExtraPath('writectlg.m'))
-                contents = "dcm -create %s -fromvll %s\n" \
-                           "path='%s'\n" \
-                           "catalogue=dread(['%s' '.ctlg'])\n" \
-                           "nVolumes=length(catalogue.volumes)\n" \
-                           "for idv=1:nVolumes\n" \
-                           "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
-                           "tomoIndex=catalogue.volumes{idv}.index\n" \
-                           "[~,tomoName,~]=fileparts(tomoPath)\n" \
-                           "coordFile=[path '/' tomoName '.txt']\n" \
-                           "if ~isfile(coordFile)\n" \
-                           "continue\n" \
-                           "end\n" \
-                           "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n" \
-                           "idm_vec=unique(coords_ids(:,4))'\n" \
-                           "for idm=idm_vec\n" \
-                           "model_name=['model_',num2str(idm)]\n" \
-                           "coords=coords_ids(coords_ids(:,4)==idm,1:4)\n" \
-                           "general=dmodels.general()\n" \
-                           "general.name=model_name\n" \
-                           "addPoint(general,coords(:,1:3),coords(:,4))\n" \
-                           "general.linkCatalogue('%s','i',tomoIndex,'s',1)\n" \
-                           "general.saveInCatalogue()\n" \
-                           "end\n" \
-                           "end\n" \
-                           "exit\n" % (catalogue, os.path.abspath(listTomosFile),
-                                       os.path.abspath(path), catalogue, catalogue)
-                codeFid = open(codeFile, 'w')
-                codeFid.write(contents)
-                codeFid.close()
-                args = ' %s' % codeFile
-                runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
-
             self.dlg = DynamoTomoDialog(self._tkRoot, path, provider=tomoProvider)
 
             import tkinter as tk
