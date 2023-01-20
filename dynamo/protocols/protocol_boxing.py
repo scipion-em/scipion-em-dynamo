@@ -39,7 +39,7 @@ import tomo.constants as const
 
 from dynamo import Plugin
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo.convert import textFile2Coords, matrix2eulerAngles
+from dynamo.convert import textFile2Coords
 
 class DynamoBoxing(ProtTomoPicking):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be

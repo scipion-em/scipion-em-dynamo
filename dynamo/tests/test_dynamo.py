@@ -436,9 +436,10 @@ class TestDynImportSubTomograms(BaseTest):
         self.assertTrue(output.getFirstItem().getClassId() == 1)
         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
-        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER), 175, delta=1)
-        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER), 134, delta=1)
-        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER), 115, delta=1)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getX(const.SCIPION), -336.89, delta=1)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getY(const.SCIPION), -377.65, delta=1)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getZ(const.SCIPION), -140.26, delta=1)
+
 
 class TestDynamoCoordsToModel(TestDynamoBase):
     '''This class checks if the protocol to convert a SetOfCoordinates3D to a Dynamo

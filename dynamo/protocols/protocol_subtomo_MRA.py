@@ -30,7 +30,6 @@ from os import rename, remove
 from os.path import join
 from shutil import copy
 from pwem import Domain
-from pwem.emlib.image import ImageHandler
 from pwem.objects.data import Volume, VolumeMask
 from pyworkflow import BETA
 from pyworkflow.object import Set
