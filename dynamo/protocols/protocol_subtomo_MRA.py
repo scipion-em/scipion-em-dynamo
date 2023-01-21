@@ -29,20 +29,20 @@ import os.path
 from os import rename, remove
 from os.path import join
 from shutil import copy
-from pwem import Domain
 from pwem.objects.data import Volume, VolumeMask
 from pyworkflow import BETA
-from pyworkflow.object import Set
+from pyworkflow.object import Set, String
 from pyworkflow.protocol import GPU_LIST, USE_GPU
-from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, FloatParam, LEVEL_ADVANCED, \
+    NumericListParam, Form
 from pyworkflow.utils.path import makePath, cleanPattern
 from dynamo import Plugin
-from dynamo.convert import writeVolume, writeSetOfVolumes, writeDynTable, readDynTable
+from dynamo.convert import convertOrLinkVolume, writeSetOfVolumes, writeDynTable, readDynTable
 
-ProtTomoSubtomogramAveraging = Domain.importFromPlugin("tomo.protocols.protocol_base", "ProtTomoSubtomogramAveraging")
-AverageSubTomogram = Domain.importFromPlugin("tomo.objects", "AverageSubTomogram")
-SetOfSubTomograms = Domain.importFromPlugin("tomo.objects", "SetOfSubTomograms")
-SubTomogram = Domain.importFromPlugin("tomo.objects", "SubTomogram")
+DYNAMO_ALIGNMENT_PROJECT = 'dynamoAlignmentProject'
+
+from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
+from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SubTomogram
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
@@ -51,12 +51,18 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     _label = 'Subtomogram alignment'
     _devStatus = BETA
 
+    @classmethod
+    def getUrl(cls):
+        return "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Alignment_project"
+
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)
 
+
+
     # --------------------------- DEFINE param functions ------------------------
 
-    def _defineParams(self, form):
+    def _defineParams(self, form:Form):
         form.addSection(label='Input subtomograms')
         form.addHidden(USE_GPU, BooleanParam, default=True,
                        label="Use GPU for execution",
@@ -68,10 +74,17 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                        help="Add a list of GPU devices that can be used")
         form.addParam('inputVolumes', PointerParam, pointerClass="SetOfSubTomograms", label='Set of subtomograms',
                       help="Set of subtomograms to align with dynamo")
+
+        form.addBooleanParam('useDynamoGui', 'Launch dynamo GUI', help="Launches Dynamo's alignment project GUI. Do not 'Run' the project,"
+                                                                       " Scipion will do it for you.", default=False)
         form.addParam('sym', StringParam, default='c1', label='Symmetry group',
                       help="Specify the article's symmetry. Symmetrization is applied at the beginning of the round to "
                            "the input reference.")
-        form.addParam('numberOfIters', IntParam, label='Iterations', default=5, help="Number of iterations per round")
+        form.addParam('numberOfIters', NumericListParam, label='Iterations', default=5, help="Number of iterations per round")
+        form.addParam('dim', NumericListParam, label='Particle dimensions', default=0,
+                      help="Leave 0 to use the size of your particle; If you put lower value the particles will be "
+                           "downsampled for the particular round. This will speed up the process. E.g.: 64 128 128")
+
         form.addParam('pca', BooleanParam, label='Perform PCA', default=False,
                       help="If selected, principal component analysis alignment is performed")
 
@@ -108,18 +121,18 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'FSC (smask)')
 
         form.addSection(label='Angular scanning')
-        form.addParam('cr', IntParam, label='Cone range', default=360,
+        form.addParam('cr', NumericListParam, label='Cone range', default=360,
                       help="The first two Euler angles are used to define the orientation of the vertical axis of the "
                            "protein. First Euler angle (tdrot) rotates the template around its z axis. Second Euler "
                            "angle (tilt) rotates the template around its x axis.Dynamo scans for this axis inside a "
                            "cone: The 'cone_range' parameter defines the angular aperture of this cone.360 degrees is "
                            "thus the value for a global scan. To skip the part of the angular search that looks for "
                            "orientations, you have to set 'cone range' to 0, and 'cone_sampling' to 1")
-        form.addParam('cs', IntParam, label='Cone sampling', default=60,
+        form.addParam('cs', NumericListParam, label='Cone sampling', default=60,
                       help="This parameter expresses the discretization inside this cone. The sampling is given in "
                            "degrees, and corresponds to a representative angular distance between two neighboring "
                            "orientations inside the cone.")
-        form.addParam('cf', IntParam, label='Cone flip', default=0, expertLevel=LEVEL_ADVANCED,
+        form.addParam('cf', NumericListParam, label='Cone flip', default=0, expertLevel=LEVEL_ADVANCED,
                       help="Generates a mirrored scanning geometry: the 'cone' of directions is complemented with the "
                            "diametrally oposed cone. This is useful when averaging elongated particles in the case in "
                            "which the direction of each one is not certain, i.e., the initial table catches the overall"
@@ -136,19 +149,19 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            "behaviour (no peak quality control, default) any integer  : degrees that define the peak. A"
                            " maximum occurring within this distance to the boundary of the defined cone will be "
                            "discarded.")
-        form.addParam('inplane_range', IntParam, label='Inplane rotation range', default=360,
+        form.addParam('inplane_range', NumericListParam, label='Inplane rotation range', default=360,
                       help='The third Euler angle ("narot") defines rotations about the new axis of the reference. 360 '
                            'degrees is the value for a global scan. To skip the part of the angular search that looks '
                            'for azimuthal rotations , you have to set 1)  "inplane range" to zero, and 2)  '
                            '"inplane_sampling" to 1. Likewise,  to skip the part of the angular search that looks for '
                            'orientations, you have to manipulate the "cone" parameters: 1)  "cone range" to zero, and 2'
                            ') "cone_sampling" to 1.')
-        form.addParam('inplane_sampling', IntParam, label='Inplane rotation sampling', default=45,
+        form.addParam('inplane_sampling', NumericListParam, label='Inplane rotation sampling', default=45,
                       help='Parameter "inplane_sampling" is associated with the "narot" angle (New Axis ROTation). 1) '
                            'the axis of the template is rotated to a new orientation (defined by "tdrot" and "tilt"). 2'
                            ') the rotated template rotates again on its new axis (an "inplane" rotation). "inplane_'
                            'sampling" defines the angular interval (in degrees) between two of these inplane rotations')
-        form.addParam('inplane_flip', IntParam, label='Inplane flip', default=0, expertLevel=LEVEL_ADVANCED,
+        form.addParam('inplane_flip', NumericListParam, label='Inplane flip', default=0, expertLevel=LEVEL_ADVANCED,
                       help='Flips the set of inplane rotations. The set of inplane rotations to scan will be the '
                            'original set plus the flipped orientations.This is useful when the particles have a '
                            'directionality, but it is not very well defined. Values 0  :  no flip (default) 1  :  flips'
@@ -234,12 +247,39 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     # --------------------------- INSERT steps functions --------------------------------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('alignStep')
-        self._insertFunctionStep('createOutputStep')
-        self._insertFunctionStep('closeSetsStep')
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.alignStep)
+        self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.closeSetsStep)
 
     # --------------------------- STEPS functions -------------------------------
+
+    def getRoundParams(self, dynamoParamName, param: String, projectName=DYNAMO_ALIGNMENT_PROJECT):
+        """ Returns the dynamo command for any of the params that can be specified in the rounds.
+        See --> https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Starters_guide#Alignment_projects
+
+        :param dynamoParamName: Dynamo's parameter name
+        :param param: Scipion's param containing the values for the rounds
+        :param projectName: Optional, defaults to DYNAMO_ALIGNMENT_PROJECT. Name of the dynamo alignment project
+
+        :return the dvput commands as a string
+        """
+
+        # Get the values as list
+        values = param.getListFromValues()
+
+        command = ""
+
+        for index, value in enumerate(values):
+
+            finalParamName = dynamoParamName
+
+            if index != 0:
+                finalParamName += '_r' + str(index+1)
+
+            command += "dvput('%s', '%s', '%s');" % (projectName, finalParamName, value)
+
+        return command
 
     def convertInputStep(self):
         fnDirData = self._getExtraPath("data")
@@ -251,73 +291,81 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         pcaInt = int(self.pca.get())
         mraInt = int(self.mra.get())
         ccmatrixInt = int(self.ccmatrix.get())
-        dim, _, _ = self.inputVolumes.get().getDimensions()
-        self.projName = 'dynamoAlignmentProject'
+
+        if self.dim.get() != 0:
+            dim = self.dim
+        else:
+            dim, _, _ = self.inputVolumes.get().getDimensions()
+            dim = String(dim)
+
         fnTable = self._getExtraPath("initial.tbl")
         fhTable = open(fnTable, 'w')
         writeDynTable(fhTable, inputVols)
         fhTable.close()
+
+        # NOTE for rounds: Daniel thnks there ar up to 8 rounds. round's params can be specified like:
+        # dvput('dynamoAlignmentProject', 'cr_r2', '360');  --> note "_r2" for round 2
         fhCommands = open(self._getExtraPath("commands1.doc"), 'w')
-        content = "dcp.new('%s','data','data','gui',0);" % self.projName + \
-                  "dvput('%s', 'dim', '%s');" % (self.projName, dim) + \
-                  "dvput('%s', 'sym', '%s');" % (self.projName, self.sym) + \
-                  "dvput('%s', 'ite', '%s');" % (self.projName, self.numberOfIters) + \
-                  "dvput('%s', 'mra', %s);" % (self.projName, mraInt) + \
-                  "dvput('%s', 'pcas', %d);" % (self.projName, pcaInt) + \
-                  "dvput('%s', 'cr', '%s');" % (self.projName, self.cr) + \
-                  "dvput('%s', 'cs', '%s');" % (self.projName, self.cs) + \
-                  "dvput('%s', 'cf', '%s');" % (self.projName, self.cf) + \
-                  "dvput('%s', 'ccp', '%s');" % (self.projName, self.ccp) + \
-                  "dvput('%s', 'rf', '%s');" % (self.projName, self.rf) + \
-                  "dvput('%s', 'rff', '%s');" % (self.projName, self.rff) + \
-                  "dvput('%s', 'ir', '%s');" % (self.projName, self.inplane_range) + \
-                  "dvput('%s', 'is', '%s');" % (self.projName, self.inplane_sampling) + \
-                  "dvput('%s', 'if', '%s');" % (self.projName, self.inplane_flip) + \
-                  "dvput('%s', 'icp', '%s');" % (self.projName, self.inplane_check_peak) + \
-                  "dvput('%s', 'thr', %s);" % (self.projName, self.threshold) + \
-                  "dvput('%s', 'thrm', %s);" % (self.projName, self.thresholdMode) + \
-                  "dvput('%s', 'thr2', %s);" % (self.projName, self.threshold2) + \
-                  "dvput('%s', 'thr2m', %s);" % (self.projName, self.thresholdMode2) + \
-                  "dvput('%s', 'ccms', %s);" % (self.projName, ccmatrixInt) + \
-                  "dvput('%s', 'ccmt', '%s');" % (self.projName, self.ccmatrixType) + \
-                  "dvput('%s', 'batch', '%s');" % (self.projName, self.ccmatrixBatch) +  \
-                  "dvput('%s', 'stm', '%s');" % (self.projName, self.separation) + \
-                  "dvput('%s', 'low', '%s');" % (self.projName, self.low) + \
-                  "dvput('%s', 'high', '%s');" % (self.projName, self.high) + \
-                  "dvput('%s', 'lim', '%s');" % (self.projName, self.lim) + \
-                  "dvput('%s', 'limm', '%s');" % (self.projName, self.limm) + \
-                  "dvput('%s', 'destination', 'standalone');" % self.projName + \
-                  "dvput('%s', 'cores', %d);" % (self.projName, self.numberOfThreads.get()) + \
-                  "dvput('%s', 'mwa', 0);" % self.projName
+        content = "dcp.new('%s','data','data','gui',0);" % DYNAMO_ALIGNMENT_PROJECT + \
+                  self.getRoundParams("dim", dim) + \
+                  "dvput('%s', 'sym', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.sym) + \
+                  self.getRoundParams("ite", self.numberOfIters) + \
+                  "dvput('%s', 'mra', %s);" % (DYNAMO_ALIGNMENT_PROJECT, mraInt) + \
+                  "dvput('%s', 'pcas', %d);" % (DYNAMO_ALIGNMENT_PROJECT, pcaInt) + \
+                  self.getRoundParams("cr", self.cr) + \
+                  self.getRoundParams("cs", self.cs) + \
+                  self.getRoundParams("cf", self.cf) + \
+                  "dvput('%s', 'ccp', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.ccp) + \
+                  "dvput('%s', 'rf', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.rf) + \
+                  "dvput('%s', 'rff', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.rff) + \
+                  self.getRoundParams("ir", self.inplane_range) + \
+                  self.getRoundParams("is", self.inplane_sampling) + \
+                  self.getRoundParams("if", self.inplane_flip) + \
+                  "dvput('%s', 'icp', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.inplane_check_peak) + \
+                  "dvput('%s', 'thr', %s);" % (DYNAMO_ALIGNMENT_PROJECT, self.threshold) + \
+                  "dvput('%s', 'thrm', %s);" % (DYNAMO_ALIGNMENT_PROJECT, self.thresholdMode) + \
+                  "dvput('%s', 'thr2', %s);" % (DYNAMO_ALIGNMENT_PROJECT, self.threshold2) + \
+                  "dvput('%s', 'thr2m', %s);" % (DYNAMO_ALIGNMENT_PROJECT, self.thresholdMode2) + \
+                  "dvput('%s', 'ccms', %s);" % (DYNAMO_ALIGNMENT_PROJECT, ccmatrixInt) + \
+                  "dvput('%s', 'ccmt', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.ccmatrixType) + \
+                  "dvput('%s', 'batch', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.ccmatrixBatch) +  \
+                  "dvput('%s', 'stm', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.separation) + \
+                  "dvput('%s', 'low', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.low) + \
+                  "dvput('%s', 'high', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.high) + \
+                  "dvput('%s', 'lim', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.lim) + \
+                  "dvput('%s', 'limm', '%s');" % (DYNAMO_ALIGNMENT_PROJECT, self.limm) + \
+                  "dvput('%s', 'destination', 'standalone');" % DYNAMO_ALIGNMENT_PROJECT + \
+                  "dvput('%s', 'cores', %d);" % (DYNAMO_ALIGNMENT_PROJECT, self.numberOfThreads.get()) + \
+                  "dvput('%s', 'mwa', 0);" % DYNAMO_ALIGNMENT_PROJECT
 
         if self.useGpu.get():
-            content += "dvput('%s', 'destination', 'standalone_gpu');" % (self.projName) + \
-                       "dvput('%s', 'gpu_motor', 'spp');" % (self.projName) + \
-                       "dvput('%s', 'gpu_identifier_set', %s);" % (self.projName, self.getGpuList())
+            content += "dvput('%s', 'destination', 'standalone_gpu');" % (DYNAMO_ALIGNMENT_PROJECT) + \
+                       "dvput('%s', 'gpu_motor', 'spp');" % (DYNAMO_ALIGNMENT_PROJECT) + \
+                       "dvput('%s', 'gpu_identifier_set', %s);" % (DYNAMO_ALIGNMENT_PROJECT, self.getGpuList())
 
         template = self.templateRef.get()
         fmask = self.fmask.get()
         if template is not None:
             if isinstance(template, Volume):
-                writeVolume(template, join(self._getExtraPath(), 'template'))
-                content += "dvput('%s', 'template', 'template.mrc');" % self.projName
-                content += "dvput('%s', 'table', 'initial.tbl');" % self.projName
+                convertOrLinkVolume(template, join(self._getExtraPath(), 'template.mrc'))
+                content += "dvput('%s', 'template', 'template.mrc');" % DYNAMO_ALIGNMENT_PROJECT
+                content += "dvput('%s', 'table', 'initial.tbl');" % DYNAMO_ALIGNMENT_PROJECT
             else:
                 makePath(self._getExtraPath('templates'))
                 writeSetOfVolumes(template, join(self._getExtraPath(), 'templates/template_initial_ref_'), 'ix')
                 for ix, template1 in enumerate(self.templateRef.get().iterItems()):
                     copy(join(self._getExtraPath(), 'initial.tbl'),
                          join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % int(ix+1)))
-                content += "dvput('%s', 'template', 'templates');" % self.projName
-                content += "dvput('%s', 'table', 'templates');" % self.projName
-                content += "dvput('%s', 'nref', '%d');" % (self.projName, self.nref)
+                content += "dvput('%s', 'template', 'templates');" % DYNAMO_ALIGNMENT_PROJECT
+                content += "dvput('%s', 'table', 'templates');" % DYNAMO_ALIGNMENT_PROJECT
+                content += "dvput('%s', 'nref', '%d');" % (DYNAMO_ALIGNMENT_PROJECT, self.nref)
                 if fmask is None:
                         makePath(self._getExtraPath('fmasks'))
                         dimsf = inputVols.getFirstItem().getDim()
                         sizef = template.getSize()
                         content += "dynamo_write_multireference(ones(%d,%d,%d),'fmask','fmasks','refs',1:%d);" \
                                    % (dimsf[0], dimsf[1], dimsf[2], sizef)
-                        content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
+                        content += "dvput('%s', 'fmask', 'fmasks');" % DYNAMO_ALIGNMENT_PROJECT
         else:
             if not self.mra.get():
                 if self.useRandomTable.get():
@@ -326,8 +374,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 if self.compensateMissingWedge.get():
                     content += "dynamo_table_randomize_azimuth('initial.tbl','o','initial.tbl');"
                 content += "dynamo_average('data','table','initial.tbl','o','template.em');"
-                content += "dvput('%s', 'template', 'template.em');" % self.projName
-                content += "dvput('%s', 'table', 'initial.tbl');" % self.projName
+                content += "dvput('%s', 'template', 'template.em');" % DYNAMO_ALIGNMENT_PROJECT
+                content += "dvput('%s', 'table', 'initial.tbl');" % DYNAMO_ALIGNMENT_PROJECT
 
             else:
                 makePath(self._getExtraPath('templates'))
@@ -341,34 +389,34 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                                "'templates/template_initial_ref_%03d.em');" % int(ix+1)
                     copy(join(self._getExtraPath(), 'initial.tbl'),
                          join(self._getExtraPath(), 'templates/table_initial_ref_%03d.tbl' % int(ix+1)))
-                content += "dvput('%s', 'template', 'templates');" % self.projName
-                content += "dvput('%s', 'table', 'templates');" % self.projName
-                content += "dvput('%s', 'nref', '%d');" % (self.projName, self.nref)
+                content += "dvput('%s', 'template', 'templates');" % DYNAMO_ALIGNMENT_PROJECT
+                content += "dvput('%s', 'table', 'templates');" % DYNAMO_ALIGNMENT_PROJECT
+                content += "dvput('%s', 'nref', '%d');" % (DYNAMO_ALIGNMENT_PROJECT, self.nref)
                 if fmask is None:
                         makePath(self._getExtraPath('fmasks'))
                         dimsf = inputVols.getFirstItem().getDim()
                         sizef = self.nref.get()
                         content += "dynamo_write_multireference(ones(%d,%d,%d),'fmask','fmasks','refs',1:%d);" \
                                    % (dimsf[0], dimsf[1], dimsf[2], sizef)
-                        content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
+                        content += "dvput('%s', 'fmask', 'fmasks');" % DYNAMO_ALIGNMENT_PROJECT
 
         if self.mask.get() is not None:
-            writeVolume(self.mask.get(), join(self._getExtraPath(), 'mask'))
-            content += "dvput('%s', 'mask', 'mask.mrc');" % self.projName
+            convertOrLinkVolume(self.mask.get(), join(self._getExtraPath(), 'mask.mrc'))
+            content += "dvput('%s', 'mask', 'mask.mrc');" % DYNAMO_ALIGNMENT_PROJECT
         if self.cmask.get() is not None:
-            writeVolume(self.cmask.get(), join(self._getExtraPath(), 'cmask'))
-            content += "dvput('%s', 'cmask', 'cmask.mrc');" % self.projName
+            convertOrLinkVolume(self.cmask.get(), join(self._getExtraPath(), 'cmask.mrc'))
+            content += "dvput('%s', 'cmask', 'cmask.mrc');" % DYNAMO_ALIGNMENT_PROJECT
         if fmask is not None:
             if isinstance(fmask, Volume) or isinstance(fmask, SubTomogram) or isinstance(fmask, VolumeMask):
-                writeVolume(fmask, join(self._getExtraPath(), 'fmask'))
-                content += "dvput('%s', 'fmask', 'fmask.mrc');" % self.projName
+                convertOrLinkVolume(fmask, join(self._getExtraPath(), 'fmask.mrc'))
+                content += "dvput('%s', 'fmask', 'fmask.mrc');" % DYNAMO_ALIGNMENT_PROJECT
             else:
                 makePath(self._getExtraPath('fmasks'))
                 writeSetOfVolumes(fmask, join(self._getExtraPath(), 'fmasks/fmask_initial_ref_'), 'ix')
-                content += "dvput('%s', 'fmask', 'fmasks');" % self.projName
+                content += "dvput('%s', 'fmask', 'fmasks');" % DYNAMO_ALIGNMENT_PROJECT
         if self.smask.get() is not None:
-            writeVolume(self.smask.get(), join(self._getExtraPath(), 'smask'))
-            content += "dvput('%s', 'smask', 'smask.mrc');" % self.projName
+            convertOrLinkVolume(self.smask.get(), join(self._getExtraPath(), 'smask.mrc'))
+            content += "dvput('%s', 'smask', 'smask.mrc');" % DYNAMO_ALIGNMENT_PROJECT
 
         content += "dynamo_data_format('templates/template_initial_ref_*.mrc'," \
                    "'templates','modus','convert','extension','.em');" \
@@ -395,29 +443,40 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            join(self._getExtraPath(), 'templates/template_initial_ref_%03d.em' % int(iref+1)))
                     remove(join(self._getExtraPath(), 'templates/template_initial_ref_%03d.mrc' % int(iref+1)))
 
+    def showDynamoGUI(self):
+        fhCommands2 = open(self._getExtraPath("showProject.doc"), 'w')
+        content2 = "dcp '%s';" % DYNAMO_ALIGNMENT_PROJECT
+        fhCommands2.write(content2)
+        fhCommands2.close()
+        Plugin.runDynamo(self, 'showProject.doc', cwd=self._getExtraPath())
+
     def alignStep(self):
+
+        if self.useDynamoGui:
+            self.showDynamoGUI()
+
         fhCommands2 = open(self._getExtraPath("commands2.doc"), 'w')
-        content2 = "dvcheck('%s');" % self.projName
-        content2 += "dvunfold('%s');dynamo_execute_project %s" % (self.projName, self.projName)
+        content2 = "dvcheck('%s');" % DYNAMO_ALIGNMENT_PROJECT
+        content2 += "dvunfold('%s');dynamo_execute_project %s" % (DYNAMO_ALIGNMENT_PROJECT, DYNAMO_ALIGNMENT_PROJECT)
         fhCommands2.write(content2)
         fhCommands2.close()
         Plugin.runDynamo(self, 'commands2.doc', cwd=self._getExtraPath())
 
     def createOutputStep(self):
-        self.projName = 'dynamoAlignmentProject'
+
         niters = int(self.numberOfIters.get())
         if self.mra.get() == 0:
             self.subtomoSet = self._createSetOfSubTomograms()
             inputSet = self.inputVolumes.get()
             self.subtomoSet.copyInfo(inputSet)
             self.fhTable = open(self._getExtraPath('%s/results/ite_%04d/averages/refined_table_ref_001_ite_%04d.tbl')
-                                % (self.projName, niters, niters), 'r')
+                                % (DYNAMO_ALIGNMENT_PROJECT, niters, niters), 'r')
             self.subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
             self.fhTable.close()
             averageSubTomogram = AverageSubTomogram()
             averageSubTomogram.setFileName(
                 self._getExtraPath('%s/results/ite_%04d/averages/average_ref_001_ite_%04d.em')
-                % (self.projName, niters, niters))
+                % (DYNAMO_ALIGNMENT_PROJECT, niters, niters))
             averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
             self._defineOutputs(outputSubtomograms=self.subtomoSet)
             self._defineSourceRelation(self.inputVolumes, self.subtomoSet)
@@ -425,7 +484,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
         else:
             fhSurvivRefs = open(self._getExtraPath('%s/results/ite_%04d/currently_surviving_references_ite_%04d.txt')
-                                % (self.projName, niters, niters), 'r')
+                                % (DYNAMO_ALIGNMENT_PROJECT, niters, niters), 'r')
             nline = next(fhSurvivRefs).rstrip()
             for nref in range(len(nline.split())):
                 ref = int(nline.split()[nref])
@@ -434,13 +493,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 subtomoSet.copyInfo(inputSet)
                 self.fhTable = open(
                     self._getExtraPath('%s/results/ite_%04d/averages/refined_table_ref_%03d_ite_%04d.tbl') %
-                    (self.projName, niters, ref, niters), 'r')
+                    (DYNAMO_ALIGNMENT_PROJECT, niters, ref, niters), 'r')
                 subtomoSet.copyItems(inputSet, updateItemCallback=self._updateItem)
                 self.fhTable.close()
                 averageSubTomogram = AverageSubTomogram()
                 averageSubTomogram.setFileName(
                     self._getExtraPath('%s/results/ite_%04d/averages/average_ref_%03d_ite_%04d.em')
-                    % (self.projName, niters, ref, niters))
+                    % (DYNAMO_ALIGNMENT_PROJECT, niters, ref, niters))
                 averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
 
                 name = 'outputSubtomogramsRef%s' % str(ref)
