@@ -49,12 +49,12 @@ def convertOrLinkVolume(inVolume:Volume, outVolume:str):
 
     inFn = inVolume.getFileName()
 
-    # If compatible with dynamo
+    # If compatible with dynamo. Attention!! Assuming is not a stack of mrc volumes!!
     if getFileFormat(inFn) == MRC:
         pwutils.createLink(os.path.abspath(inFn), outVolume)
     else:
         ih = ImageHandler()
-        ih.convert(inFn, outVolume)
+        ih.convert(inVolume, outVolume)
 
 def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
 

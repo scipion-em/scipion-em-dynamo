@@ -29,6 +29,7 @@ import os.path
 from os import rename, remove
 from os.path import join
 from shutil import copy
+
 from pwem.objects.data import Volume, VolumeMask
 from pyworkflow import BETA
 from pyworkflow.object import Set, String
@@ -38,11 +39,11 @@ from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, Str
 from pyworkflow.utils.path import makePath, cleanPattern
 from dynamo import Plugin
 from dynamo.convert import convertOrLinkVolume, writeSetOfVolumes, writeDynTable, readDynTable
-
-DYNAMO_ALIGNMENT_PROJECT = 'dynamoAlignmentProject'
-
 from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SubTomogram
+
+DEFAULT_DIM = "0"
+DYNAMO_ALIGNMENT_PROJECT = 'dynamoAlignmentProject'
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
@@ -81,8 +82,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       help="Specify the article's symmetry. Symmetrization is applied at the beginning of the round to "
                            "the input reference.")
         form.addParam('numberOfIters', NumericListParam, label='Iterations', default=5, help="Number of iterations per round")
-        form.addParam('dim', NumericListParam, label='Particle dimensions', default=0,
-                      help="Leave 0 to use the size of your particle; If you put lower value the particles will be "
+        form.addParam('dim', NumericListParam, label='Particle dimensions', default=DEFAULT_DIM,
+                      help="Leave 0 to use the size of your particle; If you put a lower value the particles will be "
                            "downsampled for the particular round. This will speed up the process. E.g.: 64 128 128")
 
         form.addParam('pca', BooleanParam, label='Perform PCA', default=False,
@@ -292,7 +293,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         mraInt = int(self.mra.get())
         ccmatrixInt = int(self.ccmatrix.get())
 
-        if self.dim.get() != 0:
+        if self.dim.get() != DEFAULT_DIM:
             dim = self.dim
         else:
             dim, _, _ = self.inputVolumes.get().getDimensions()
@@ -303,7 +304,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         writeDynTable(fhTable, inputVols)
         fhTable.close()
 
-        # NOTE for rounds: Daniel thnks there ar up to 8 rounds. round's params can be specified like:
+        # NOTE for rounds: There are up to 8 rounds. round's params can be specified like:
         # dvput('dynamoAlignmentProject', 'cr_r2', '360');  --> note "_r2" for round 2
         fhCommands = open(self._getExtraPath("commands1.doc"), 'w')
         content = "dcp.new('%s','data','data','gui',0);" % DYNAMO_ALIGNMENT_PROJECT + \
