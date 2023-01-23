@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 import logging
+
 logger = logging.getLogger(__file__)
 import math, os
 import numpy as np
@@ -43,7 +44,7 @@ import tomo.constants as const
 from dynamo import Plugin
 
 
-def convertOrLinkVolume(inVolume:Volume, outVolume:str):
+def convertOrLinkVolume(inVolume: Volume, outVolume: str):
     """Converts the inVolume into a compatible (mrc) dynamo volume named outVolume
     or links it if already compatible"""
 
@@ -56,8 +57,8 @@ def convertOrLinkVolume(inVolume:Volume, outVolume:str):
         ih = ImageHandler()
         ih.convert(inVolume, outVolume)
 
-def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
 
+def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
     if name == 'id':  # write the ID of the object in the name
         for volume in setOfVolumes:
             convertOrLinkVolume(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
@@ -125,7 +126,7 @@ def readDynTable(self, item, tomoSet=None):
     item.setClassId(classId)
     if tomoSet != None:
         tomo = tomoSet[volId] if tomoSet.getSize() > 1 \
-               else tomoSet.getFirstItem()
+            else tomoSet.getFirstItem()
         tomoOrigin = tomo.getOrigin()
         item.setVolName(tomo.getFileName())
         item.setOrigin(tomoOrigin)
