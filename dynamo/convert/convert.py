@@ -23,42 +23,52 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
+logger = logging.getLogger(__file__)
 import math, os
 import numpy as np
 from scipy.io import loadmat
-from pwem import Domain
-from pwem.emlib.image.image_handler import ImageHandler
-from pwem.objects.data import Transform
+
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.process import runJob
 import pyworkflow.object as pwobj
-from dynamo import Plugin
 
-Coordinate3D = Domain.importFromPlugin("tomo.objects", "Coordinate3D")
-MeshPoint = Domain.importFromPlugin("tomo.objects", "MeshPoint")
-TomoAcquisition = Domain.importFromPlugin("tomo.objects", "TomoAcquisition")
-SetOfCoordinates3D = Domain.importFromPlugin("tomo.objects", "SetOfCoordinates3D")
-SetOfMeshes = Domain.importFromPlugin("tomo.objects", "SetOfMeshes")
+from pwem.convert.headers import getFileFormat, MRC
+from pwem.emlib.image.image_handler import ImageHandler
+from pwem.objects.data import Transform, Volume
+
+from tomo.objects import Coordinate3D, MeshPoint, TomoAcquisition, SetOfCoordinates3D, SetOfMeshes
 import tomo.constants as const
 
+from dynamo import Plugin
 
-def writeVolume(volume, outputFn):
-    ih = ImageHandler()
-    ih.convert(volume, "%s.mrc" % outputFn)
 
+def convertOrLinkVolume(inVolume:Volume, outVolume:str):
+    """Converts the inVolume into a compatible (mrc) dynamo volume named outVolume
+    or links it if already compatible"""
+
+    inFn = inVolume.getFileName()
+
+    # If compatible with dynamo. Attention!! Assuming is not a stack of mrc volumes!!
+    if getFileFormat(inFn) == MRC:
+        pwutils.createLink(os.path.abspath(inFn), outVolume)
+    else:
+        ih = ImageHandler()
+        ih.convert(inVolume, outVolume)
 
 def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
-    ih = ImageHandler()
+
     if name == 'id':  # write the ID of the object in the name
         for volume in setOfVolumes:
-            ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
+            convertOrLinkVolume(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
     if name == 'ix':  # write the INDEX of the object in the name
         for ix, volume in enumerate(setOfVolumes):
-            ih.convert(volume, "%s%03d.mrc" % (outputFnRoot, int(ix + 1)))
+            convertOrLinkVolume(volume, "%s%03d.mrc" % (outputFnRoot, int(ix + 1)))
 
 
 def writeDynTable(fhTable, setOfSubtomograms):
-    for subtomo in setOfSubtomograms.iterItems():
+    for subtomo in setOfSubtomograms.iterSubtomos():
+        # Get 3d coordinates or 0, 0, 0
         if subtomo.hasCoordinate3D():
             x = subtomo.getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER)
             y = subtomo.getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER)
@@ -67,6 +77,8 @@ def writeDynTable(fhTable, setOfSubtomograms):
             x = 0
             y = 0
             z = 0
+
+        # Get alignment information
         if subtomo.hasTransform():
             tdrot, tilt, narot, shiftx, shifty, shiftz = matrix2eulerAngles(subtomo.getTransform().getMatrix())
         else:

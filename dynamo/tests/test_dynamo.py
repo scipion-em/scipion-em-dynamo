@@ -28,13 +28,16 @@
 
 import os
 
-from pyworkflow.object import Pointer
+from pyworkflow.object import Pointer, String
 from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
 from tomo.tests import DataSet
 import tomo.constants as const
 from xmipp3.protocols import XmippProtCreateMask3D
 from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoCoordsToModel
+
+DYNAMOPARAMNAME = "dyn"
+MYPROJECT = "myproject"
 
 
 class TestDynamoBase(BaseTest):
@@ -53,7 +56,7 @@ class TestDynamoBase(BaseTest):
         cls.smallTomogram = cls.dataset.getFile('coremask_normcorona.mrc')
 
 
-class TestSubTomogramsAlignment(BaseTest):
+class TestDynamoSubTomogramsAlignment(BaseTest):
     """ This class check if the protocol to import sub tomograms works
     properly."""
 
@@ -62,6 +65,24 @@ class TestSubTomogramsAlignment(BaseTest):
         setupTestProject(cls)
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
+
+    def test_rounds(self):
+
+        staDynamo = DynamoSubTomoMRA()
+
+        def testValueCase(value, expectedresult):
+
+            scipionParam = String(value)
+
+            result = staDynamo.getRoundParams( DYNAMOPARAMNAME, scipionParam, projectName=MYPROJECT)
+
+            self.assertEquals(expectedresult,
+                              result, "getRounds not working for this value: %s." % value)
+
+
+        testValueCase("1", "dvput('%s', '%s', '1');\n" % (MYPROJECT, DYNAMOPARAMNAME))
+
+        testValueCase("5 3", "dvput('%s', '%s', '5');\ndvput('%s', '%s_r2', '3');\n" % (MYPROJECT, DYNAMOPARAMNAME, MYPROJECT, DYNAMOPARAMNAME))
 
     def _runPreviousProtocols(self):
         protImport = self.newProtocol(ProtImportSubTomograms,
@@ -394,7 +415,7 @@ class TestDynamoExtraction(TestDynamoBase):
         return protExtraction
 
 
-class TestDynImportSubTomograms(BaseTest):
+class TestDynamoImportSubTomograms(BaseTest):
     """ This class check if the protocol to import subtomograms from Dynamo works
      properly."""
 
