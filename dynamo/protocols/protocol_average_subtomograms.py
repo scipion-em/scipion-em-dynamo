@@ -95,12 +95,14 @@ class DynamoProtAvgSubtomograms(EMProtocol, ProtTomoBase):
                             'of particles that must contribute into a Fourier coefficient in order to accept it')
         group.addParam('fCompensationSmoothingMask', PointerParam,
                        pointerClass='VolumeMask',
+                       allowsNull=True,
                        label='Mask for Fourier compensation (opt.)',
                        help='If a mask is provided, the raw average will be multiplied with this mask before '
                             'the Fourier compensation')
         form.addParam('nmask', PointerParam,
                       pointerClass='VolumeMask',
                       label='Normalization mask (opt.)',
+                      allowsNull=True,
                       help='If a mask is provided, each particle will be normalized to have zero mean and standard '
                            'deviation 1 inside this mask before adding it to the average.')
         form.addParam('impRotMasking', BooleanParam,

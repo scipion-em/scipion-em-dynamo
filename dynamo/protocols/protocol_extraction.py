@@ -26,6 +26,7 @@
 
 import os
 import glob
+from enum import Enum
 
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
@@ -47,11 +48,16 @@ SAME_AS_PICKING = 0
 OTHER = 1
 
 
+class DynExtractionOutputs(Enum):
+    subtomograms = SetOfSubTomograms
+
+
 class DynamoExtraction(EMProtocol, ProtTomoBase):
     """Extraction of subtomograms using Dynamo"""
 
     _label = 'vectorial extraction'
     _devStatus = BETA
+    _possibleOutputs = DynExtractionOutputs
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -105,12 +111,12 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self.tomoFiles = sorted(self.getInputTomograms().getFiles())
-        self._insertFunctionStep('writeSetOfCoordinates3D')
-        self._insertFunctionStep('launchDynamoExtractStep')
+        self._insertFunctionStep(self.writeSetOfCoordinates3D)
+        self._insertFunctionStep(self.launchDynamoExtractStep)
         if self.doInvert:
             for ind, _ in enumerate(self.tomoFiles):
-                self._insertFunctionStep('invertContrastStep', ind)
-        self._insertFunctionStep('createOutputStep')
+                self._insertFunctionStep(self.invertContrastStep, ind)
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
     def writeSetOfCoordinates3D(self):
@@ -158,22 +164,22 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
             self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
-        self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
-        self.outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() * self.downFactor.get())
-        self.outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
+        outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
+        outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() * self.downFactor.get())
+        outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
         if self.getInputTomograms().getFirstItem().getAcquisition():
             acquisition = TomoAcquisition()
             acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
             acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
             acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
-            self.outputSubTomogramsSet.setAcquisition(acquisition)
+            outputSubTomogramsSet.setAcquisition(acquisition)
         for ind, tomoFile in enumerate(self.tomoFiles):
             cropPath = os.path.join(self._getExtraPath('Crop%d' % (ind+1)), '')
             if os.path.isdir(cropPath):
                 coordSet = self.lines[ind]
-                outputSet = self.readSetOfSubTomograms(cropPath, self.outputSubTomogramsSet, coordSet)
+                outputSet = self.readSetOfSubTomograms(cropPath, outputSubTomogramsSet, coordSet)
 
-        self._defineOutputs(Subtomograms=outputSet)
+        self._defineOutputs(**{DynExtractionOutputs.subtomograms.name: outputSubTomogramsSet})
         self._defineSourceRelation(self.inputCoordinates, outputSet)
 
     # --------------------------- DEFINE utils functions ----------------------
