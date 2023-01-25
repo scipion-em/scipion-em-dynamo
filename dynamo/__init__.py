@@ -30,13 +30,14 @@ import pwem
 import pyworkflow.utils as pwutils
 from .constants import *
 
-__version__ = '3.1.10'
+__version__ = '3.1.11'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
 class Plugin(pwem.Plugin):
     _homeVar = DYNAMO_HOME
     _pathVars = [DYNAMO_HOME]
+    _url = "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Main_Page"
     # _supportedVersions =
 
     @classmethod
