@@ -1,3 +1,9 @@
+V3.1.11
+  - Dynamo alignment significantly refactored:
+       many params allow specification of round like "360 180 90". Labeled with (R)
+       Protocol convert creates de catalog and templates and so on but processing params are moved to alignStep
+       alignStep is resumable, but not yet from a specific iteration (TODO)
+
 V3.1.10
 20-January-2023.  - Fixing an error in the import subtomograms test
                   - Updating README.txt
