@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:    David Herreros Calero (dherreros@cnb.csic.es)
+# *             Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
@@ -23,20 +24,32 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
 import os
+from enum import Enum
 
 from pyworkflow import BETA
 from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 
 from pwem.protocols import EMProtocol
+from tomo.objects import SetOfMeshes
 
 from tomo.protocols import ProtTomoBase
 
 from ..convert.convert import textFile2Coords
 from dynamo import Plugin
+
+# Model types mapping
+MODEL_CHOICES = ["Ellipsoidal Vesicle", "Surface", "General"]
+
+# Model types encoding
+M_ELLIPSOIDAL = 0
+M_SURFACE = 1
+M_GENERAL = 2
+
+
+class OutputsModelWf(Enum):
+    meshes = SetOfMeshes
 
 
 class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
@@ -45,72 +58,106 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     _label = 'model workflow'
     _devStatus = BETA
-
-    modelChoices = ["Ellipsoidal Vesicle", "Surface", "General"]
+    _possibleOutputs = OutputsModelWf
     OUTPUT_PREFIX = 'output3DCoordinates'
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
 
-   # --------------------------- DEFINE param functions ----------------------
+    # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputMeshes', params.PointerParam, pointerClass='SetOfMeshes',
-                      label="Input Meshes", important=True,
+        form.addParam('inputMeshes', params.PointerParam,
+                      pointerClass='SetOfMeshes',
+                      label="Input Meshes",
+                      important=True,
                       help="Input Meshes that will be used to create the cropping geometry and "
                            "to extract the crop points")
-        form.addParam('boxSize', params.IntParam, default=0,
-                      label='Box size', important=True)
+        form.addParam('boxSize', params.IntParam,
+                      default=0,
+                      label='Box size',
+                      important=True)
         form.addParam('modelType', params.EnumParam,
-                       choices=self.modelChoices, default=0,
-                       label='Model type',
-                       help='Select the type of model defined in the Tomograms.')
-        form.addParam('orientMesh', params.PointerParam, pointerClass='SetOfMeshes',
-                      label="Orientation Meshes", allowsNull=True, condition="modelType == 2",
-                      help="Specify if you will use a different SetOfMeshes to impart orientation to "
-                           "the *Input Meshes* provided before. If not provided, no directional information "
-                           "will be given to the output coordinates.")
-        form.addParam('orientType', params.EnumParam,
-                       choices=self.modelChoices[:-1], default=0, condition="modelType == 2",
+                      choices=MODEL_CHOICES,
+                      default=M_ELLIPSOIDAL,
+                      label='Model type',
+                      help='Select the type of model defined in the Tomograms.')
+
+        form.addSection('Model parameters')
+        form.addLine('Available models:')
+        form.addLine('%s [EV]' % MODEL_CHOICES[M_ELLIPSOIDAL])
+        form.addLine('%s [S]' % MODEL_CHOICES[M_SURFACE])
+        form.addLine('%s [G]' % MODEL_CHOICES[M_GENERAL])
+        form.addLine('%s model specific cases:' % MODEL_CHOICES[M_GENERAL])
+        form.addLine('If oriented with an ellipsoidal vesicle model mesh [GE]')
+        form.addLine('If oriented with a surface model mesh [GS]')
+        form.addLine('Parameters corresponding to models not present in your picking data can be ignored')
+
+        group = form.addGroup('Specific for %s model' % MODEL_CHOICES[M_GENERAL])
+        group.addParam('orientMesh', params.PointerParam,
+                       pointerClass='SetOfMeshes',
+                       label="Orientation Meshes",
+                       allowsNull=True,
+                       # condition="modelType == %i" % M_GENERAL,
+                       help="Specify if you will use a different SetOfMeshes to impart orientation to "
+                            "the *Input Meshes* provided before. If not provided, no directional information "
+                            "will be given to the output coordinates.")
+        group.addParam('orientType', params.EnumParam,
+                       choices=MODEL_CHOICES[:-1],
+                       default=M_ELLIPSOIDAL,
+                       # condition="modelType == %i" % M_GENERAL,
                        label='Model type for *Orientation Meshes*',
                        help='Select the type of model defined in the Tomograms.')
-        form.addParam('auto', params.BooleanParam, default=True,
-                      condition="modelType == 0 or (modelType==2 and orientType==0)",
-                      label="Auto detect geometry")
-        form.addParam('center', params.NumericListParam, default='0 0 0',
-                      label='Center',
-                      condition='(modelType==0 and auto==False) or (modelType==2 and orientType==0 and auto==False)',
-                      help='Center of globular models, or a point marking the interior part '
-                           'of a membrane')
-        form.addParam('radius', params.NumericListParam, default='10 10 10',
-                      label='radius XYZ',
-                      condition='(modelType==0 and auto==False) or (modelType==2 and orientType==0 and auto==False)',
-                      help='Semi-axes for ellipsoidal vesicles')
-        form.addParam('meshParameter', params.IntParam, default=5, label="Mesh parameter",
-                      condition='(modelType==0 or modelType == 1) or (modelType==2 and orientType==0 or orientType==1)',
-                      help='Intended mesh parameter for the "mesh" that supports the '
-                           'depiction of the model')
-        form.addParam('maxTr', params.IntParam, default=100000,
-                      condition='(modelType==0 or modelType == 1) or (modelType==2 and orientType==0 or orientType==1)',
-                      label="Maximun number of triangles",
-                      help='Maximum number of triangles allowed during generation of a depiction '
-                           'mesh')
-        form.addParam('cropping', params.IntParam, default=10,
-                      condition='(modelType==0 or modelType == 1)',
-                      label="Cropping parameter",
-                      help='Intended mesh parameter for the "crop_mesh" that defined a cropping '
-                           'geometry on a surface')
-        form.addParam('subDivision', params.IntParam, default=2,
-                      condition='modelType==1 or (modelType==2 and orientType==1)',
-                      label="Number of Subdivision steps",
-                      help="Specifiy the number of times the Mesh geometry will be subdivided. This will increase the "
-                           "number of triangles in the mesh, making it smoother. However, it will also increase the "
-                           "number of cropping points")
+
+        group = form.addGroup('Common to multiple models')
+        group.addParam('meshParameter', params.IntParam,
+                       default=5,
+                       label='Mesh parameter [EV][S][GE][GS]',
+                       # condition='(modelType==%i or modelType==%i) or (modelType==%i and orientType==%i or '
+                       #           'orientType==%i)' % (M_ELLIPSOIDAL, M_SURFACE, M_GENERAL, M_ELLIPSOIDAL, M_SURFACE),
+                       help='Intended mesh parameter for the "mesh" that supports the depiction of the model')
+        group.addParam('maxTr [EV][S][GE][GS]', params.IntParam,
+                       default=100000,
+                       # condition='(modelType==%i or modelType==%i) or (modelType==%i and orientType==%i or '
+                       #           'orientType==%i)' % (M_ELLIPSOIDAL, M_SURFACE, M_GENERAL, M_ELLIPSOIDAL, M_SURFACE),
+                       label="Maximun number of triangles",
+                       help='Maximum number of triangles allowed during generation of a depiction mesh')
+        group.addParam('auto', params.BooleanParam,
+                       default=True,
+                       # condition="modelType == %i or (modelType==%i and orientType==%i)" %
+                       #           (M_ELLIPSOIDAL, M_GENERAL, M_ELLIPSOIDAL),
+                       label='Auto detect geometry [EV][GE]')
+        group.addParam('center', params.NumericListParam,
+                       default='0 0 0',
+                       label='Center (pix.) [EV][GE] only if auto = No',
+                       # condition='(modelType==%i and auto==False) or (modelType==%i and orientType==%i and auto==False)'
+                       #           % (M_ELLIPSOIDAL, M_GENERAL, M_ELLIPSOIDAL),
+                       help='Center of globular models, or a point marking the interior part of a membrane')
+        group.addParam('radius', params.NumericListParam,
+                       default='10 10 10',
+                       label='radius XYZ (pix.) [EV][GE] only if auto = No',
+                       # condition='(modelType==%i and auto==False) or (modelType==%i and orientType==%i and auto==False)' %
+                       #           (M_ELLIPSOIDAL, M_GENERAL, M_ELLIPSOIDAL),
+                       help='Semi-axes for ellipsoidal vesicles or general models oriented with ellipsoidal vesicles.')
+        group.addParam('cropping', params.IntParam,
+                       default=10,
+                       # condition='(modelType==%i or modelType==%i)' % (M_ELLIPSOIDAL, M_SURFACE),
+                       label="Cropping parameter [EV][S]",
+                       help='Intended mesh parameter for the "crop_mesh" that defined a cropping '
+                            'geometry on a surface')
+        group.addParam('subDivision', params.IntParam,
+                       default=2,
+                       # condition='modelType==%i or (modelType==%i and orientType==%i)' %
+                       #           (M_SURFACE, M_GENERAL, M_SURFACE),
+                       label="Number of Subdivision steps [S][GS]",
+                       help="Specifiy the number of times the Mesh geometry will be subdivided. This will increase the "
+                            "number of triangles in the mesh, making it smoother. However, it will also increase the "
+                            "number of cropping points")
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('applyWorkflowStep')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.applyWorkflowStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
     def applyWorkflowStep(self):
@@ -318,8 +365,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):
-        methodsMsgs = []
-        methodsMsgs.append("*Model Type*: %s" % self.modelChoices[self.modelType.get()])
+        methodsMsgs = ["*Model Type*: %s" % MODEL_CHOICES[self.modelType.get()]]
         if self.modelType.get() == 0:
             if self.auto.get():
                 methodsMsgs.append("*Geometry Detection*: auto")
@@ -368,3 +414,11 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         else:
             summary.append("Output coordinates not ready yet.")
         return summary
+
+    def _validate(self):
+        errorMsg = []
+        # Only sets of meshes generated using the Dynamo picking protocol are accepted (they must contain
+        # an attribute named '_dynCatalogue')
+        if not getattr(self.inputMeshes.get(), '_dynCatalogue', None):
+            errorMsg.append('Only sets of meshes generated using the Dynamo picking protocol are accepted')
+        return errorMsg
