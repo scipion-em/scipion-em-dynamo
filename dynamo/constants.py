@@ -1,8 +1,7 @@
 # **************************************************************************
 # *
-# *  Authors:
-# *
-# * MRC Laboratory of Molecular Biology (MRC-LMB)
+# * Authors:    David Herreros Calero (dherreros@cnb.csic.es)
+# *             Scipion Team (scipion@cnb.csic.es)
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -27,11 +26,14 @@
 This file contains constants related to scipion-em-dynamo protocols
 """
 
-import os
-
 DYNAMO_PROGRAM = 'dynamo'
 DYNAMO_HOME = 'DYNAMO_HOME'
 DYNAMO_VERSION_1_146 = '1.146'
 DYNAMO_VERSION_1_1_532 = '1.1.532'
 DYNAMO_VERSION = DYNAMO_VERSION_1_1_532
 DYNAMO_SHIPPED_MCR = 'dynamo_activate_linux_shipped_MCR.sh'
+
+# Dynamo files
+CATALOG_BASENAME = 'project'
+CATALOG_FILENAME = '%s.ctlg' % CATALOG_BASENAME
+VLL_FILE = 'tomograms.vll'

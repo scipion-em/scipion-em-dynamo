@@ -24,18 +24,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
 from enum import Enum
-
+from os.path import abspath
 from pyworkflow import BETA
 from pyworkflow.protocol import params
-import pyworkflow.utils as pwutils
-
 from pwem.protocols import EMProtocol
+from pyworkflow.utils import removeBaseExt, getFloatListFromValues, removeExt
 from tomo.objects import SetOfMeshes
-
 from tomo.protocols import ProtTomoBase
-
 from ..convert.convert import textFile2Coords
 from dynamo import Plugin
 
@@ -77,11 +73,11 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                       default=0,
                       label='Box size',
                       important=True)
-        form.addParam('modelType', params.EnumParam,
-                      choices=MODEL_CHOICES,
-                      default=M_ELLIPSOIDAL,
-                      label='Model type',
-                      help='Select the type of model defined in the Tomograms.')
+        # form.addParam('modelType', params.EnumParam,
+        #               choices=MODEL_CHOICES,
+        #               default=M_ELLIPSOIDAL,
+        #               label='Model type',
+        #               help='Select the type of model defined in the Tomograms.')
 
         form.addSection('Model parameters')
         form.addLine('Available models:')
@@ -98,14 +94,12 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                        pointerClass='SetOfMeshes',
                        label="Orientation Meshes",
                        allowsNull=True,
-                       # condition="modelType == %i" % M_GENERAL,
                        help="Specify if you will use a different SetOfMeshes to impart orientation to "
                             "the *Input Meshes* provided before. If not provided, no directional information "
                             "will be given to the output coordinates.")
         group.addParam('orientType', params.EnumParam,
                        choices=MODEL_CHOICES[:-1],
                        default=M_ELLIPSOIDAL,
-                       # condition="modelType == %i" % M_GENERAL,
                        label='Model type for *Orientation Meshes*',
                        help='Select the type of model defined in the Tomograms.')
 
@@ -113,42 +107,29 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         group.addParam('meshParameter', params.IntParam,
                        default=5,
                        label='Mesh parameter [EV][S][GE][GS]',
-                       # condition='(modelType==%i or modelType==%i) or (modelType==%i and orientType==%i or '
-                       #           'orientType==%i)' % (M_ELLIPSOIDAL, M_SURFACE, M_GENERAL, M_ELLIPSOIDAL, M_SURFACE),
                        help='Intended mesh parameter for the "mesh" that supports the depiction of the model')
         group.addParam('maxTr [EV][S][GE][GS]', params.IntParam,
                        default=100000,
-                       # condition='(modelType==%i or modelType==%i) or (modelType==%i and orientType==%i or '
-                       #           'orientType==%i)' % (M_ELLIPSOIDAL, M_SURFACE, M_GENERAL, M_ELLIPSOIDAL, M_SURFACE),
                        label="Maximun number of triangles",
                        help='Maximum number of triangles allowed during generation of a depiction mesh')
         group.addParam('auto', params.BooleanParam,
                        default=True,
-                       # condition="modelType == %i or (modelType==%i and orientType==%i)" %
-                       #           (M_ELLIPSOIDAL, M_GENERAL, M_ELLIPSOIDAL),
                        label='Auto detect geometry [EV][GE]')
         group.addParam('center', params.NumericListParam,
                        default='0 0 0',
                        label='Center (pix.) [EV][GE] only if auto = No',
-                       # condition='(modelType==%i and auto==False) or (modelType==%i and orientType==%i and auto==False)'
-                       #           % (M_ELLIPSOIDAL, M_GENERAL, M_ELLIPSOIDAL),
                        help='Center of globular models, or a point marking the interior part of a membrane')
         group.addParam('radius', params.NumericListParam,
                        default='10 10 10',
                        label='radius XYZ (pix.) [EV][GE] only if auto = No',
-                       # condition='(modelType==%i and auto==False) or (modelType==%i and orientType==%i and auto==False)' %
-                       #           (M_ELLIPSOIDAL, M_GENERAL, M_ELLIPSOIDAL),
                        help='Semi-axes for ellipsoidal vesicles or general models oriented with ellipsoidal vesicles.')
         group.addParam('cropping', params.IntParam,
                        default=10,
-                       # condition='(modelType==%i or modelType==%i)' % (M_ELLIPSOIDAL, M_SURFACE),
                        label="Cropping parameter [EV][S]",
                        help='Intended mesh parameter for the "crop_mesh" that defined a cropping '
                             'geometry on a surface')
         group.addParam('subDivision', params.IntParam,
                        default=2,
-                       # condition='modelType==%i or (modelType==%i and orientType==%i)' %
-                       #           (M_SURFACE, M_GENERAL, M_SURFACE),
                        label="Number of Subdivision steps [S][GS]",
                        help="Specifiy the number of times the Mesh geometry will be subdivided. This will increase the "
                             "number of triangles in the mesh, making it smoother. However, it will also increase the "
@@ -156,217 +137,244 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.applyWorkflowStep)
+        # JORGE
+        import os
+        fname = "/home/jjimenez/Desktop/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        import time
+        time.sleep(10)
+        # JORGE_END
+        volIdsListOfDict = self.inputMeshes.get().aggregate(["MAX"], "_volId", ["_volId", "_tomoId"])
+        self._initialize()
+        for d in volIdsListOfDict:
+            volId = d['_volId']
+            tomoId = d['_tomoId']
+            self._insertFunctionStep(self.applyWorkflowStep, volId, tomoId)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
-    def applyWorkflowStep(self):
-        inputMeshes = self.inputMeshes.get()
-        catalogue_path = os.path.abspath(pwutils.removeExt(inputMeshes._dynCatalogue.get()))
-        self.volIds = inputMeshes.aggregate(["MAX"], "_volId", ["_volId"])
-        for d in self.volIds:
-            volId = d['_volId']
-            commandsFile = self.writeMatlabFile(catalogue_path, volId)
-            args = ' %s' % commandsFile
-            self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+    def _initialize(self):
+        self.tomoDict = {tomo.getTsId(): tomo for tomo in self.inputMeshes.get().getPrecedents()}
+        self.savePath = abspath(self._getExtraPath())
+        self.cataloguePath = abspath(removeExt(self.inputMeshes.get()._dynCatalogue.get()))
+        self.center = getFloatListFromValues(self.center.get())
+        self.radius = getFloatListFromValues(self.radius.get())
+        self.orientationMesh = abspath(removeExt(self.orientMesh.get()._dynCatalogue.get()))
+
+    def applyWorkflowStep(self, volId, tomoId):
+        # Get the models associated to the current volume
+        tomo = self.tomoDict[tomoId]
+
+        commandsFile = self.writeMatlabFile(volId)
+        args = ' %s' % commandsFile
+        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def createOutputStep(self):
         textFile2Coords(self, self.inputMeshes.get().getPrecedents(), self._getExtraPath())
 
     # --------------------------- DEFINE utils functions ----------------------
-    def writeMatlabFile(self, catalogue_path, volId):
+    def writeMatlabFile(self, volId):
         codeFilePath = self._getExtraPath('modelWorkflow_Tomo_%d.m' % volId)
-        outPath = pwutils.removeBaseExt(self.inputMeshes.get().getPrecedents()[volId].getFileName())
-        if self.modelType.get() == 0:
-            center = pwutils.getFloatListFromValues(self.center.get())
-            radius = pwutils.getFloatListFromValues(self.radius.get())
-            content = "path='%s'\n" \
-                      "auto=%i\n" \
-                      "crop_points=[]\n" \
-                      "crop_angles=[]\n" \
-                      "modelId=0\n" \
-                      "outFile='%s'\n" \
-                      "savePath='%s'\n" \
-                      "outPoints=[outFile '.txt']\n" \
-                      "outAngles=['angles_' outFile '.txt']\n" \
-                      "modelFile=dir(fullfile(path,'tomograms','volume_%d','models'))\n" \
-                      "modelFile=modelFile(~ismember({modelFile.name},{'.','..'}))\n" \
-                      "for k=1:length(modelFile)\n" \
-                      "modelId=modelId+1\n" \
-                      "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n" \
-                      "if auto==1\n" \
-                      "m.approximateGeometryFromPoints()\n" \
-                      "else\n" \
-                      "m.center=[%f %f %f]\n" \
-                      "m.radius_x=%f\n" \
-                      "m.radius_y=%f\n" \
-                      "m.radius_z=%f\n" \
-                      "end\n" \
-                      "m.mesh_parameter=%d\n" \
-                      "m.crop_mesh_parameter=%d\n" \
-                      "m.mesh_maximum_triangles=%d\n" \
-                      "m.createMesh\n" \
-                      "m.createCropMesh\n" \
-                      "m.grepTable()\n" \
-                      "crop_points=[crop_points; [m.crop_points modelId*ones(length(m.crop_points),1)]]\n" \
-                      "crop_angles=[crop_angles; [m.crop_angles modelId*ones(length(m.crop_angles),1)]]\n" \
-                      "end\n" \
-                      "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
-                      "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
-                      "exit\n" % (catalogue_path, self.auto.get(), outPath, os.path.abspath(self._getExtraPath()),
-                                  volId, center[0], center[1], center[2], radius[0], radius[1],
-                                  radius[2], self.meshParameter.get(), self.cropping.get(),
-                                  self.maxTr.get())
-        elif self.modelType.get() == 1:
-            content = "path='%s'\n" \
-                      "crop_points=[]\n" \
-                      "crop_angles=[]\n" \
-                      "modelId=0\n" \
-                      "outFile='%s'\n" \
-                      "savePath='%s'\n" \
-                      "outPoints=[outFile '.txt']\n" \
-                      "outAngles=['angles_' outFile '.txt']\n" \
-                      "modelFile=dir(fullfile(path,'tomograms','volume_%d','models'))\n" \
-                      "modelFile=modelFile(~ismember({modelFile.name},{'.','..'}))\n" \
-                      "for k=1:length(modelFile)\n" \
-                      "modelId=modelId+1\n" \
-                      "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n" \
-                      "m.mesh_parameter=%d\n" \
-                      "m.crop_mesh_parameter=%d\n" \
-                      "m.mesh_maximum_triangles=%d\n" \
-                      "m.subdivision_iterations=%d\n" \
-                      "if isempty(m.center)\n" \
-                      "m.center=mean(m.points)\n" \
-                      "end\n" \
-                      "m.createMesh()\n" \
-                      "m.refineMesh()\n" \
-                      "m.createCropMesh()\n" \
-                      "m.updateCrop()\n" \
-                      "m.grepTable()\n" \
-                      "crop_points=[crop_points; [m.crop_points modelId*ones(length(m.crop_points),1)]]\n" \
-                      "crop_angles=[crop_angles; [m.crop_angles modelId*ones(length(m.crop_angles),1)]]\n" \
-                      "end\n" \
-                      "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
-                      "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
-                      "exit\n" % (catalogue_path, outPath, os.path.abspath(self._getExtraPath()),
-                                  volId, self.meshParameter.get(), self.cropping.get(),
-                                  self.maxTr.get(), self.subDivision.get())
-        elif self.modelType.get() == 2:
-            if self.orientType.get() == 0 and self.orientMesh.get() is not None:
-                center = pwutils.getFloatListFromValues(self.center.get())
-                radius = pwutils.getFloatListFromValues(self.radius.get())
-                orientation_mesh = os.path.abspath(pwutils.removeExt(self.orientMesh.get()._dynCatalogue.get()))
-                content = "path='%s'\n" \
-                          "path_o='%s'\n" \
-                          "auto=%i\n" \
-                          "crop_points=[]\n" \
-                          "crop_angles=[]\n" \
-                          "modelId=0\n" \
-                          "outFile='%s'\n" \
-                          "savePath='%s'\n" \
-                          "outPoints=[outFile '.txt']\n" \
-                          "outAngles=['angles_' outFile '.txt']\n" \
-                          "modelFile=dir(fullfile(path,'tomograms','volume_%d','models'))\n" \
-                          "modelFile=modelFile_o(~ismember({modelFile.name},{'.','..'}))\n" \
-                          "modelFile_o=dir(fullfile(path_o,'tomograms','volume_%d','models'))\n" \
-                          "modelFile_o=modelFile(~ismember({modelFile_o.name},{'.','..'}))\n" \
-                          "for k=1:length(modelFile)\n" \
-                          "modelId=modelId+1\n" \
-                          "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n" \
-                          "m_o=dread(fullfile(modelFile_o(k).folder,modelFile_o(k).name))\n" \
-                          "if auto==1\n" \
-                          "m_o.approximateGeometryFromPoints()\n" \
-                          "else\n" \
-                          "m_o.center=[%f %f %f]\n" \
-                          "m_o.radius_x=%f\n" \
-                          "m_o.radius_y=%f\n" \
-                          "m_o.radius_z=%f\n" \
-                          "end\n" \
-                          "m_o.mesh_parameter=%d\n" \
-                          "m_o.mesh_maximum_triangles=%d\n" \
-                          "m_o.createMesh\n" \
-                          "t=m.grepTable()\n" \
-                          "t=dpktbl.triangulation.fillTable(m_o.mesh,t)\n" \
-                          "crop_points=[crop_points; [t(:,24:26) modelId*ones(length(m.crop_points),1)]]\n" \
-                          "crop_angles=[crop_angles; [t(:,7:9) modelId*ones(length(m.crop_angles),1)]]\n" \
-                          "end\n" \
-                          "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
-                          "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
-                          "exit\n" % (catalogue_path, orientation_mesh, self.auto.get(), outPath,
-                                      os.path.abspath(self._getExtraPath()),
-                                      volId, volId, center[0], center[1], center[2], radius[0], radius[1],
-                                      radius[2], self.meshParameter.get(),
-                                      self.maxTr.get())
-            elif self.orientType.get() == 1 and self.orientMesh.get() is not None:
-                orientation_mesh = os.path.abspath(pwutils.removeExt(self.orientMesh.get()._dynCatalogue.get()))
-                content = "path='%s'\n" \
-                          "path_o='%s'\n" \
-                          "crop_points=[]\n" \
-                          "crop_angles=[]\n" \
-                          "modelId=0\n" \
-                          "outFile='%s'\n" \
-                          "savePath='%s'\n" \
-                          "outPoints=[outFile '.txt']\n" \
-                          "outAngles=['angles_' outFile '.txt']\n" \
-                          "modelFile=dir(fullfile(path,'tomograms','volume_%d','models'))\n" \
-                          "modelFile=modelFile(~ismember({modelFile.name},{'.','..'}))\n" \
-                          "modelFile_o=dir(fullfile(path_o,'tomograms','volume_%d','models'))\n" \
-                          "modelFile_o=modelFile_o(~ismember({modelFile_o.name},{'.','..'}))\n" \
-                          "for k=1:length(modelFile)\n" \
-                          "modelId=modelId+1\n" \
-                          "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n" \
-                          "m_o=dread(fullfile(modelFile_o(k).folder,modelFile_o(k).name))\n" \
-                          "m_o.mesh_parameter=%d\n" \
-                          "m_o.mesh_maximum_triangles=%d\n" \
-                          "m_o.subdivision_iterations=%d\n" \
-                          "if isempty(m_o.center)\n" \
-                          "m_o.center=mean(m_o.points)\n" \
-                          "end\n" \
-                          "m_o.createMesh()\n" \
-                          "m_o.refineMesh()\n" \
-                          "t=m.grepTable()\n" \
-                          "t=dpktbl.triangulation.fillTable(m_o.mesh,t)\n" \
-                          "crop_points=[crop_points; [t(:,24:26) modelId*ones(length(m.crop_points),1)]]\n" \
-                          "crop_angles=[crop_angles; [t(:,7:9) modelId*ones(length(m.crop_angles),1)]]\n" \
-                          "end\n" \
-                          "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
-                          "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
-                          "exit\n" % (catalogue_path, orientation_mesh, outPath,
-                                      os.path.abspath(self._getExtraPath()),
-                                      volId, volId, self.meshParameter.get(),
-                                      self.maxTr.get(), self.subDivision.get())
+        outPath = removeBaseExt(self.inputMeshes.get().getPrecedents()[volId].getFileName())
+        if self.modelType.get() == M_ELLIPSOIDAL:
+            content = self.genEVCmdFileContents(volId, outPath)
+        elif self.modelType.get() == M_SURFACE:
+            content = self.genSCmdFileContents(volId, outPath)
+        elif self.modelType.get() == M_GENERAL:
+            if self.orientType.get() == M_ELLIPSOIDAL and self.orientMesh.get():
+                content = self.genGECmdFileContents(volId, outPath)
+            elif self.orientType.get() == M_SURFACE and self.orientMesh.get():
+                content = self.genGSCmdFileContents(volId, outPath)
             else:
-                content = "path='%s'\n" \
-                          "crop_points=[]\n" \
-                          "crop_angles=[]\n" \
-                          "modelId=0\n" \
-                          "outFile='%s'\n" \
-                          "savePath='%s'\n" \
-                          "outPoints=[outFile '.txt']\n" \
-                          "outAngles=['angles_' outFile '.txt']\n" \
-                          "modelFile=dir(fullfile(path,'tomograms','volume_%d','models'))\n" \
-                          "modelFile=modelFile(~ismember({modelFile.name},{'.','..'}))\n" \
-                          "for k=1:length(modelFile)\n" \
-                          "modelId=modelId+1\n" \
-                          "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n" \
-                          "t=m.grepTable()\n" \
-                          "crop_points=[crop_points; [t(:,24:26) modelId*ones(length(m.crop_points),1)]]\n" \
-                          "crop_angles=[crop_angles; [t(:,7:9) modelId*ones(length(m.crop_angles),1)]]\n" \
-                          "end\n" \
-                          "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
-                          "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
-                          "exit\n" % (catalogue_path, outPath,
-                                      os.path.abspath(self._getExtraPath()),
-                                      volId)
-        codeFid = open(codeFilePath, 'w')
-        codeFid.write(content)
-        codeFid.close()
+                content = self.genGComdFileContents(volId, outPath)
+        with open(codeFilePath, 'w') as codeFid:
+            codeFid.write(content)
+
         return codeFilePath
 
-    # --------------------------- DEFINE info functions ----------------------
+    def genEVCmdFileContents(self, volId, outPath):
+        center = self.center
+        radius = self.radius
+        content = "path='%s'\n" % self.cataloguePath
+        content += "auto=%i\n" % self.auto.get()
+        content += "crop_points=[]\n"
+        content += "crop_angles=[]\n"
+        content += "modelId=0\n"
+        content += "outFile='%s'\n" % outPath
+        content += "savePath='%s'\n" % self.savePath
+        content += "outPoints=[outFile '.txt']\n"
+        content += "outAngles=['angles_' outFile '.txt']\n"
+        content += "modelFile=dir(fullfile(path,'tomograms','volume_%i','models'))\n" % volId
+        content += "modelFile=modelFile(~ismember({modelFile.name},{'.','..'}))\n"
+        content += "for k=1:length(modelFile)\n"
+        content += "modelId=modelId+1\n"
+        content += "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n"
+        content += "if auto==1\n"
+        content += "m.approximateGeometryFromPoints()\n"
+        content += "else\n"
+        content += "m.center=[%f %f %f]\n" % (center[0], center[1], center[2])
+        content += "m.radius_x=%f\n" % radius[0]
+        content += "m.radius_y=%f\n" % radius[1]
+        content += "m.radius_z=%f\n" % radius[2]
+        content += "end\n"
+        content += "m.mesh_parameter=%i\n" % self.meshParameter.get()
+        content += "m.crop_mesh_parameter=%i\n" % self.cropping.get()
+        content += "m.mesh_maximum_triangles=%i\n" % self.maxTr.get()
+        content += "m.createMesh\n"
+        content += "m.createCropMesh\n"
+        content += "m.grepTable()\n"
+        content += "crop_points=[crop_points; [m.crop_points modelId*ones(length(m.crop_points),1)]]\n"
+        content += "crop_angles=[crop_angles; [m.crop_angles modelId*ones(length(m.crop_angles),1)]]\n"
+        content += "end\n"
+        content += "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n"
+        content += "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n"
+        content += "exit\n"
+        return content
+
+    def genSCmdFileContents(self, volId, outPath):
+        content = "path='%s'\n" % self.cataloguePath
+        content += "crop_points=[]\n"
+        content += "crop_angles=[]\n"
+        content += "modelId=0\n"
+        content += "outFile='%s'\n" % outPath
+        content += "savePath='%s'\n" % self.savePath
+        content += "outPoints=[outFile '.txt']\n"
+        content += "outAngles=['angles_' outFile '.txt']\n"
+        content += "modelFile=dir(fullfile(path,'tomograms','volume_%i','models'))\n" % volId
+        content += "modelFile=modelFile(~ismember({modelFile.name},{'.','..'}))\n"
+        content += "for k=1:length(modelFile)\n"
+        content += "modelId=modelId+1\n"
+        content += "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n"
+        content += "m.mesh_parameter=%i\n" % self.meshParameter.get()
+        content += "m.crop_mesh_parameter=%i\n" % self.cropping.get()
+        content += "m.mesh_maximum_triangles=%i\n" % self.maxTr.get()
+        content += "m.subdivision_iterations=%i\n" % self.subDivision.get()
+        content += "if isempty(m.center)\n"
+        content += "m.center=mean(m.points)\n"
+        content += "end\n"
+        content += "m.createMesh()\n"
+        content += "m.refineMesh()\n"
+        content += "m.createCropMesh()\n"
+        content += "m.updateCrop()\n"
+        content += "m.grepTable()\n"
+        content += "crop_points=[crop_points; [m.crop_points modelId*ones(length(m.crop_points),1)]]\n"
+        content += "crop_angles=[crop_angles; [m.crop_angles modelId*ones(length(m.crop_angles),1)]]\n"
+        content += "end\n"
+        content += "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n"
+        content += "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n"
+        content += "exit\n"
+        return content
+
+    def genGECmdFileContents(self, volId, outPath):
+        center = self.center
+        radius = self.radius
+        content = "path='%s'\n" % self.cataloguePath
+        content += "path_o='%s'\n" % self.orientationMesh
+        content += "auto=%s\n" % ('true' if self.auto.get() else 'false')
+        content += "crop_points=[]\n"
+        content += "crop_angles=[]\n"
+        content += "modelId=0\n"
+        content += "outFile='%s'\n" % outPath
+        content += "savePath='%s'\n" % self.savePath
+        content += "outPoints=[outFile '.txt']\n"
+        content += "outAngles=['angles_' outFile '.txt']\n"
+        content += "modelFile=dir(fullfile(path,'tomograms','volume_%i','models'))\n" % volId
+        content += "modelFile=modelFile_o(~ismember({modelFile.name},{'.','..'}))\n"
+        content += "modelFile_o=dir(fullfile(path_o,'tomograms','volume_%i','models'))\n" % volId
+        content += "modelFile_o=modelFile(~ismember({modelFile_o.name},{'.','..'}))\n"
+        content += "for k=1:length(modelFile)\n"
+        content += "modelId=modelId+1\n"
+        content += "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n"
+        content += "m_o=dread(fullfile(modelFile_o(k).folder,modelFile_o(k).name))\n"
+        content += "if auto==1\n"
+        content += "m_o.approximateGeometryFromPoints()\n"
+        content += "else\n"
+        content += "m_o.center=[%f %f %f]\n" % (center[0], center[1], center[2])
+        content += "m_o.radius_x=%f\n" % radius[0]
+        content += "m_o.radius_y=%f\n" % radius[1]
+        content += "m_o.radius_z=%f\n" % radius[2]
+        content += "end\n"
+        content += "m_o.mesh_parameter=%i\n" % self.meshParameter.get()
+        content += "m_o.mesh_maximum_triangles=%i\n" % self.maxTr.get()
+        content += "m_o.createMesh\n"
+        content += "t=m.grepTable()\n"
+        content += "t=dpktbl.triangulation.fillTable(m_o.mesh,t)\n"
+        content += "crop_points=[crop_points; [t(:,24:26) modelId*ones(length(m.crop_points),1)]]\n"
+        content += "crop_angles=[crop_angles; [t(:,7:9) modelId*ones(length(m.crop_angles),1)]]\n"
+        content += "end\n"
+        content += "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n"
+        content += "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n"
+        content += "exit\n"
+        return content
+
+    def genGSCmdFileContents(self, volId, outPath):
+        content = "path='%s'\n" % self.cataloguePath
+        content += "path_o='%s'\n" % self.orientationMesh
+        content += "crop_points=[]\n"
+        content += "crop_angles=[]\n"
+        content += "modelId=0\n"
+        content += "outFile='%s'\n" % outPath
+        content += "savePath='%s'\n" % self.savePath
+        content += "outPoints=[outFile '.txt']\n"
+        content += "outAngles=['angles_' outFile '.txt']\n"
+        content += "modelFile=dir(fullfile(path,'tomograms','volume_%i','models'))\n" % volId
+        content += "modelFile=modelFile(~ismember({modelFile.name},{'.','..'}))\n"
+        content += "modelFile_o=dir(fullfile(path_o,'tomograms','volume_%i','models'))\n" % volId
+        content += "modelFile_o=modelFile_o(~ismember({modelFile_o.name},{'.','..'}))\n"
+        content += "for k=1:length(modelFile)\n"
+        content += "modelId=modelId+1\n"
+        content += "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n"
+        content += "m_o=dread(fullfile(modelFile_o(k).folder,modelFile_o(k).name))\n"
+        content += "m_o.mesh_parameter=%i\n" % self.meshParameter.get()
+        content += "m_o.mesh_maximum_triangles=%i\n" % self.maxTr.get()
+        content += "m_o.subdivision_iterations=%i\n" % self.subDivision.get()
+        content += "if isempty(m_o.center)\n"
+        content += "m_o.center=mean(m_o.points)\n"
+        content += "end\n"
+        content += "m_o.createMesh()\n"
+        content += "m_o.refineMesh()\n"
+        content += "t=m.grepTable()\n"
+        content += "t=dpktbl.triangulation.fillTable(m_o.mesh,t)\n"
+        content += "crop_points=[crop_points; [t(:,24:26) modelId*ones(length(m.crop_points),1)]]\n"
+        content += "crop_angles=[crop_angles; [t(:,7:9) modelId*ones(length(m.crop_angles),1)]]\n"
+        content += "end\n"
+        content += "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n"
+        content += "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n"
+        content += "exit\n"
+        return content
+
+    def genGComdFileContents(self, volId, outPath):
+        content = "path='%s'\n" % self.cataloguePath
+        content += "crop_points=[]\n"
+        content += "crop_angles=[]\n"
+        content += "modelId=0\n"
+        content += "outFile='%s'\n" % outPath
+        content += "savePath='%s'\n" % self.savePath
+        content += "outPoints=[outFile '.txt']\n"
+        content += "outAngles=['angles_' outFile '.txt']\n"
+        content += "modelFile=dir(fullfile(path,'tomograms','volume_%i','models'))\n" % volId
+        content += "modelFile=modelFile(~ismember({modelFile.name},{'.','..'}))\n"
+        content += "for k=1:length(modelFile)\n"
+        content += "modelId=modelId+1\n"
+        content += "m=dread(fullfile(modelFile(k).folder,modelFile(k).name))\n"
+        content += "t=m.grepTable()\n"
+        content += "crop_points=[crop_points; [t(:,24:26) modelId*ones(length(m.crop_points),1)]]\n"
+        content += "crop_angles=[crop_angles; [t(:,7:9) modelId*ones(length(m.crop_angles),1)]]\n"
+        content += "end\n"
+        content += "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n"
+        content += "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n"
+        content += "exit\n"
+        return content
+
+    # --------------------------- DEFINE INFO functions ----------------------
     def _methods(self):
         methodsMsgs = ["*Model Type*: %s" % MODEL_CHOICES[self.modelType.get()]]
-        if self.modelType.get() == 0:
+        if self.modelType.get() == M_ELLIPSOIDAL:
             if self.auto.get():
                 methodsMsgs.append("*Geometry Detection*: auto")
             else:
@@ -376,17 +384,17 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
             methodsMsgs.append("*Mesh parameter*: %d" % self.meshParameter.get())
             methodsMsgs.append("*Maximum number triangles*: %d" % self.maxTr.get())
             methodsMsgs.append("*Cropping parameter*: %d" % self.cropping.get())
-        elif self.modelType.get() == 1:
+        elif self.modelType.get() == M_SURFACE:
             methodsMsgs.append("*Model Type*: Surface")
             methodsMsgs.append("*Mesh parameter*: %d" % self.meshParameter.get())
             methodsMsgs.append("*Maximum number triangles*: %d" % self.maxTr.get())
             methodsMsgs.append("*Cropping parameter*: %d" % self.cropping.get())
             methodsMsgs.append("*Number of subdivision steps*: %d" % self.subDivision.get())
-        elif self.modelType.get() == 2:
+        elif self.modelType.get() == M_GENERAL:
             if self.orientMesh.get() is None:
                 methodsMsgs.append("Particles extracted without orientation")
             else:
-                if self.orientType.get() == 0:
+                if self.orientType.get() == M_ELLIPSOIDAL:
                     methodsMsgs.append("*Orientation Model Type*: Ellipsoidal Vesicle")
                     if self.auto.get():
                         methodsMsgs.append("*Geometry Detection*: auto")
@@ -396,7 +404,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                         methodsMsgs.append("    *Semiaxes Radius*: [%s]" % self.radius.get())
                     methodsMsgs.append("*Mesh parameter*: %d" % self.meshParameter.get())
                     methodsMsgs.append("*Maximum number triangles*: %d" % self.maxTr.get())
-                elif self.orientType.get() == 1:
+                elif self.orientType.get() == M_SURFACE:
                     methodsMsgs.append("*Orientation Model Type*: Surface")
                     methodsMsgs.append("*Mesh parameter*: %d" % self.meshParameter.get())
                     methodsMsgs.append("*Maximum number triangles*: %d" % self.maxTr.get())

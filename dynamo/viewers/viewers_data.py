@@ -41,8 +41,7 @@ import tomo.constants as const
 
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 from dynamo.convert import textFile2Coords, matrix2eulerAngles
-from dynamo import Plugin
-
+from dynamo import Plugin, VLL_FILE
 
 
 class DynamoDataViewer(pwviewer.Viewer):
@@ -84,7 +83,7 @@ class DynamoDataViewer(pwviewer.Viewer):
 
             tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
 
-            listTomosFile = os.path.join(path, "tomos.vll")
+            listTomosFile = os.path.join(path, VLL_FILE)
 
             # Create list of tomos file
             tomoFid = open(listTomosFile, 'w')

@@ -39,7 +39,7 @@ from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
 import tomo.constants as const
 
-from dynamo import Plugin
+from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
 
 
@@ -193,7 +193,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
     def writeMatlabCode(self):
         # Initialization params
         codeFilePath = os.path.join(os.getcwd(), "DynamoExtraction.m")
-        listTomosFile = self._getTmpPath("tomos.vll")
+        listTomosFile = self._getTmpPath(VLL_FILE)
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
         # self.tomoFiles = sorted(self.getInputTomograms().getFiles())
 

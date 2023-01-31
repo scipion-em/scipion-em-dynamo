@@ -25,14 +25,14 @@
 # **************************************************************************
 
 import os, threading
-import numpy as np
+from os.path import abspath, join, isdir
 
-import pyworkflow.config as conf
+import numpy as np
 from pyworkflow import utils as pwutils
 from pyworkflow.utils.process import runJob
 from pyworkflow.gui.dialog import ToolbarListDialog
 
-from dynamo import Plugin
+from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME
 
 
 class DynamoTomoDialog(ToolbarListDialog):
@@ -55,47 +55,45 @@ class DynamoTomoDialog(ToolbarListDialog):
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
-            outPath = os.path.join(self.path, pwutils.removeBaseExt(self.tomo.getFileName()) + '.txt')
+            outPath = join(self.path, pwutils.removeBaseExt(self.tomo.getFileName()) + '.txt')
             self.tomo.count = np.loadtxt(outPath, delimiter=' ').shape[0]
             self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
         # Create a catalogue with the Coordinates to be visualized
-        catalogue = os.path.abspath(os.path.join(self.path, "tomos"))
-        listTomosFile = os.path.join(self.path, "tomos.vll")
+        mainPath = abspath(join(self.path))
+        catalogue = join(mainPath, CATALOG_BASENAME)
+        listTomosFile = join(mainPath, VLL_FILE)
 
-        if not os.path.isdir(catalogue):
-            codeFile = os.path.abspath(os.path.join(self.path, 'writectlg.m'))
-            contents = "dcm -create %s -fromvll %s\n" \
-                       "path='%s'\n" \
-                       "catalogue=dread(['%s' '.ctlg'])\n" \
-                       "nVolumes=length(catalogue.volumes)\n" \
-                       "for idv=1:nVolumes\n" \
-                       "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
-                       "tomoIndex=catalogue.volumes{idv}.index\n" \
-                       "[~,tomoName,~]=fileparts(tomoPath)\n" \
-                       "coordFile=[path '/' tomoName '.txt']\n" \
-                       "if ~isfile(coordFile)\n" \
-                       "continue\n" \
-                       "end\n" \
-                       "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n" \
-                       "idm_vec=unique(coords_ids(:,4))'\n" \
-                       "for idm=idm_vec\n" \
-                       "model_name=['model_',num2str(idm)]\n" \
-                       "coords=coords_ids(coords_ids(:,4)==idm,1:4)\n" \
-                       "general=dmodels.general()\n" \
-                       "general.name=model_name\n" \
-                       "addPoint(general,coords(:,1:3),coords(:,4))\n" \
-                       "general.linkCatalogue('%s','i',tomoIndex,'s',1)\n" \
-                       "general.saveInCatalogue()\n" \
-                       "end\n" \
-                       "end\n" \
-                       "exit\n" % (catalogue, os.path.abspath(listTomosFile),
-                                   os.path.abspath(self.path), catalogue, catalogue)
-            codeFid = open(codeFile, 'w')
-            codeFid.write(contents)
-            codeFid.close()
+        if not isdir(catalogue):
+            codeFile = abspath(join(self.path, 'writectlg.m'))
+            contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
+            contents += "catalogue=dread('%s')\n" % join(mainPath, CATALOG_FILENAME)
+            contents += "nVolumes=length(catalogue.volumes)\n"
+            contents += "for idv=1:nVolumes\n"
+            contents += "tomoPath=catalogue.volumes{idv}.fullFileName()\n"
+            contents += "tomoIndex=catalogue.volumes{idv}.index\n"
+            contents += "[~,tomoName,~]=fileparts(tomoPath)\n"
+            contents += "coordFile=fullfile('%s', tomoName '.txt')\n" % mainPath
+            contents += "if ~isfile(coordFile)\n"
+            contents += "continue\n"
+            contents += "end\n"
+            contents += "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n"
+            contents += "idm_vec=unique(coords_ids(:,4))'\n"
+            contents += "for idm=idm_vec\n"
+            contents += "model_name=['model_',num2str(idm)]\n"
+            contents += "coords=coords_ids(coords_ids(:,4)==idm,1:4)\n"
+            contents += "general=dmodels.general()\n"
+            contents += "general.name=model_name\n"
+            contents += "addPoint(general,coords(:,1:3),coords(:,4))\n"
+            contents += "general.linkCatalogue('%s','i',tomoIndex,'s',1)\n" % catalogue
+            contents += "general.saveInCatalogue()\n"
+            contents += "end\n"
+            contents += "end\n"
+            contents += "exit\n"
+            with open(codeFile, 'w') as codeFid:
+                codeFid.write(contents)
             args = ' %s' % codeFile
             runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
@@ -110,8 +108,8 @@ class DynamoTomoDialog(ToolbarListDialog):
 
     def writeMatlabCode(self, tomo):
         # Initialization params
-        codeFilePath = os.path.join(os.getcwd(), "DynamoPicker.m")
-        catalogue = os.path.join(self.path, "tomos")
+        codeFilePath = join(os.getcwd(), "DynamoPicker.m")
+        catalogue = join(self.path, CATALOG_BASENAME)
 
         # Write code to Matlab code file
         codeFid = open(codeFilePath, 'w')
@@ -142,7 +140,7 @@ class DynamoTomoDialog(ToolbarListDialog):
                   "if ~isempty(crop_points)\n" \
                   "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
                   "end\n" \
-                  "exit\n" % (os.path.abspath(catalogue), os.path.abspath(tomo.getFileName()), catalogue,
+                  "exit\n" % (abspath(catalogue), abspath(tomo.getFileName()), catalogue,
                               pwutils.removeBaseExt(tomo.getFileName()), self.path)
         # "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
         # "crop_angles=[crop_angles; [model{end}.crop_angles model_id*ones(length(model{end}.crop_angles),1)]]\n" \

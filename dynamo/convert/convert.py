@@ -25,6 +25,8 @@
 # **************************************************************************
 import logging
 
+from dynamo import Plugin
+
 logger = logging.getLogger(__file__)
 import math, os
 import numpy as np
@@ -40,8 +42,6 @@ from pwem.objects.data import Transform, Volume
 
 from tomo.objects import Coordinate3D, MeshPoint, TomoAcquisition, SetOfCoordinates3D, SetOfMeshes
 import tomo.constants as const
-
-from dynamo import Plugin
 
 
 def convertOrLinkVolume(inVolume: Volume, outVolume: str):

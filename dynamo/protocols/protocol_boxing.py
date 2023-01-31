@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:    David Herreros Calero (dherreros@cnb.csic.es)
+# *             Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
@@ -23,23 +24,33 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import glob
 import os
+from enum import Enum
+from os.path import abspath, exists, join, basename
+
 import numpy as np
 
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
-from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
+from pyworkflow.object import String
+from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
+from pyworkflow.utils import makePath
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
+from tomo.objects import SetOfMeshes, Coordinate3D
 
 from tomo.protocols import ProtTomoPicking
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 import tomo.constants as const
 
-from dynamo import Plugin
+from dynamo import Plugin, VLL_FILE, CATALOG_FILENAME, CATALOG_BASENAME
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo.convert import textFile2Coords
+
+
+class OutputDynPicking(Enum):
+    meshes = SetOfMeshes
+
 
 class DynamoBoxing(ProtTomoPicking):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
@@ -53,108 +64,100 @@ class DynamoBoxing(ProtTomoPicking):
 
     _label = 'vectorial picking'
     _devStatus = BETA
-
-    modelChoices = ["Ellipsoidal Vesicle", "Surface", "General"]
-    modelNames = {modelChoices[0]: "ellipsoidalVesicle", modelChoices[1]: "surface", modelChoices[2]: "general"}
-    OUTPUT_PREFIX = 'outputMeshes'
+    _possibleOutputs = OutputDynPicking
 
     def __init__(self, **kwargs):
         ProtTomoPicking.__init__(self, **kwargs)
+        self.dlg = None
+        self.dynModelsPathDict = {}  # Used to store the path where the corresponding models to a tomo are stored
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         ProtTomoPicking._defineParams(self, form)
 
         form.addParam('boxSize', IntParam, label="Box Size")
-        form.addParam('selection', EnumParam, choices=['Yes', 'No'], default=1,
-                      label='Modify previous meshes?', display=EnumParam.DISPLAY_HLIST,
+        form.addParam('modPrevMeshes', BooleanParam,
+                      default=False,
+                      label='Modify previous meshes?',
                       help='This option allows to add and/or remove coordinates to a previous SetOfMeshes')
-        form.addParam('inputMeshes', PointerParam, label="Input Meshes", condition='selection == 0',
-                      allowsNull=True, pointerClass='SetOfMeshes',
+        form.addParam('inputMeshes', PointerParam,
+                      label="Input Meshes",
+                      condition='modPrevMeshes',
+                      allowsNull=True,
+                      pointerClass='SetOfMeshes',
                       help='Select the previous SetOfMeshes you want to modify')
-        # form.addParam('modelType', EnumParam,
-        #               choices=self.modelChoices, default=0,
-        #               label='Model type',
-        #               help='Select the type of model defined in the Tomograms.')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        # Copy input coordinates to Extra Path
-        self._insertFunctionStep('copyInputMeshes')
-
-        # Launch Boxing GUI
-        self._insertFunctionStep('launchDynamoBoxingStep', interactive=True)
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.launchDynamoBoxingStep, interactive=True)
 
     # --------------------------- STEPS functions -----------------------------
+    def convertInputStep(self):
+        """Initialize the catalogue"""
+        # Create the vll (list of tomos) file
+        vllFile = self._getExtraPath(VLL_FILE)
+        tomoCounter = 1  # Matlab begins counting in 1
+        with open(vllFile, 'w') as tomoFid:
+            for tomo in self.inputTomograms.get().iterItems():
+                tomoPath = abspath(tomo.getFileName())
+                tomoFid.write(tomoPath + '\n')
+                self.dynModelsPathDict[tomo.getTsId()] = self._getExtraPath(CATALOG_BASENAME, 'tomograms', 'volume_%i' % tomoCounter)
+                tomoCounter += 1
 
-    def copyInputMeshes(self):
-        # Initialize the catalogue
-        listTomosFile = self._getExtraPath("tomos.vll")
-        catalogue = os.path.abspath(self._getExtraPath("tomos"))
-
-        # Create list of tomos file
-        tomoFid = open(listTomosFile, 'w')
-        for tomo in self.inputTomograms.get().iterItems():
-            tomoPath = os.path.abspath(tomo.getFileName())
-            tomoFid.write(tomoPath + '\n')
-        tomoFid.close()
-
-        # Save coordinates into .txt file for each tomogram
-        codeFile = self._getExtraPath('coords2model.m')
-        if self.selection.get() == 0:
+        catalogFile = self.getCatalogFile(withExt=False)
+        if self.modPrevMeshes.get():
+            # Save coordinates into .txt file for each tomogram and pass them to dynamo
             inputMeshes = self.inputMeshes.get()
             inputTomograms = self.inputTomograms.get()
-            for tomo in inputTomograms.iterItems(iterate=False):
+            for tomo in inputTomograms:
                 outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
-                coords_tomo = []
+                coordsInCurrentTomo = []
                 for coord in inputMeshes.iterCoordinates(tomo.getObjId()):
-                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
-                if coords_tomo:
-                    np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
+                    coordsInCurrentTomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
+                if coordsInCurrentTomo:
+                    np.savetxt(outFileCoord, np.asarray(coordsInCurrentTomo), delimiter=' ')
 
             # Create small program to tell Dynamo to save the inputMeshes in a Ellipsoidal Vesicle Model
-            contents = "dcm -create %s -fromvll %s\n" \
-                       "path='%s'\n" \
-                       "catalogue=dread(['%s' '.ctlg'])\n" \
-                       "nVolumes=length(catalogue.volumes)\n" \
-                       "for idv=1:nVolumes\n" \
-                       "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
-                       "tomoIndex=catalogue.volumes{idv}.index\n" \
-                       "[~,tomoName,~]=fileparts(tomoPath)\n" \
-                       "coordFile=[path '/' tomoName '.txt']\n" \
-                       "if ~isfile(coordFile)\n" \
-                       "continue\n" \
-                       "end\n" \
-                       "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n" \
-                       "idm_vec=unique(coords_ids(:,4))'\n" \
-                       "end\n" \
-                       "exit\n" % (catalogue, listTomosFile, os.path.abspath(self._getExtraPath()), catalogue)
+            contents = "dcm -create %s -fromvll %s\n" % (catalogFile, vllFile)
+            contents += "catalogue=dread('%s')\n" % self.getCatalogFile()
+            contents += "nVolumes=length(catalogue.volumes)\n"
+            contents += "for idv=1:nVolumes\n"
+            contents += "tomoPath=catalogue.volumes{idv}.fullFileName()\n"
+            contents += "tomoIndex=catalogue.volumes{idv}.index\n"
+            contents += "[~,tomoName,~]=fileparts(tomoPath)\n"
+            contents += "coordFile=fullfile('%s', tomoName '.txt']\n" % self._getExtraPath()
+            contents += "if ~isfile(coordFile)\n"
+            contents += "continue\n"
+            contents += "end\n"
+            contents += "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n"
+            contents += "idm_vec=unique(coords_ids(:,4))'\n"
+            contents += "end\n"
+            contents += "exit\n"
         else:
-            contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
+            contents = "dcm -create %s -vll %s\n" % (catalogFile, vllFile)
 
-        codeFid = open(codeFile, 'w')
-        codeFid.write(contents)
-        codeFid.close()
+        codeFile = self._getExtraPath('coords2model.m')
+        with open(codeFile, 'w') as codeFid:
+            codeFid.write(contents)
 
         # Tell Dynamo to create the catalogue with the models
         args = ' %s' % codeFile
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def launchDynamoBoxingStep(self):
-
         tomoList = []
         for tomo in self.inputTomograms.get().iterItems():
             tomogram = tomo.clone()
             tomoName = pwutils.removeBaseExt(tomo.getFileName())
             outFile = self._getExtraPath(tomoName + '.txt')
-            if os.path.isfile(outFile):
+            if exists(outFile):
                 tomogram.count = np.loadtxt(outFile, delimiter=' ').shape[0]
             else:
                 tomogram.count = 0
             tomoList.append(tomogram)
 
         tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "txt")
-
         self.dlg = DynamoTomoDialog(None, self._getExtraPath(), provider=tomoProvider)
 
         # Open dialog to request confirmation to create output
@@ -165,10 +168,67 @@ class DynamoBoxing(ProtTomoPicking):
         pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
-        textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath(), False, True)
+        # textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath(), False, True)
+        precedents = self.inputTomograms.get()
+        meshes = SetOfMeshes.create(self._getPath(), template='meshes%s.sqlite')
+        meshes.setPrecedents(precedents)
+        meshes.setSamplingRate(precedents.getSamplingRate())
+        meshes.setBoxSize(self.boxSize.get())
+        meshes._dynCatalogue = String(self.getCatalogFile())  # Extended attribute
+        tmpCoordFile = self._getTmpPath('points.txt')
+        tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
+        # TODO: add angle management for oriented particles (it seems that it's not being considered here (The False in the commented line textFile2Coords), maybe it has to be only in the model wf protocol
+        for tomoId, modelsDir in self.dynModelsPathDict.items():
+            tomo = tomoIdDict[tomoId]
+            modelFilesInDir = glob.glob(join(modelsDir, '*omd'))
+            self.readModels(modelsDir, modelFilesInDir, tmpCoordFile)
+            with open(tmpCoordFile, 'r') as coordFile:
+                for line in coordFile:
+                    coord = Coordinate3D()
+                    values = line.replace('\n', '').split('\t')
+                    coord.setVolume(tomo)
+                    coord.setPosition(values[0], values[1], values[2], const.BOTTOM_LEFT_CORNER)
+                    coord.setGroupId(int(values[3]))
+                    # Extended attributes
+                    coord._dynModelName = String(values[4])
+                    coord._dynModelFile = String(values[5])
+                    meshes.append(coord)
+
+            os.remove(tmpCoordFile)
+
+        self._defineOutputs(**{OutputDynPicking.meshes.name: meshes})
+        self._defineSourceRelation(self.inputTomograms, meshes)
+        self._updateOutputSet(OutputDynPicking.meshes.name, meshes, state=meshes.STREAM_CLOSED)
+
+    def readModels(self, modelsDir, modelFilesInDir, tmpCoordFile):
+        """Read the models generated for each tomograms and write the info to a temporary file"""
+        codeFile = self._getExtraPath('parseModels.m')
+        contents = ""
+        for modelFile in modelFilesInDir:
+            contents += "modelFile = fullfile('%s', '%s');\n" % (modelsDir, modelFile)
+            contents += "model = dread(modelFile);\n"  # Read current model
+            contents += "mInfo = model.getInfo();\n"
+            contents += "modelName = mInfo.generic.name;\n"
+            contents += "nVesicles = mInfo.infoNGroups();\n"  # Get the number of vesicles annotated with this model
+            contents += "fid = fopen('%s', 'a');\n" % tmpCoordFile  # Open a text file
+            contents += "formatSpec = '%.2f\t%.2f\t%.2f\t%i\t%s\t%s\n';\n"  # coordX, coordY, coordZ, vesicleId, modelName, modelFile
+            contents += "for vesId=1:nVesicles\n"
+            contents += "coords = model.getPointsFromGroup(vesId);\n"  # Get the points corresponding to the current vesicle
+            contents += "nRows = size(coords, 1)"
+            contents += "for row=1:nRows\n"
+            contents += "fprintf(fid, formatSpec, [coords[row,:], vesId, modelName, '%s');\n" % modelFile  # Write current particle data to a text file
+            contents += "end\n"
+            contents += "end\n"
+            contents += "fclose(fid);"  # Close the text file
+        with open(codeFile, 'w') as codeFid:
+            codeFid.write(contents)
+
+    def getCatalogFile(self, withExt=True):
+        return self._getExtraPath(basename(CATALOG_FILENAME)) if withExt else self._getExtraPath(CATALOG_BASENAME)
 
     # --------------------------- DEFINE info functions ----------------------
-    def getMethods(self, output):
+    @staticmethod
+    def getMethods(output):
         msg = 'User picked %d particles ' % output.getSize()
         msg += 'with a particle size of %s.' % output.getBoxSize()
         return msg
