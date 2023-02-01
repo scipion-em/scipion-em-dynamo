@@ -5,18 +5,18 @@
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
-# * This program is free software; you can redistribute it and/or modify
+# * This program is free software you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
-# * the Free Software Foundation; either version 2 of the License, or
+# * the Free Software Foundation either version 2 of the License, or
 # * (at your option) any later version.
 # *
 # * This program is distributed in the hope that it will be useful,
-# * but WITHOUT ANY WARRANTY; without even the implied warranty of
+# * but WITHOUT ANY WARRANTY without even the implied warranty of
 # * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # * GNU General Public License for more details.
 # *
 # * You should have received a copy of the GNU General Public License
-# * along with this program; if not, write to the Free Software
+# * along with this program if not, write to the Free Software
 # * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 # * 02111-1307  USA
 # *
@@ -35,7 +35,7 @@ from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 from pyworkflow.object import String
 from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
-from pyworkflow.utils import makePath
+from pyworkflow.utils import makePath, removeBaseExt
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 from tomo.objects import SetOfMeshes, Coordinate3D
@@ -102,7 +102,8 @@ class DynamoBoxing(ProtTomoPicking):
             for tomo in self.inputTomograms.get().iterItems():
                 tomoPath = abspath(tomo.getFileName())
                 tomoFid.write(tomoPath + '\n')
-                self.dynModelsPathDict[tomo.getTsId()] = self._getExtraPath(CATALOG_BASENAME, 'tomograms', 'volume_%i' % tomoCounter)
+                self.dynModelsPathDict[tomo.getTsId()] = self._getExtraPath(CATALOG_BASENAME, 'tomograms',
+                                                                            'volume_%i' % tomoCounter, 'models')
                 tomoCounter += 1
 
         catalogFile = self.getCatalogFile(withExt=False)
@@ -175,53 +176,55 @@ class DynamoBoxing(ProtTomoPicking):
         meshes.setSamplingRate(precedents.getSamplingRate())
         meshes.setBoxSize(self.boxSize.get())
         meshes._dynCatalogue = String(self.getCatalogFile())  # Extended attribute
-        tmpCoordFile = self._getTmpPath('points.txt')
         tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
         # TODO: add angle management for oriented particles (it seems that it's not being considered here (The False in the commented line textFile2Coords), maybe it has to be only in the model wf protocol
         for tomoId, modelsDir in self.dynModelsPathDict.items():
             tomo = tomoIdDict[tomoId]
-            modelFilesInDir = glob.glob(join(modelsDir, '*omd'))
-            self.readModels(modelsDir, modelFilesInDir, tmpCoordFile)
-            with open(tmpCoordFile, 'r') as coordFile:
-                for line in coordFile:
-                    coord = Coordinate3D()
-                    values = line.replace('\n', '').split('\t')
-                    coord.setVolume(tomo)
-                    coord.setPosition(values[0], values[1], values[2], const.BOTTOM_LEFT_CORNER)
-                    coord.setGroupId(int(values[3]))
-                    # Extended attributes
-                    coord._dynModelName = String(values[4])
-                    coord._dynModelFile = String(values[5])
-                    meshes.append(coord)
-
-            os.remove(tmpCoordFile)
+            tmpCoordFile = self._getTmpPath('%s.txt' % tomoId)
+            modelsDir = self.readModels(modelsDir, tmpCoordFile, tomoId)
+            if modelsDir:
+                with open(tmpCoordFile, 'r') as coordFile:
+                    for line in coordFile:
+                        coord = Coordinate3D()
+                        values = line.replace('\n', '').split('\t')
+                        coord.setVolume(tomo)
+                        coord.setPosition(float(values[0]), float(values[1]), float(values[2]),
+                                          const.BOTTOM_LEFT_CORNER)
+                        coord.setGroupId(int(values[3]))
+                        # Extended attributes
+                        coord._dynModelName = String(values[4])
+                        coord._dynModelFile = String(values[5])
+                        meshes.append(coord)
+                os.remove(tmpCoordFile)
 
         self._defineOutputs(**{OutputDynPicking.meshes.name: meshes})
         self._defineSourceRelation(self.inputTomograms, meshes)
         self._updateOutputSet(OutputDynPicking.meshes.name, meshes, state=meshes.STREAM_CLOSED)
 
-    def readModels(self, modelsDir, modelFilesInDir, tmpCoordFile):
+    def readModels(self, modelsDir, tmpCoordFile, tomoId):
         """Read the models generated for each tomograms and write the info to a temporary file"""
-        codeFile = self._getExtraPath('parseModels.m')
-        contents = ""
-        for modelFile in modelFilesInDir:
-            contents += "modelFile = fullfile('%s', '%s');\n" % (modelsDir, modelFile)
-            contents += "model = dread(modelFile);\n"  # Read current model
-            contents += "mInfo = model.getInfo();\n"
-            contents += "modelName = mInfo.generic.name;\n"
-            contents += "nVesicles = mInfo.infoNGroups();\n"  # Get the number of vesicles annotated with this model
-            contents += "fid = fopen('%s', 'a');\n" % tmpCoordFile  # Open a text file
-            contents += "formatSpec = '%.2f\t%.2f\t%.2f\t%i\t%s\t%s\n';\n"  # coordX, coordY, coordZ, vesicleId, modelName, modelFile
-            contents += "for vesId=1:nVesicles\n"
-            contents += "coords = model.getPointsFromGroup(vesId);\n"  # Get the points corresponding to the current vesicle
-            contents += "nRows = size(coords, 1)"
-            contents += "for row=1:nRows\n"
-            contents += "fprintf(fid, formatSpec, [coords[row,:], vesId, modelName, '%s');\n" % modelFile  # Write current particle data to a text file
-            contents += "end\n"
-            contents += "end\n"
-            contents += "fclose(fid);"  # Close the text file
-        with open(codeFile, 'w') as codeFid:
-            codeFid.write(contents)
+        modelsInDir = False
+        modelFilesInDir = glob.glob(join(modelsDir, '*.omd'))
+        if modelFilesInDir:  # The models directories are created before the annotation step, so they can be empty
+            modelsInDir = True
+            vesicleInd = 1
+            for modelFile in modelFilesInDir:  # There's only one model per vesicle, a file is generated for each model
+                contents = "model = dread('%s')\n" % modelFile  # Read current model
+                contents += "coords = model.points\n"  # Get the points corresponding to the current vesicle
+                contents += "nParticles = size(coords, 1)\n"
+                contents += "for row=1:nParticles\n"
+                contents += "cRow = (100*coords(row,:))/100\n"  # Leave only two decimals for the coordinates
+                contents += "writecell({cRow(1), cRow(2), cRow(3), %i, model.name, '%s'}, '%s', " \
+                            "'WriteMode','append', 'Delimiter', 'tab')\n" % (vesicleInd, modelFile, tmpCoordFile)
+                contents += "end\n"
+                vesicleInd += 1
+
+                codeFile = self._getExtraPath('parseModels_%s_%s.m' % (tomoId, removeBaseExt(modelFile)))
+                with open(codeFile, 'w') as codeFid:
+                    codeFid.write(contents)
+                args = ' %s' % codeFile
+                self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+        return modelsInDir
 
     def getCatalogFile(self, withExt=True):
         return self._getExtraPath(basename(CATALOG_FILENAME)) if withExt else self._getExtraPath(CATALOG_BASENAME)
