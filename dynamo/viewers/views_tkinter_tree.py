@@ -24,15 +24,13 @@
 # *
 # **************************************************************************
 
-import os, threading
+import os
+import threading
 from os.path import abspath, join, isdir
-
-import numpy as np
-from pyworkflow import utils as pwutils
-from pyworkflow.utils.process import runJob
-from pyworkflow.gui.dialog import ToolbarListDialog
-
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME
+from pyworkflow.gui.dialog import ToolbarListDialog
+from pyworkflow.utils import removeBaseExt
+from pyworkflow.utils.process import runJob
 
 
 class DynamoTomoDialog(ToolbarListDialog):
@@ -42,6 +40,9 @@ class DynamoTomoDialog(ToolbarListDialog):
     """
 
     def __init__(self, parent, path, **kwargs):
+        self.proc = None
+        self.currentTomoTxtFile = None
+        self.tomo = None
         self.path = path
         self.provider = kwargs.get("provider", None)
         ToolbarListDialog.__init__(self, parent,
@@ -55,17 +56,17 @@ class DynamoTomoDialog(ToolbarListDialog):
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
-            outPath = join(self.path, pwutils.removeBaseExt(self.tomo.getFileName()) + '.txt')
-            self.tomo.count = np.loadtxt(outPath, delimiter=' ').shape[0]
-            self.tree.update()
+            with open(self.currentTomoTxtFile, 'r') as fn:
+                self.tomo.count = int(fn.read())
+                self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
+        self.currentTomoTxtFile = join(self.path, removeBaseExt(e.getFileName()) + '.txt')
         # Create a catalogue with the Coordinates to be visualized
         mainPath = abspath(join(self.path))
         catalogue = join(mainPath, CATALOG_BASENAME)
         listTomosFile = join(mainPath, VLL_FILE)
-
         if not isdir(catalogue):
             codeFile = abspath(join(self.path, 'writectlg.m'))
             contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
@@ -112,40 +113,26 @@ class DynamoTomoDialog(ToolbarListDialog):
         catalogue = join(self.path, CATALOG_BASENAME)
 
         # Write code to Matlab code file
-        codeFid = open(codeFilePath, 'w')
-        content = "catalogue_name='%s'\n" \
-                  "c=dread(strcat(catalogue_name,'.ctlg'))\n" \
-                  "n=cellfun(@(c) c.fullFileName,c.volumes,'UniformOutput',false)\n" \
-                  "idt=find(cell2mat(cellfun(@(c) strcmp(c,'%s'),n,'UniformOutput',false)))\n" \
-                  "eval(strcat('dtmslice @{%s}',num2str(idt)))\n" \
-                  "modeltrack.loadFromCatalogue('handles',c,'full',true,'select',false)\n" \
-                  "uiwait(dpkslicer.getHandles().figure_fastslicer)\n" \
-                  "modeltrack.saveAllInCatalogue\n" \
-                  "models = dread(dcmodels(catalogue_name,'i', idt))\n" \
-                  "outFile='%s'\n" \
-                  "savePath='%s'\n" \
-                  "outPoints=[outFile '.txt']\n" \
-                  "outAngles=['angles_' outFile '.txt']\n" \
-                  "crop_points=[]\n" \
-                  "crop_angles=[]\n" \
-                  "model_id=0\n" \
-                  "for model=models\n" \
-                  "model_id=model_id+1\n" \
-                  "if iscell(model)\n" \
-                  "crop_points=[crop_points; [model{end}.points model_id*ones(length(model{end}.points),1)]]\n" \
-                  "else\n" \
-                  "crop_points=[crop_points; [model.points model_id*ones(length(model.points),1)]]\n" \
-                  "end\n" \
-                  "end\n" \
-                  "if ~isempty(crop_points)\n" \
-                  "writematrix(crop_points,fullfile(savePath,outPoints),'Delimiter',' ')\n" \
-                  "end\n" \
-                  "exit\n" % (abspath(catalogue), abspath(tomo.getFileName()), catalogue,
-                              pwutils.removeBaseExt(tomo.getFileName()), self.path)
-        # "writematrix(crop_angles,fullfile(savePath,outAngles),'Delimiter',' ')\n" \
-        # "crop_angles=[crop_angles; [model{end}.crop_angles model_id*ones(length(model{end}.crop_angles),1)]]\n" \
-        # "crop_angles=[crop_angles; [model.crop_angles model_id*ones(length(model.crop_angles),1)]]\n" \
-        codeFid.write(content)
-        codeFid.close()
-
+        with open(codeFilePath, 'w') as codeFid:
+            content = "ctlgNoExt = '%s'\n" % catalogue
+            content += "ctlgName = [ctlgNoExt, '.ctlg']\n"
+            content += "ctlg = dread(ctlgName)\n"  # Load the catalogue
+            content += "tomoFiles = cellfun(@(x) x.file, ctlg.volumes, 'UniformOutput', false)\n"  # Cell with the tomo names
+            content += "currentTomoInd = find(ismember(tomoFiles, '%s'))\n" % abspath(tomo.getFileName())  # Index of the current tomo in the catalog
+            content += "loadDynSyntax = sprintf('dtmslice @{%s}%i', ctlgNoExt, currentTomoInd)\n"
+            content += "eval(loadDynSyntax)\n"  # Launch Dynamo's picker GUI
+            content += "uiwait(dpkslicer.getHandles().figure_fastslicer)\n"  # Wait until it's closed
+            content += "modeltrack.saveAllInCatalogue\n"  # Save in the catalog
+            content += "models = dcmodels(ctlgNoExt, 'i', currentTomoInd)\n"
+            content += "nParticles = 0\n"
+            content += "for i=1:length(models)\n"
+            content += "model = dread(models{i})\n"
+            content += "newParts = size(model.points, 1)\n"
+            content += "nParticles = nParticles + newParts\n"  # Sum the no. of particles from all the models generated for the current tomogram
+            content += "end\n"
+            content += "fid = fopen('%s', 'w')\n" % self.currentTomoTxtFile
+            content += "fprintf(fid, '%i', nParticles)\n"  # Save the number of particles to a text file
+            content += "fclose(fid)\n"
+            content += "nParticles"
+            codeFid.write(content)
         return codeFilePath

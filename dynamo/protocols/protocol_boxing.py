@@ -27,7 +27,7 @@
 import glob
 import os
 from enum import Enum
-from os.path import abspath, exists, join, basename
+from os.path import exists, join, basename, abspath
 
 import numpy as np
 
@@ -35,7 +35,7 @@ from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 from pyworkflow.object import String
 from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
-from pyworkflow.utils import makePath, removeBaseExt
+from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 from tomo.objects import SetOfMeshes, Coordinate3D
@@ -165,8 +165,7 @@ class DynamoBoxing(ProtTomoPicking):
         import tkinter as tk
         if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, tk.Frame()):
             self._createOutput()
-
-        pwutils.cleanPattern(self._getExtraPath('*.m'))
+        # pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
         # textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath(), False, True)
