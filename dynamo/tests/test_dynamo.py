@@ -27,12 +27,17 @@
 
 
 import os
+
+from pyworkflow.object import Pointer, String
 from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
 from tomo.tests import DataSet
 import tomo.constants as const
 from xmipp3.protocols import XmippProtCreateMask3D
 from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoCoordsToModel
+
+DYNAMOPARAMNAME = "dyn"
+MYPROJECT = "myproject"
 
 
 class TestDynamoBase(BaseTest):
@@ -51,7 +56,7 @@ class TestDynamoBase(BaseTest):
         cls.smallTomogram = cls.dataset.getFile('coremask_normcorona.mrc')
 
 
-class TestSubTomogramsAlignment(BaseTest):
+class TestDynamoSubTomogramsAlignment(BaseTest):
     """ This class check if the protocol to import sub tomograms works
     properly."""
 
@@ -60,6 +65,24 @@ class TestSubTomogramsAlignment(BaseTest):
         setupTestProject(cls)
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
+
+    def test_rounds(self):
+
+        staDynamo = DynamoSubTomoMRA()
+
+        def testValueCase(value, expectedresult):
+
+            scipionParam = String(value)
+
+            result = staDynamo.getRoundParams( DYNAMOPARAMNAME, scipionParam, projectName=MYPROJECT)
+
+            self.assertEquals(expectedresult,
+                              result, "getRounds not working for this value: %s." % value)
+
+
+        testValueCase("1", "dvput('%s', '%s', '1');\n" % (MYPROJECT, DYNAMOPARAMNAME))
+
+        testValueCase("5 3", "dvput('%s', '%s', '5');\ndvput('%s', '%s_r2', '3');\n" % (MYPROJECT, DYNAMOPARAMNAME, MYPROJECT, DYNAMOPARAMNAME))
 
     def _runPreviousProtocols(self):
         protImport = self.newProtocol(ProtImportSubTomograms,
@@ -311,10 +334,11 @@ class TestDynamoExtraction(TestDynamoBase):
         protDynamoExtractionNoAngles = self.newProtocol(DynamoExtraction,
                                                         objLabel='Extraction without Angles - %s' % text,
                                                         inputTomograms=protImportTomogram.outputTomograms,
-                                                        inputCoordinates=coordsNoAngle,
                                                         boxSize=coordsNoAngle.getBoxSize(),
                                                         tomoSource=tomoSource,
                                                         downFactor=downFactor)
+
+        protDynamoExtractionNoAngles.inputCoordinates= Pointer(protImportCoordinatesNoAngles, extended='outputCoordinates')
 
         protDynamoExtractionAngles = self.newProtocol(DynamoExtraction,
                                                       objLabel='Extraction with Angles - %s' % text,
@@ -324,6 +348,8 @@ class TestDynamoExtraction(TestDynamoBase):
                                                       tomoSource=tomoSource,
                                                       downFactor=downFactor)
 
+        protDynamoExtractionAngles.inputCoordinates = Pointer(protImportCoordinatesAngles, extended='outputCoordinates')
+
         self.launchProtocol(protDynamoExtractionNoAngles)
         self.launchProtocol(protDynamoExtractionAngles)
         return protDynamoExtractionNoAngles, protDynamoExtractionAngles
@@ -331,65 +357,65 @@ class TestDynamoExtraction(TestDynamoBase):
     def test_Extraction_SameAsPicking(self):
         protExtraction = self._runExtraction(text='SameAsPicking')
 
-        outputNoAngles = getattr( protExtraction[0], 'outputSetOfSubtomogram', None)
+        outputNoAngles = getattr( protExtraction[0], 'Subtomograms', None)
         self.assertTrue(outputNoAngles)
         self.assertTrue(outputNoAngles.hasCoordinates3D())
-        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputNoAngles._coordsPointer.hasExtended())
 
-        outputAngles = getattr( protExtraction[1], 'outputSetOfSubtomogram', None)
+        outputAngles = getattr( protExtraction[1], 'Subtomograms', None)
         self.assertTrue(outputAngles)
         self.assertTrue(outputAngles.hasCoordinates3D())
-        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputAngles._coordsPointer.hasExtended())
 
         return protExtraction
 
     def test_Extraction_Other(self):
         protExtraction = self._runExtraction(tomoSource=1, text='OtherSource')
 
-        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        outputNoAngles = getattr(protExtraction[0], 'Subtomograms', None)
         self.assertTrue(outputNoAngles)
         self.assertTrue(outputNoAngles.hasCoordinates3D())
-        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputNoAngles._coordsPointer.hasExtended())
 
-        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        outputAngles = getattr(protExtraction[1], 'Subtomograms', None)
         self.assertTrue(outputAngles)
         self.assertTrue(outputAngles.hasCoordinates3D())
-        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputAngles._coordsPointer.hasExtended())
 
         return protExtraction
 
     def test_Extraction_DownSampling(self):
         protExtraction = self._runExtraction(downFactor=2, text='DownSampling')
 
-        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        outputNoAngles = getattr(protExtraction[0], 'Subtomograms', None)
         self.assertTrue(outputNoAngles)
         self.assertTrue(outputNoAngles.hasCoordinates3D())
-        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputNoAngles._coordsPointer.hasExtended())
 
-        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        outputAngles = getattr(protExtraction[1], 'Subtomograms', None)
         self.assertTrue(outputAngles)
         self.assertTrue(outputAngles.hasCoordinates3D())
-        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputAngles._coordsPointer.hasExtended())
 
         return protExtraction
 
     def test_Extraction_All(self):
         protExtraction = self._runExtraction(tomoSource=1, downFactor=2, text='AllOptions')
 
-        outputNoAngles = getattr(protExtraction[0], 'outputSetOfSubtomogram', None)
+        outputNoAngles = getattr(protExtraction[0], 'Subtomograms', None)
         self.assertTrue(outputNoAngles)
         self.assertTrue(outputNoAngles.hasCoordinates3D())
-        self.assertTrue(outputNoAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputNoAngles._coordsPointer.hasExtended())
 
-        outputAngles = getattr(protExtraction[1], 'outputSetOfSubtomogram', None)
+        outputAngles = getattr(protExtraction[1], 'Subtomograms', None)
         self.assertTrue(outputAngles)
         self.assertTrue(outputAngles.hasCoordinates3D())
-        self.assertTrue(outputAngles.getCoordinates3D().getObjValue())
+        self.assertTrue(outputAngles._coordsPointer.hasExtended())
 
         return protExtraction
 
 
-class TestDynImportSubTomograms(BaseTest):
+class TestDynamoImportSubTomograms(BaseTest):
     """ This class check if the protocol to import subtomograms from Dynamo works
      properly."""
 
@@ -431,9 +457,10 @@ class TestDynImportSubTomograms(BaseTest):
         self.assertTrue(output.getFirstItem().getClassId() == 1)
         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
-        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER), 175, delta=1)
-        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER), 134, delta=1)
-        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER), 115, delta=1)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getX(const.SCIPION), -336.89, delta=1)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getY(const.SCIPION), -377.65, delta=1)
+        self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getZ(const.SCIPION), -140.26, delta=1)
+
 
 class TestDynamoCoordsToModel(TestDynamoBase):
     '''This class checks if the protocol to convert a SetOfCoordinates3D to a Dynamo

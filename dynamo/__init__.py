@@ -23,20 +23,21 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import os.path
 from os.path import join
 import subprocess
 import pwem
 import pyworkflow.utils as pwutils
 from .constants import *
 
-__version__ = '3.1.9'
+__version__ = '3.1.11'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
 class Plugin(pwem.Plugin):
     _homeVar = DYNAMO_HOME
     _pathVars = [DYNAMO_HOME]
+    _url = "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Main_Page"
     # _supportedVersions =
 
     @classmethod
@@ -49,13 +50,15 @@ class Plugin(pwem.Plugin):
         environ = pwutils.Environ(os.environ)
         dyn_home = cls.getHome()
         # For GPU, we need to add to LD_LIBRARY_PATH the path to Cuda/lib
+        paths = (dyn_home + '/MCRLinux/runtime/glnxa64',
+                 dyn_home + '/MCRLinux/bin/glnxa64',
+                 dyn_home + '/MCRLinux/sys/os/glnxa64',
+                 dyn_home + '/MCRLinux/sys/opengl/lib/glnxa64',
+                 pwem.Config.CUDA_LIB)
+
         environ.update({
             'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
-            'LD_LIBRARY_PATH': ":".join(dyn_home + '/MCRLinux/runtime/glnxa64',
-                                        dyn_home + '/MCRLinux/bin/glnxa64',
-                                        dyn_home + '/MCRLinux/sys/os/glnxa64',
-                                        dyn_home + '/MCRLinux/sys/opengl/lib/glnxa64',
-                                        pwem.Config.CUDA_LIB),
+            'LD_LIBRARY_PATH': ":".join(paths),
             'DYNAMO_ROOT': dyn_home
         }, position=pwutils.Environ.BEGIN)
         return environ
@@ -117,5 +120,12 @@ class Plugin(pwem.Plugin):
                        version='1.146',
                        tar='dynamo-1.146.tar.gz',
                        commands=commands,
-                       default=True)
+                       default=False)
+
+        # Dynamo 1.1.532
+        commands = [("cd cuda && make clean && ./config.sh %s && make all && touch cuda_compiled" % os.path.dirname(pwem.Config.CUDA_LIB), 'cuda/cuda_compiled')]
+        env.addPackage('dynamo', version='1.1.532',
+                       tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
+                       createBuildDir = True,
+                       commands=commands)
 
