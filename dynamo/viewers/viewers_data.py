@@ -109,6 +109,7 @@ class DynamoDataViewer(pwviewer.Viewer):
 
             import tkinter as tk
             frame = tk.Frame()
+            # TODO: check if the user has made changes and only ask in that case
             if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
                 textFile2Coords(self.protocol, outputCoords.getPrecedents(), path, directions=False)
 

@@ -28,6 +28,7 @@ import os
 import threading
 from os.path import abspath, join, isdir
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME
+from dynamo.utils import getCurrentTomoTxtFile
 from pyworkflow.gui.dialog import ToolbarListDialog
 from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.process import runJob
@@ -62,7 +63,7 @@ class DynamoTomoDialog(ToolbarListDialog):
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
-        self.currentTomoTxtFile = join(self.path, removeBaseExt(e.getFileName()) + '.txt')
+        self.currentTomoTxtFile = getCurrentTomoTxtFile(self.path, e)
         # Create a catalogue with the Coordinates to be visualized
         mainPath = abspath(join(self.path))
         catalogue = join(mainPath, CATALOG_BASENAME)
@@ -90,6 +91,7 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "addPoint(general,coords(:,1:3),coords(:,4))\n"
             contents += "general.linkCatalogue('%s','i',tomoIndex,'s',1)\n" % catalogue
             contents += "general.saveInCatalogue()\n"
+            # TODO: think about a method to check if the user has made any changes in the points, apart from just visualizing
             contents += "end\n"
             contents += "end\n"
             contents += "exit\n"

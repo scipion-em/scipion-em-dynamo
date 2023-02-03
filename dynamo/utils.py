@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es)
+# * Authors:    Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
@@ -24,13 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from .protocol_average_subtomograms import DynamoProtAvgSubtomograms
-from .protocol_subtomo_MRA import DynamoSubTomoMRA
-from .protocol_extraction import DynamoExtraction
-from .protocol_boxing import DynamoBoxing
-from .protocol_import_subtomos import DynamoImportSubtomos
-from .protocol_subBoxing import DynamoSubBoxing
-# from .protocol_model_workflow import DynamoModelWorkflow
-from .protocol_import_tomograms import DynamoImportTomograms
-from .protocol_bin_tomograms import DynamoBinTomograms
-from .protocol_coords_to_model import DynamoCoordsToModel
+from os.path import join
+
+
+def getCurrentTomoTxtFile(filePath, tomo):
+    return join(filePath, tomo.getTsId() + '.txt')

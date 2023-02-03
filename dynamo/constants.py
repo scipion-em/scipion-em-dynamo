@@ -37,3 +37,38 @@ DYNAMO_SHIPPED_MCR = 'dynamo_activate_linux_shipped_MCR.sh'
 CATALOG_BASENAME = 'project'
 CATALOG_FILENAME = '%s.ctlg' % CATALOG_BASENAME
 VLL_FILE = 'tomograms.vll'
+
+# Names of Dynamo models
+M_GENERAL_NAME = "General"
+M_GENERAL_WITH_BOXES_NAME = "General (shown in boxes)"
+M_DIPOLE_SET_NAME = "Oriented particles (dipole set)"
+M_SURFACE_NAME = "Surface"
+M_VESICLE_NAME = "Vesicle"
+M_ELLIPSOIDAL_VESICLE_NAME = "Ellipsoidal vesicle"
+M_MARKED_ELLIP_VESICLE_NAME = "Marked ellipsoidal vesicle"
+
+# Description of Dynamo models
+M_GENERAL_DES = "Coordinates (x, y, z) without any specific property."
+M_GENERAL_WITH_BOXES_DES = "Same as general, but allowing the creation of boxes when wisualized with " \
+                           "the Dynamo dtmslice GUI.\n\n" \
+                           "\tSpecific property: box size."
+M_DIPOLE_SET_DES = "Isolated particles with orientation imparted individually.\n" \
+                   "This is a simple model: it describes the picking geometry in which the user defines positions " \
+                   "AND orientations of isolated particles.\n\nMore details here --> " \
+                   "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Dipole_set_models"
+M_SURFACE_DES = "Model class for modelling of membranes patches by picking points on membranes boundaries. On " \
+                "different x, y or z levels.\n\nMore details here --> " \
+                "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Membrane_models"
+M_VESICLE_DES = "Basic container for vesicle-like models.\n\n" \
+                "\tSpecific properties:\n" \
+                "\t  - radius.\n" \
+                "\t  - separation between points on the surface.\n\n" \
+                "\tMore details here --> https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Vesicle_models"
+M_ELLIPSOIDAL_VESICLE_DES = "Basic container for vesicle-like models of ellipsoidal shape.\n\n" \
+                            "\tSpecific properties:\n" \
+                            "\t  - radial directions (x, y, z)\n" \
+                            "\t  - radius in x, y and z directions\n\n" \
+                            "\tMore details here --> https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Vesicle_models"
+M_MARKED_ELLIP_VESICLE_DES = "A vesicle marker with a single 3d point.\n\n" \
+                             "\tSpecific property: exclusion radius around marker, used to exclude whatever is close " \
+                             "to the marker."
