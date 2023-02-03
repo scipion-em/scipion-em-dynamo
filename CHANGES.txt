@@ -1,3 +1,5 @@
+V3.1.12
+  - Dynamo's alignment step call .exe file to get output "on the fly"
 V3.1.11
   - Dynamo alignment significantly refactored:
        many params allow specification of round like "360 180 90". Labeled with (R)

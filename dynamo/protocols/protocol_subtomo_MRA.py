@@ -474,22 +474,26 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def alignStep(self):
 
-        fhCommands2 = open(self._getExtraPath(ALIGNMENT_CMD_FILE), 'w')
-        alignmentCommands= self.get_computing_command()
+        with open(self._getExtraPath(ALIGNMENT_CMD_FILE), 'w') as fhCommands2:
+            alignmentCommands= self.get_computing_command()
 
-        if not self.useDynamoGui:
-    
-            alignmentCommands += "dvcheck('%s');" % DYNAMO_ALIGNMENT_PROJECT
-            alignmentCommands += "dvunfold('%s');dynamo_execute_project %s" % (DYNAMO_ALIGNMENT_PROJECT, DYNAMO_ALIGNMENT_PROJECT)
-        
-        
-        fhCommands2.write(alignmentCommands)
-        fhCommands2.close()
+            if not self.useDynamoGui:
+
+                alignmentCommands += "dvcheck('%s');" % DYNAMO_ALIGNMENT_PROJECT
+                alignmentCommands += "dvunfold('%s');" % DYNAMO_ALIGNMENT_PROJECT
+                #alignmentCommands += "dynamo_execute_project %s" % (DYNAMO_ALIGNMENT_PROJECT, DYNAMO_ALIGNMENT_PROJECT)
+
+
+            fhCommands2.write(alignmentCommands)
+            fhCommands2.close()
+
         Plugin.runDynamo(self, ALIGNMENT_CMD_FILE, cwd=self._getExtraPath())
-        
+
         if self.useDynamoGui:
             self.showDynamoGUI()
 
+        # This way shows output more or less on the fly.
+        self.runJob("./%s.exe" % DYNAMO_ALIGNMENT_PROJECT, [], env=Plugin.getEnviron(), cwd=self._getExtraPath())
 
     def createOutputStep(self):
 
@@ -506,7 +510,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             self.fhTable.close()
             averageSubTomogram = AverageSubTomogram()
             averageSubTomogram.setFileName(
-                self._getExtraPath('%s/results/ite_%04d/averages/average_ref_001_ite_%04d.em')
+                self._getExtraPath('%s/results/ite_%04d/averages/average_symmetrized_ref_001_ite_%04d.em')
                 % (DYNAMO_ALIGNMENT_PROJECT, niters, niters))
             averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
             self._defineOutputs(outputSubtomograms=self.subtomoSet)
