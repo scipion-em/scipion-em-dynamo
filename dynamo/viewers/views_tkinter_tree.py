@@ -111,12 +111,13 @@ class DynamoTomoDialog(ToolbarListDialog):
 
     def writeMatlabCode(self, tomo):
         # Initialization params
-        codeFilePath = join(os.getcwd(), "DynamoPicker.m")
+        codeFilePath = join(self.path, "DynamoPicker.m")
         catalogue = join(self.path, CATALOG_BASENAME)
 
         # Write code to Matlab code file
         with open(codeFilePath, 'w') as codeFid:
-            content = "ctlgNoExt = '%s'\n" % catalogue
+            content = "cd(fullfile('..', '..', '..'))\n"  # Change the extra directory to the project directory for relative paths coherence
+            content += "ctlgNoExt = '%s'\n" % catalogue
             content += "ctlgName = [ctlgNoExt, '.ctlg']\n"
             content += "ctlg = dread(ctlgName)\n"  # Load the catalogue
             content += "tomoFiles = cellfun(@(x) x.file, ctlg.volumes, 'UniformOutput', false)\n"  # Cell with the tomo names

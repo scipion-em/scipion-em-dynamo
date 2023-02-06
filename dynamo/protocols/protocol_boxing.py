@@ -31,7 +31,7 @@ from os.path import exists, join, basename, abspath
 
 import numpy as np
 
-from dynamo.utils import getCurrentTomoTxtFile
+from dynamo.utils import getCurrentTomoTxtFile, getCatalogFile
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 from pyworkflow.object import String
@@ -114,7 +114,7 @@ class DynamoBoxing(ProtTomoPicking):
                                                                             'volume_%i' % tomoCounter, 'models')
                 tomoCounter += 1
 
-        catalogFile = self.getCatalogFile(withExt=False)
+        catalogFile = getCatalogFile(self._getExtraPath(), withExt=False)
         if self.modPrevMeshes.get():
             # Save coordinates into .txt file for each tomogram and pass them to dynamo
             inputMeshes = self.inputMeshes.get()
@@ -129,7 +129,7 @@ class DynamoBoxing(ProtTomoPicking):
 
             # Create small program to tell Dynamo to save the inputMeshes in a Ellipsoidal Vesicle Model
             contents = "dcm -create %s -fromvll %s\n" % (catalogFile, vllFile)
-            contents += "catalogue=dread('%s')\n" % self.getCatalogFile()
+            contents += "catalogue=dread('%s')\n" % getCatalogFile(self._getExtraPath())
             contents += "nVolumes=length(catalogue.volumes)\n"
             contents += "for idv=1:nVolumes\n"
             contents += "tomoPath=catalogue.volumes{idv}.fullFileName()\n"
@@ -172,7 +172,9 @@ class DynamoBoxing(ProtTomoPicking):
         import tkinter as tk
         if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, tk.Frame()):
             self._createOutput()
-        # pwutils.cleanPattern(self._getExtraPath('*.m'))
+            # Delete the .m generated files if requested
+        if self.deleteGenMFiles.get():
+            pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
         # textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath(), False, True)
@@ -181,7 +183,7 @@ class DynamoBoxing(ProtTomoPicking):
         meshes.setPrecedents(precedents)
         meshes.setSamplingRate(precedents.getSamplingRate())
         meshes.setBoxSize(self.boxSize.get())
-        meshes._dynCatalogue = String(self.getCatalogFile())  # Extended attribute
+        meshes._dynCatalogue = String(getCatalogFile(self._getExtraPath()))  # Extended attribute
         tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
         # TODO: add angle management for oriented particles (it seems that it's not being considered here (The False in the commented line textFile2Coords), maybe it has to be only in the model wf protocol
         for tomoId, modelsDir in self.dynModelsPathDict.items():
@@ -231,9 +233,6 @@ class DynamoBoxing(ProtTomoPicking):
                 args = ' %s' % codeFile
                 self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
         return modelsInDir
-
-    def getCatalogFile(self, withExt=True):
-        return self._getExtraPath(basename(CATALOG_FILENAME)) if withExt else self._getExtraPath(CATALOG_BASENAME)
 
     # --------------------------- DEFINE info functions ----------------------
     @staticmethod

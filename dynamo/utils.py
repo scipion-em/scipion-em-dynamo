@@ -23,8 +23,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import join
+from os.path import join, basename
+from dynamo import CATALOG_FILENAME, CATALOG_BASENAME
 
 
 def getCurrentTomoTxtFile(filePath, tomo):
     return join(filePath, tomo.getTsId() + '.txt')
+
+
+def getCatalogFile(fpath, withExt=True):
+    return join(basename(CATALOG_FILENAME)) if withExt else join(fpath, CATALOG_BASENAME)

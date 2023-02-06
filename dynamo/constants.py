@@ -38,12 +38,21 @@ CATALOG_BASENAME = 'project'
 CATALOG_FILENAME = '%s.ctlg' % CATALOG_BASENAME
 VLL_FILE = 'tomograms.vll'
 
+# Tags of Dynamo models
+MB_BY_LEVELS = 'mmembraneByLevels'
+MB_VESICLE = 'mvesicle'
+MB_ELLIPSOIDAL = 'mellipsoidalVesicle'
+MB_ELLIPSOIDAL_MARKED = 'mmarkedEllipsoidalVesicle'
+MB_GENERAL = 'megeneral'
+MB_GENERAL_BOXES = 'mboxes'
+
+
 # Names of Dynamo models
 M_GENERAL_NAME = "General"
 M_GENERAL_WITH_BOXES_NAME = "General (shown in boxes)"
 M_DIPOLE_SET_NAME = "Oriented particles (dipole set)"
 M_SURFACE_NAME = "Surface"
-M_VESICLE_NAME = "Vesicle"
+M_VESICLE_NAME = "Vesicle (spherical)"
 M_ELLIPSOIDAL_VESICLE_NAME = "Ellipsoidal vesicle"
 M_MARKED_ELLIP_VESICLE_NAME = "Marked ellipsoidal vesicle"
 
