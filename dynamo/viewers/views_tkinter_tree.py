@@ -116,8 +116,7 @@ class DynamoTomoDialog(ToolbarListDialog):
 
         # Write code to Matlab code file
         with open(codeFilePath, 'w') as codeFid:
-            content = "cd(fullfile('..', '..', '..'))\n"  # Change the extra directory to the project directory for relative paths coherence
-            content += "ctlgNoExt = '%s'\n" % catalogue
+            content = "ctlgNoExt = '%s'\n" % catalogue
             content += "ctlgName = [ctlgNoExt, '.ctlg']\n"
             content += "ctlg = dread(ctlgName)\n"  # Load the catalogue
             content += "tomoFiles = cellfun(@(x) x.file, ctlg.volumes, 'UniformOutput', false)\n"  # Cell with the tomo names

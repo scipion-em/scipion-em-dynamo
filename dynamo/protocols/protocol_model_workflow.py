@@ -60,6 +60,7 @@ dynModelsDict = {
     MB_GENERAL_BOXES: M_GENERAL,
 }
 
+
 class OutputsModelWf(Enum):
     meshes = SetOfMeshes
 
@@ -71,7 +72,6 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     _label = 'model workflow'
     _devStatus = BETA
     _possibleOutputs = OutputsModelWf
-    OUTPUT_PREFIX = 'output3DCoordinates'
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -118,20 +118,6 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                        default=100000,
                        label="Maximun number of triangles [EV][S][GE][GS]",
                        help='Maximum number of triangles allowed during generation of a depiction mesh')
-        # group.addParam('auto', params.BooleanParam,
-        #                default=True,
-        #                expertLevel=LEVEL_ADVANCED,
-        #                label='Auto detect geometry parameters? [EV][GE]')
-        # group.addParam('center', params.NumericListParam,
-        #                default='0 0 0',
-        #                label='Center (pix.) [EV][GE] only if auto = No',
-        #                expertLevel=LEVEL_ADVANCED,
-        #                help='Center of globular models, or a point marking the interior part of a membrane')
-        # group.addParam('radius', params.NumericListParam,
-        #                default='10 10 10',
-        #                label='radius XYZ (pix.) [EV][GE] only if auto = No',
-        #                expertLevel=LEVEL_ADVANCED,
-        #                help='Semi-axes for ellipsoidal vesicles or general models oriented with ellipsoidal vesicles.')
         group.addParam('cropping', params.IntParam,
                        default=10,
                        label="Cropping parameter [EV][S]",
@@ -163,11 +149,8 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         presentIdsListOfDicts = self.inputMeshes.get().aggregate(["MAX"], "_volId", ["_volId", "_tomoId"])
         self.presentTomoIds = [d['_tomoId'] for d in presentIdsListOfDicts]
         self.precedentsTsIdList = {tomo.getTsId(): tomo for tomo in self.inputMeshes.get().getPrecedents()}
-        self.savePath = abspath(self._getExtraPath())
+        self.savePath = self._getExtraPath()
         self.cataloguePath = abspath(removeExt(self.inputMeshes.get()._dynCatalogue.get()))
-        # self.center = getFloatListFromValues(self.center.get())
-        # self.radius = getFloatListFromValues(self.radius.get())
-        # self.orientationMesh = abspath(removeExt(self.orientMesh.get()._dynCatalogue.get()))
 
     def applyWorkflowStep(self, tomoId, modelName, modelFile, vesicleId):
         commandsFile = self.writeMatlabFile(tomoId, modelName, modelFile, vesicleId)
@@ -228,8 +211,8 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         return codeFilePath
 
     def genVesicleCmdFileContents(self, tomoId, modelName, modelFile, vesicleId):
-        content = "path = '%s'\n" % self.cataloguePath
-        content += "m = dread('%s')\n" % abspath(modelFile)  # Load the model created in the boxing protocol
+        # Load the current Dynamo model
+        content = self._genMCode4ReadDynModel(modelFile)
         # Let Dynamo approximate the geometry based on the points annotated in the boxing protocol
         content += "m.approximateGeometryFromPoints()\n"
         # Mesh creation steps (some of which are specific for each sub-model of type vesicle)
@@ -245,8 +228,8 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         return content
 
     def genSCmdFileContents(self, tomoId, modelFile, vesicleId):
-        content = "path='%s'\n" % self.cataloguePath
-        content += "m=dread('%s')\n" % abspath(modelFile)  # Load the model created in the boxing protocol
+        # Load the current Dynamo model
+        content = self._genMCode4ReadDynModel(modelFile)
         # Mesh creation steps
         content += "m.mesh_parameter=%i\n" % self.meshParameter.get()
         content += "m.crop_mesh_parameter=%i\n" % self.cropping.get()
@@ -374,8 +357,13 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         return abspath(self._getExtraPath('%s.txt' % tomoId))
 
     @staticmethod
+    def _genMCode4ReadDynModel(modelFile):
+        """MATLAB code to read a model file from Dynamo"""
+        return "m = dread('%s')\n" % abspath(modelFile)  # Load the model created in the boxing protocol
+
+    @staticmethod
     def _genMCode4ReadAndSaveData(vesicleId, modelFile, outputFile):
-        """Format and write the output data in a text file that will be read in the step create output.
+        """MATLAB code to format and write the output data in a text file that will be read in the step create output.
         The column headers of the generated file are:
         coordX, coordY, coordZ, rot, tilt, psi, vesicleId, modelName, modelFile"""
         content = "coordsMatrix = m.crop_points\n"
