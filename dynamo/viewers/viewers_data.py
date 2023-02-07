@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# *              Scipion Team (scipion@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,24 +25,19 @@
 # *
 # **************************************************************************
 
-import os
+from os.path import join, abspath
 import numpy as np
-
 from pwem.viewers import ObjectView
-
 import pyworkflow.viewer as pwviewer
-import pyworkflow.utils as pwutils
 from pyworkflow.gui.dialog import askYesNo
+from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
-from pyworkflow.utils.process import runJob
-
-import tomo.objects
-from tomo.viewers.views_tkinter_tree import MeshesTreeProvider, TomogramsTreeProvider
+from tomo.objects import SetOfCoordinates3D, SetOfMeshes
+from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 import tomo.constants as const
-
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo.convert import textFile2Coords, matrix2eulerAngles
-from dynamo import Plugin, VLL_FILE
+from dynamo.convert import textFile2Coords
+from dynamo import VLL_FILE
 
 
 class DynamoDataViewer(pwviewer.Viewer):
@@ -49,10 +45,7 @@ class DynamoDataViewer(pwviewer.Viewer):
     with the Xmipp program xmipp_showj
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [
-        tomo.objects.SetOfMeshes,
-        tomo.objects.SetOfCoordinates3D
-    ]
+    _targets = [SetOfMeshes, SetOfCoordinates3D]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -66,7 +59,7 @@ class DynamoDataViewer(pwviewer.Viewer):
         views = []
         cls = type(obj)
 
-        if issubclass(cls, tomo.objects.SetOfCoordinates3D) or issubclass(cls, tomo.objects.SetOfMeshes):
+        if issubclass(cls, SetOfCoordinates3D) or issubclass(cls, SetOfMeshes):
             outputCoords = obj
             tomos = outputCoords.getPrecedents()
 
@@ -80,21 +73,19 @@ class DynamoDataViewer(pwviewer.Viewer):
                 tomoList.append(tomogram)
 
             path = self.protocol._getExtraPath()
-
             tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
+            listTomosFile = join(path, VLL_FILE)
 
-            listTomosFile = os.path.join(path, VLL_FILE)
-
-            # Create list of tomos file
-            tomoFid = open(listTomosFile, 'w')
-            for tomoFile in tomos.getFiles():
-                tomoPath = os.path.abspath(tomoFile)
-                tomoFid.write(tomoPath + '\n')
-            tomoFid.close()
-
+            # Create list of tomos file (VLL file)
+            with open(listTomosFile, 'w') as tomoFid:
+                for tomo in tomoList:
+                    tomoPath = abspath(tomo.getFileName())
+                    tomoFid.write(tomoPath + '\n')
+            
+            # Write the coordinates corresponding for each tomogram into a text file that will be read later by Dynamo
             for tomogram in tomoList:
-                outFileCoord = os.path.join(path, pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
-                # outFileAngle = os.path.join(path, 'angles_' + pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
+                outFileCoord = join(path, removeBaseExt(tomogram.getFileName())) + ".txt"
+                # outFileAngle = join(path, 'angles_' + removeBaseExt(tomogram.getFileName())) + ".txt"
                 coords_tomo = []
                 # angles_tomo = []
                 for coord in outputCoords.iterCoordinates(tomogram):
@@ -105,7 +96,9 @@ class DynamoDataViewer(pwviewer.Viewer):
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
                     # np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
-            self.dlg = DynamoTomoDialog(self._tkRoot, path, provider=tomoProvider)
+            self.dlg = DynamoTomoDialog(self._tkRoot, path,
+                                        provider=tomoProvider,
+                                        calledFromViewer=True)
 
             import tkinter as tk
             frame = tk.Frame()

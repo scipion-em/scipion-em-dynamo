@@ -27,7 +27,7 @@
 import glob
 import os
 from enum import Enum
-from os.path import exists, join, basename, abspath
+from os.path import exists, join, abspath
 
 import numpy as np
 
@@ -46,7 +46,7 @@ from tomo.protocols import ProtTomoPicking
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 import tomo.constants as const
 
-from dynamo import Plugin, VLL_FILE, CATALOG_FILENAME, CATALOG_BASENAME
+from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 
 

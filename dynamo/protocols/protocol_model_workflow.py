@@ -133,6 +133,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._initialize()
+        # TODO: eliminar el where y añadir un filtro por tomoId en su lugar para evitar iterar sobre ello
         for tomoId in self.presentTomoIds:
             # Get the models associated to the current tomogram
             modelsDict = self.inputMeshes.get().getUniqueValues(['_dynModelName', '_dynModelFile', '_groupId'],

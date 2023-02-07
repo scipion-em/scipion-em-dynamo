@@ -24,13 +24,12 @@
 # *
 # **************************************************************************
 
-import os
 import threading
 from os.path import abspath, join, isdir
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME
 from dynamo.utils import getCurrentTomoTxtFile
 from pyworkflow.gui.dialog import ToolbarListDialog
-from pyworkflow.utils import removeBaseExt
+from pyworkflow.utils import makePath
 from pyworkflow.utils.process import runJob
 
 
@@ -45,6 +44,8 @@ class DynamoTomoDialog(ToolbarListDialog):
         self.currentTomoTxtFile = None
         self.tomo = None
         self.path = path
+        self.coordsFileDict = kwargs.get('writtenCoordsFilesDict', None)
+        self.calledFromViewer = kwargs.get('calledFromViewer', False)
         self.provider = kwargs.get("provider", None)
         ToolbarListDialog.__init__(self, parent,
                                    "Tomogram List",
@@ -65,36 +66,50 @@ class DynamoTomoDialog(ToolbarListDialog):
         self.tomo = e
         self.currentTomoTxtFile = getCurrentTomoTxtFile(self.path, e)
         # Create a catalogue with the Coordinates to be visualized
-        mainPath = abspath(join(self.path))
-        catalogue = join(mainPath, CATALOG_BASENAME)
-        listTomosFile = join(mainPath, VLL_FILE)
-        if not isdir(catalogue):
+        extraPath = join(self.path)
+        catalogue = join(extraPath, CATALOG_BASENAME)
+        catalogueWithExt = join(extraPath, CATALOG_FILENAME)
+        listTomosFile = join(extraPath, VLL_FILE)
+        if self.calledFromViewer:
+            makePath(catalogue)  # Needed for a correct catalog creation
             codeFile = abspath(join(self.path, 'writectlg.m'))
-            contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
-            contents += "catalogue=dread('%s')\n" % join(mainPath, CATALOG_FILENAME)
-            contents += "nVolumes=length(catalogue.volumes)\n"
-            contents += "for idv=1:nVolumes\n"
-            contents += "tomoPath=catalogue.volumes{idv}.fullFileName()\n"
-            contents += "tomoIndex=catalogue.volumes{idv}.index\n"
+            contents = "if exist('%s', 'file')==2\n" % catalogueWithExt
+            contents += "delete('%s')\n" % catalogueWithExt
+            contents += "end\n"
+            contents += "dcm -create %s -vll %s\n" % (catalogue, listTomosFile)  # create the catalog
+            contents += "catalogue=dread('%s')\n" % catalogueWithExt  # read it
+            contents += "for idv=1:length(catalogue.volumes)\n"
+            contents += "cvolume = catalogue.volumes{idv}\n"
+            contents += "tomoPath=cvolume.file\n"
+            contents += "tomoIndex=cvolume.index\n"
+            contents += "currentTomoModelsDir = fullfile('%s', 'tomograms', ['volume_', num2str(tomoIndex)], " \
+                        "'models')\n" % catalogue
+            contents += "if not(exist(currentTomoModelsDir)==7)\n"
+            contents += "mkdir(currentTomoModelsDir)\n"
+            contents += "end\n"
             contents += "[~,tomoName,~]=fileparts(tomoPath)\n"
-            contents += "coordFile=fullfile('%s', tomoName '.txt')\n" % mainPath
+            contents += "coordFile=fullfile('%s', [tomoName, '.txt'])\n" % extraPath
             contents += "if ~isfile(coordFile)\n"
             contents += "continue\n"
             contents += "end\n"
             contents += "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n"
             contents += "idm_vec=unique(coords_ids(:,4))'\n"
-            contents += "for idm=idm_vec\n"
+            contents += "for idm=1:length(idm_vec)\n"
             contents += "model_name=['model_',num2str(idm)]\n"
             contents += "coords=coords_ids(coords_ids(:,4)==idm,1:4)\n"
-            contents += "general=dmodels.general()\n"
-            contents += "general.name=model_name\n"
-            contents += "addPoint(general,coords(:,1:3),coords(:,4))\n"
-            contents += "general.linkCatalogue('%s','i',tomoIndex,'s',1)\n" % catalogue
-            contents += "general.saveInCatalogue()\n"
+            contents += "modelFilePath = fullfile(currentTomoModelsDir, [model_name, '.omd'])\n"
+            contents += "model=dmodels.general()\n"  # Create a general model for each tomogram
+            contents += "model.file = modelFilePath\n"
+            contents += "model.name = model_name\n"
+            contents += "model.cvolume = cvolume\n"
+            contents += "addPoint(model, coords(:,1:3), coords(:,4))\n"  # Add the points to the model
+            contents += "save(modelFilePath, 'model')\n"  # Save the model to a file in the expected location
+            contents += "catalogue.models = [catalogue.models, model]\n"  # Add the current model to the catalog
+            # contents += "general.linkCatalogue('%s','i',tomoIndex)\n" % catalogue
             # TODO: think about a method to check if the user has made any changes in the points, apart from just visualizing
             contents += "end\n"
             contents += "end\n"
-            contents += "exit\n"
+            contents += "save('%s', 'catalogue')\n" % catalogueWithExt
             with open(codeFile, 'w') as codeFid:
                 codeFid.write(contents)
             args = ' %s' % codeFile
