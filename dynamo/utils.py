@@ -28,7 +28,7 @@ from dynamo import CATALOG_FILENAME, CATALOG_BASENAME
 
 
 def getCurrentTomoTxtFile(filePath, tomo):
-    return join(filePath, tomo.getTsId() + '.txt')
+    return join(filePath, tomo.getTsId() + '_count.txt')
 
 
 def getCatalogFile(fpath, withExt=True):

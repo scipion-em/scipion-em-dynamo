@@ -23,10 +23,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import glob
 import threading
 from os.path import abspath, join, isdir
-from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME
+from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME, MB_GENERAL
 from dynamo.utils import getCurrentTomoTxtFile
 from pyworkflow.gui.dialog import ToolbarListDialog
 from pyworkflow.utils import makePath
@@ -66,50 +66,71 @@ class DynamoTomoDialog(ToolbarListDialog):
         self.tomo = e
         self.currentTomoTxtFile = getCurrentTomoTxtFile(self.path, e)
         # Create a catalogue with the Coordinates to be visualized
-        extraPath = join(self.path)
+        extraPath = self.path
         catalogue = join(extraPath, CATALOG_BASENAME)
         catalogueWithExt = join(extraPath, CATALOG_FILENAME)
         listTomosFile = join(extraPath, VLL_FILE)
-        if self.calledFromViewer:
+        if self.calledFromViewer and not self._isADynamoProj():
             makePath(catalogue)  # Needed for a correct catalog creation
-            codeFile = abspath(join(self.path, 'writectlg.m'))
-            contents = "if exist('%s', 'file')==2\n" % catalogueWithExt
+            codeFile = join(extraPath, 'writectlg.m')
+            # Dynamo fails if trying to create a catalog that already exists, so the previous one is deleted
+            contents = "if exist('%s', 'file') == 2\n" % catalogueWithExt
             contents += "delete('%s')\n" % catalogueWithExt
             contents += "end\n"
+            # Create the catalog with the tomograms involves, read it and use that info for a coherent indexation
+            # of elements within Dynamo
             contents += "dcm -create %s -vll %s\n" % (catalogue, listTomosFile)  # create the catalog
             contents += "catalogue=dread('%s')\n" % catalogueWithExt  # read it
+            # Create a model for each particles of the same groupId for each tomogram
             contents += "for idv=1:length(catalogue.volumes)\n"
             contents += "cvolume = catalogue.volumes{idv}\n"
-            contents += "tomoPath=cvolume.file\n"
-            contents += "tomoIndex=cvolume.index\n"
+            contents += "tomoPath = cvolume.file\n"
+            contents += "tomoIndex = cvolume.index\n"
             contents += "currentTomoModelsDir = fullfile('%s', 'tomograms', ['volume_', num2str(tomoIndex)], " \
                         "'models')\n" % catalogue
-            contents += "if not(exist(currentTomoModelsDir)==7)\n"
+            # Create the models directory if it doesn't exist
+            contents += "if not(exist(currentTomoModelsDir) == 7)\n"
             contents += "mkdir(currentTomoModelsDir)\n"
             contents += "end\n"
-            contents += "[~,tomoName,~]=fileparts(tomoPath)\n"
-            contents += "coordFile=fullfile('%s', [tomoName, '.txt'])\n" % extraPath
-            contents += "if ~isfile(coordFile)\n"
+            contents += "[~,tomoName,~] = fileparts(tomoPath)\n"
+            contents += "coordFile = fullfile('%s', [tomoName, '.txt'])\n" % extraPath  # Get current coordinates file
+            contents += "if not(isfile(coordFile))\n"
             contents += "continue\n"
             contents += "end\n"
-            contents += "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n"
-            contents += "idm_vec=unique(coords_ids(:,4))'\n"
+            contents += "coordsMatrix=readmatrix(coordFile,'Delimiter',' ')\n"  # Read it
+            contents += "idm_vec=unique(coordsMatrix(:,4))'\n"  # Get the groupIds
             contents += "for idm=1:length(idm_vec)\n"
-            contents += "model_name=['model_',num2str(idm)]\n"
-            contents += "coords=coords_ids(coords_ids(:,4)==idm,1:4)\n"
+            contents += "model_name=['%s_',num2str(idm)]\n" % MB_GENERAL
+            contents += "coords=coordsMatrix(coordsMatrix(:,4)==idm_vec(idm),:)\n"  # Use them for logical indexing of the coords
             contents += "modelFilePath = fullfile(currentTomoModelsDir, [model_name, '.omd'])\n"
-            contents += "model=dmodels.general()\n"  # Create a general model for each tomogram
+            contents += "model=dmodels.general()\n"  # Create a general model for each groupId in each tomogram
             contents += "model.file = modelFilePath\n"
             contents += "model.name = model_name\n"
             contents += "model.cvolume = cvolume\n"
-            contents += "addPoint(model, coords(:,1:3), coords(:,4))\n"  # Add the points to the model
-            contents += "save(modelFilePath, 'model')\n"  # Save the model to a file in the expected location
+            contents += "nParticles = size(coords, 1)\n"
+            contents += "model.individual_labels = 1:nParticles\n"
+
+            contents += "zcoords = round(coords(:,4))\n"
+            contents += "uniqueZVals = unique(zcoords)\n"
+            contents += "groupLabels = zeros(1, nParticles)\n"
+            contents += "for indZ=1:length(uniqueZVals)\n"
+            contents += "currentZ = uniqueZVals(indZ)\n"
+            contents += "groupLabels(zcoords == currentZ) = indZ\n"
+            contents += "end\n"
+            contents += "model.group_labels = groupLabels\n"
+            contents += "model.points = coords(:,1:3)\n"
+
+            # contents += "addPoint(model, coords(:,1:3), coords(:,4))\n"  # Add the points to the model
+            # contents += "model.grepTable()\n"
+            contents += "model.save()\n"
+            # contents += "save(modelFilePath, 'model')\n"  # Save the model to a file in the expected location
             contents += "catalogue.models = [catalogue.models, model]\n"  # Add the current model to the catalog
             # contents += "general.linkCatalogue('%s','i',tomoIndex)\n" % catalogue
             # TODO: think about a method to check if the user has made any changes in the points, apart from just visualizing
             contents += "end\n"
             contents += "end\n"
-            contents += "save('%s', 'catalogue')\n" % catalogueWithExt
+            contents += "dynamo_write(catalogue, '%s')\n" % catalogueWithExt
+            # contents += "save('%s', 'catalogue')\n" % catalogueWithExt
             with open(codeFile, 'w') as codeFid:
                 codeFid.write(contents)
             args = ' %s' % codeFile
@@ -153,3 +174,9 @@ class DynamoTomoDialog(ToolbarListDialog):
             content += "nParticles"
             codeFid.write(content)
         return codeFilePath
+
+    @staticmethod
+    def _isADynamoProj(fpath):
+        """Search recursively for Dynamo model files (omd) in a given directory (usually extra)"""
+        modelFiles = glob.iglob(join(fpath, '**/*.omd'), recursive=True)
+        return True if modelFiles else None
