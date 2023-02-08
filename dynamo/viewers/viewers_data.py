@@ -27,6 +27,8 @@
 
 from os.path import join, abspath
 import numpy as np
+
+from dynamo.utils import getCurrentTomoTxtFile
 from pwem.viewers import ObjectView
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import askYesNo
@@ -93,6 +95,9 @@ class DynamoDataViewer(pwviewer.Viewer):
                     # angles_shifts = matrix2eulerAngles(coord.getMatrix())
                     # angles_tomo.append(angles_shifts[:3])
                 if coords_tomo:
+                    particleCountFile = getCurrentTomoTxtFile(path, tomogram)
+                    with open(particleCountFile, 'w') as pf:
+                        pf.write('%i' % len(coords_tomo))
                     np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
                     # np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
