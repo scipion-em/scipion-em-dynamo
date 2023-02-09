@@ -41,7 +41,7 @@ from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NA
     MODELS_NOT_PROCESSED_IN_MW, MODELS_ALLOWED_IN_MW_NAMES
 
 # Model types mapping
-from ..utils import getCatalogFile
+from ..utils import getCatalogFile, genMCode4ReadAndSaveData, genMCode4ReadDynModel
 
 MODEL_CHOICES = [M_ELLIPSOIDAL_VESICLE_NAME, M_SURFACE_NAME, M_GENERAL_NAME]
 
@@ -185,7 +185,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     def genVesicleCmdFileContents(self, tomoId, modelName, modelFile, vesicleId):
         # Load the current Dynamo model
-        content = self._genMCode4ReadDynModel(modelFile)
+        content = genMCode4ReadDynModel(modelFile)
         # Let Dynamo approximate the geometry based on the points annotated in the boxing protocol
         content += "m.approximateGeometryFromPoints()\n"
         # Mesh creation steps (some of which are specific for each sub-model of type vesicle)
@@ -197,21 +197,21 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         content += "m.updateCrop()\n"
         content += "m.grepTable()\n"
         # Format and write the output data in a text file that will be read in the step create output
-        content += self._genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
+        content += genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
         return content
 
     def genSCmdFileContents(self, tomoId, modelFile, vesicleId):
         # Load the current Dynamo model
-        content = self._genMCode4ReadDynModel(modelFile)
+        content = genMCode4ReadDynModel(modelFile)
         # Mesh creation steps
         content += self._genSurfaceModelMeshSteps()
         # Format and write the output data in a text file that will be read in the step create output
-        content += self._genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
+        content += genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
         return content
 
     def genGen2SurfCmdFileContents(self, tomoId, modelFile, vesicleId):
         # Load the current Dynamo model
-        content = self._genMCode4ReadDynModel(modelFile)
+        content = genMCode4ReadDynModel(modelFile)
         # Change model type from general to surface
         content += "m = model.changeType(m, '%s')\n" % 'membraneByLevels'
         content += "zCoords = m.points(:, 3)\n"
@@ -227,7 +227,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         # Mesh creation steps
         content += self._genSurfaceModelMeshSteps()
         # Format and write the output data in a text file that will be read in the step create output
-        content += self._genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
+        content += genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
         return content
 
     @staticmethod
@@ -261,27 +261,27 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     def getMeshResultFile(self, tomoId):
         return abspath(self._getExtraPath('%s.txt' % tomoId))
+    #
+    # @staticmethod
+    # def _genMCode4ReadDynModel(modelFile):
+    #     """MATLAB code to read a model file from Dynamo"""
+    #     return "m = dread('%s')\n" % abspath(modelFile)  # Load the model created in the boxing protocol
 
-    @staticmethod
-    def _genMCode4ReadDynModel(modelFile):
-        """MATLAB code to read a model file from Dynamo"""
-        return "m = dread('%s')\n" % abspath(modelFile)  # Load the model created in the boxing protocol
-
-    @staticmethod
-    def _genMCode4ReadAndSaveData(vesicleId, modelFile, outputFile):
-        """MATLAB code to format and write the output data in a text file that will be read in the step create output.
-        The column headers of the generated file are:
-        coordX, coordY, coordZ, rot, tilt, psi, vesicleId, modelName, modelFile"""
-        content = "coordsMatrix = m.crop_points\n"
-        content += "anglesMatrix = m.crop_angles\n"
-        content += "nParticles = size(coordsMatrix, 1)\n"
-        content += "for row=1:nParticles\n"
-        content += "cRow = (100*coordsMatrix(row,:))/100\n"  # Leave only two decimals for the coordinates
-        content += "aRow = (100*anglesMatrix(row,:))/100\n"  # The same for the angles
-        content += "writecell({cRow(1), cRow(2), cRow(3), aRow(1), aRow(2), aRow(3), %i, m.name, '%s'}, '%s', " \
-                   "'WriteMode','append', 'Delimiter', 'tab')\n" % (vesicleId, modelFile, outputFile)
-        content += "end\n"
-        return content
+    # @staticmethod
+    # def _genMCode4ReadAndSaveData(vesicleId, modelFile, outputFile):
+    #     """MATLAB code to format and write the output data in a text file that will be read in the step create output.
+    #     The column headers of the generated file are:
+    #     coordX, coordY, coordZ, rot, tilt, psi, vesicleId, modelName, modelFile"""
+    #     content = "coordsMatrix = m.crop_points\n"
+    #     content += "anglesMatrix = m.crop_angles\n"
+    #     content += "nParticles = size(coordsMatrix, 1)\n"
+    #     content += "for row=1:nParticles\n"
+    #     content += "cRow = (100*coordsMatrix(row,:))/100\n"  # Leave only two decimals for the coordinates
+    #     content += "aRow = (100*anglesMatrix(row,:))/100\n"  # The same for the angles
+    #     content += "writecell({cRow(1), cRow(2), cRow(3), aRow(1), aRow(2), aRow(3), %i, m.name, '%s'}, '%s', " \
+    #                "'WriteMode','append', 'Delimiter', 'tab')\n" % (vesicleId, modelFile, outputFile)
+    #     content += "end\n"
+    #     return content
 
     def _genSurfaceModelMeshSteps(self):
         # Mesh creation steps

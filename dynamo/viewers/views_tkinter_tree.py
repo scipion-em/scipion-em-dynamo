@@ -27,7 +27,7 @@ import glob
 import threading
 from os.path import abspath, join
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME, MB_GENERAL
-from dynamo.utils import getCurrentTomoTxtFile
+from dynamo.utils import getCurrentTomoCountFile
 from pyworkflow.gui.dialog import ToolbarListDialog
 from pyworkflow.utils import makePath
 from pyworkflow.utils.process import runJob
@@ -62,7 +62,7 @@ class DynamoTomoDialog(ToolbarListDialog):
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
-        self.currentTomoTxtFile = getCurrentTomoTxtFile(self.path, e)
+        self.currentTomoTxtFile = getCurrentTomoCountFile(self.path, e)
         # Create a catalogue with the Coordinates to be visualized
         extraPath = self.path
         catalogue = join(extraPath, CATALOG_BASENAME)

@@ -25,13 +25,13 @@
 # *
 # **************************************************************************
 import glob
-import os
 from enum import Enum
 from os.path import exists, join, abspath
 
 import numpy as np
 
-from dynamo.utils import getCurrentTomoTxtFile, getCatalogFile
+from dynamo.utils import getCatalogFile, genMCode4ReadDynModel, genMCode4ReadAndSaveData, \
+    getCurrentTomoPointsFile, getCurrentTomoCroppedFile
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
@@ -158,11 +158,6 @@ class DynamoBoxing(ProtTomoPicking):
         tomoList = []
         for tomo in self.inputTomograms.get().iterItems():
             tomogram = tomo.clone()
-            particlesCountFile = getCurrentTomoTxtFile(self._getExtraPath(), tomogram)
-            tomogram.count = 0
-            if exists(particlesCountFile):  # That means that we're working with a tomo that currently has previous particles picked
-                with open(particlesCountFile) as fn:
-                    tomogram.count = int(fn.read())
             tomoList.append(tomogram)
 
         tomoProvider = DynamoTomogramProvider(tomoList, self._getExtraPath(), "txt")
@@ -177,7 +172,6 @@ class DynamoBoxing(ProtTomoPicking):
             pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
-        # textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath(), False, True)
         precedents = self.inputTomograms.get()
         meshes = SetOfMeshes.create(self._getPath(), template='meshes%s.sqlite')
         meshes.setPrecedents(precedents)
@@ -185,13 +179,13 @@ class DynamoBoxing(ProtTomoPicking):
         meshes.setBoxSize(self.boxSize.get())
         meshes._dynCatalogue = String(getCatalogFile(self._getExtraPath()))  # Extended attribute
         tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
-        # TODO: add angle management for oriented particles (it seems that it's not being considered here (The False in the commented line textFile2Coords), maybe it has to be only in the model wf protocol
         for tomoId, modelsDir in self.dynModelsPathDict.items():
             tomo = tomoIdDict[tomoId]
-            tmpCoordFile = self._getTmpPath('%s.txt' % tomoId)
-            modelsDir = self.readModels(modelsDir, tmpCoordFile, tomoId)
+            pointsFile = getCurrentTomoPointsFile(self._getExtraPath(), tomo)  # For the clicked points
+            croppedFile = getCurrentTomoCroppedFile(self._getExtraPath(), tomo)  # For the cropped points and angles in case of mesh calculation from the GUI
+            modelsDir = self.readModels(modelsDir, tomoId, pointsFile=pointsFile, croppedFile=croppedFile)
             if modelsDir:
-                with open(tmpCoordFile, 'r') as coordFile:
+                with open(pointsFile, 'r') as coordFile:
                     for line in coordFile:
                         coord = Coordinate3D()
                         values = line.replace('\n', '').split('\t')
@@ -203,28 +197,26 @@ class DynamoBoxing(ProtTomoPicking):
                         coord._dynModelName = String(values[4])
                         coord._dynModelFile = String(values[5])
                         meshes.append(coord)
-                os.remove(tmpCoordFile)
+
+                # Generate a set of coordinates in case the user generated the meshes from the Dynamo GUI
+                if exists(croppedFile):
+                    pass
 
         self._defineOutputs(**{OutputDynPicking.meshes.name: meshes})
         self._defineSourceRelation(self.inputTomograms, meshes)
         self._updateOutputSet(OutputDynPicking.meshes.name, meshes, state=meshes.STREAM_CLOSED)
 
-    def readModels(self, modelsDir, tmpCoordFile, tomoId):
-        """Read the models generated for each tomograms and write the info to a temporary file"""
+    def readModels(self, modelsDir, tomoId, pointsFile=None, croppedFile=None):
+        """Read the models generated for each tomograms and write the info to a the corresponding file,
+        depending if there was only a picking or a picking and a mesh calculation"""
         modelsInDir = False
         modelFilesInDir = glob.glob(join(modelsDir, '*.omd'))
         if modelFilesInDir:  # The models directories are created before the annotation step, so they can be empty
             modelsInDir = True
             vesicleInd = 1
             for modelFile in modelFilesInDir:  # There's only one model per vesicle, a file is generated for each model
-                contents = "model = dread('%s')\n" % modelFile  # Read current model
-                contents += "coords = model.points\n"  # Get the points corresponding to the current vesicle
-                contents += "nParticles = size(coords, 1)\n"
-                contents += "for row=1:nParticles\n"
-                contents += "cRow = (100*coords(row,:))/100\n"  # Leave only two decimals for the coordinates
-                contents += "writecell({cRow(1), cRow(2), cRow(3), %i, model.name, '%s'}, '%s', " \
-                            "'WriteMode','append', 'Delimiter', 'tab')\n" % (vesicleInd, modelFile, tmpCoordFile)
-                contents += "end\n"
+                contents = genMCode4ReadDynModel(modelFile)  # Read current model
+                contents += genMCode4ReadAndSaveData(vesicleInd, modelFile, pointsFile=pointsFile, croppedFile=croppedFile)
                 vesicleInd += 1
 
                 codeFile = self._getExtraPath('parseModels_%s_%s.m' % (tomoId, removeBaseExt(modelFile)))

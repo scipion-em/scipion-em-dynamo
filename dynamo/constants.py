@@ -38,6 +38,11 @@ CATALOG_BASENAME = 'project'
 CATALOG_FILENAME = '%s.ctlg' % CATALOG_BASENAME
 VLL_FILE = 'tomograms.vll'
 
+# Test files created to pass data between Scipion and Dynamo
+SUFFIX_COUNT = '_count'
+SUFFIX_ONLY_PICKED = '_onlyPicked'
+SUFFIX_CROPPED = '_cropped'
+
 # Tags of Dynamo models
 MB_GENERAL = 'mgeneral'
 MB_GENERAL_BOXES = 'mboxes'

@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 from os.path import exists
-from dynamo.utils import getCurrentTomoTxtFile
+from dynamo.utils import getCurrentTomoCountFile
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 
 
@@ -42,7 +42,7 @@ class DynamoTomogramProvider(TomogramsTreeProvider):
                    'parent': None,
                    'values': (count, 'TO DO'),
                    'tags': 'pending'}
-        coordsInTomoCountFile = getCurrentTomoTxtFile(self._path, tomogram)
+        coordsInTomoCountFile = getCurrentTomoCountFile(self._path, tomogram)
         if exists(coordsInTomoCountFile):
             with open(coordsInTomoCountFile, 'r') as fn:
                 count = int(fn.read())
