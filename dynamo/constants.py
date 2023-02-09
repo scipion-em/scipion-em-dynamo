@@ -39,13 +39,20 @@ CATALOG_FILENAME = '%s.ctlg' % CATALOG_BASENAME
 VLL_FILE = 'tomograms.vll'
 
 # Tags of Dynamo models
+MB_GENERAL = 'mgeneral'
+MB_GENERAL_BOXES = 'mboxes'
+DIPOLE_SET = 'mdipoleSet'
 MB_BY_LEVELS = 'mmembraneByLevels'
 MB_VESICLE = 'mvesicle'
 MB_ELLIPSOIDAL = 'mellipsoidalVesicle'
 MB_ELLIPSOIDAL_MARKED = 'mmarkedEllipsoidalVesicle'
-MB_GENERAL = 'megeneral'
-MB_GENERAL_BOXES = 'mboxes'
-
+FILAMENT = 'mfilament'
+FILAMENT_WITH_TORSION = 'mfilamentWithTorsion'
+FILAMENT_HELIX = 'mfilamentSubunitsInHelix'
+FILAMENT_RINGS = 'mfilamentRings'
+CUBIC_CRYSTAL = 'mcubicCrystal'
+MODELS_NOT_PROCESSED_IN_MW = [DIPOLE_SET, FILAMENT, FILAMENT_WITH_TORSION,
+                              FILAMENT_HELIX, FILAMENT_RINGS, CUBIC_CRYSTAL]
 
 # Names of Dynamo models
 M_GENERAL_NAME = "General"
@@ -55,6 +62,12 @@ M_SURFACE_NAME = "Surface"
 M_VESICLE_NAME = "Vesicle (spherical)"
 M_ELLIPSOIDAL_VESICLE_NAME = "Ellipsoidal vesicle"
 M_MARKED_ELLIP_VESICLE_NAME = "Marked ellipsoidal vesicle"
+M_FILAMENT_NAME = "Filament (crop along axis)"
+M_FIL_WITH_TORSION_NAME = "Filament (crop on walls)"
+M_FIL_HELIX_NAME = "Filament (crop on helical path)"
+M_FIL_RINGS_NAME = "Filament (crop on rings along path)"
+MODELS_ALLOWED_IN_MW_NAMES = [M_GENERAL_NAME, M_GENERAL_WITH_BOXES_NAME, M_SURFACE_NAME,
+                              M_VESICLE_NAME, M_ELLIPSOIDAL_VESICLE_NAME, M_MARKED_ELLIP_VESICLE_NAME]
 
 # Description of Dynamo models
 M_GENERAL_DES = "Coordinates (x, y, z) without any specific property."
