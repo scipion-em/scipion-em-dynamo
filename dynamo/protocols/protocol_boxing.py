@@ -32,6 +32,7 @@ from os.path import exists, join, abspath
 import numpy as np
 
 from dynamo.utils import getCurrentTomoTxtFile, getCatalogFile
+from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 from pyworkflow.object import String
@@ -43,7 +44,6 @@ from pyworkflow.gui.dialog import askYesNo
 from tomo.objects import SetOfMeshes, Coordinate3D
 
 from tomo.protocols import ProtTomoPicking
-from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 import tomo.constants as const
 
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME
@@ -165,7 +165,7 @@ class DynamoBoxing(ProtTomoPicking):
                     tomogram.count = int(fn.read())
             tomoList.append(tomogram)
 
-        tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "txt")
+        tomoProvider = DynamoTomogramProvider(tomoList, self._getExtraPath(), "txt")
         self.dlg = DynamoTomoDialog(None, self._getExtraPath(), provider=tomoProvider)
 
         # Open dialog to request confirmation to create output

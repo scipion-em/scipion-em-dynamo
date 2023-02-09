@@ -29,13 +29,13 @@ from os.path import join, abspath
 import numpy as np
 
 from dynamo.utils import getCurrentTomoTxtFile
+from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 from pwem.viewers import ObjectView
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import askYesNo
 from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 from tomo.objects import SetOfCoordinates3D, SetOfMeshes
-from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 import tomo.constants as const
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 from dynamo.convert import textFile2Coords
@@ -75,7 +75,7 @@ class DynamoDataViewer(pwviewer.Viewer):
                 tomoList.append(tomogram)
 
             path = self.protocol._getExtraPath()
-            tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
+            tomoProvider = DynamoTomogramProvider(tomoList, path, 'txt', )
             listTomosFile = join(path, VLL_FILE)
 
             # Create list of tomos file (VLL file)

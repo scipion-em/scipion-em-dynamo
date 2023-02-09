@@ -25,7 +25,7 @@
 # **************************************************************************
 import glob
 import threading
-from os.path import abspath, join, isdir
+from os.path import abspath, join
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME, MB_GENERAL
 from dynamo.utils import getCurrentTomoTxtFile
 from pyworkflow.gui.dialog import ToolbarListDialog
@@ -58,9 +58,7 @@ class DynamoTomoDialog(ToolbarListDialog):
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
-            with open(self.currentTomoTxtFile, 'r') as fn:
-                self.tomo.count = int(fn.read())
-                self.tree.update()
+            self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
