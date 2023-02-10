@@ -59,23 +59,14 @@ class DynamoDataViewer(pwviewer.Viewer):
 
     def _visualize(self, obj, **kwargs):
         views = []
-        cls = type(obj)
 
-        if issubclass(cls, SetOfCoordinates3D) or issubclass(cls, SetOfMeshes):
+        if isinstance(obj, SetOfCoordinates3D) or isinstance(obj, SetOfMeshes):
             outputCoords = obj
-            tomos = outputCoords.getPrecedents()
-
-            volIds = outputCoords.aggregate(["MAX", "COUNT"], "_volId", ["_volId"])
-            volIds = [(d['_volId'], d["COUNT"]) for d in volIds]
-
-            tomoList = []
-            for objId in volIds:
-                tomogram = tomos[objId[0]].clone()
-                tomogram.count = objId[1]
-                tomoList.append(tomogram)
-
+            precedents = outputCoords.getPrecedents()
+            tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
+            tomoList = list(tomoIdDict.values())
             path = self.protocol._getExtraPath()
-            tomoProvider = DynamoTomogramProvider(tomoList, path, 'txt', )
+            tomoProvider = DynamoTomogramProvider(tomoList, path, nParticles=len(outputCoords))
             listTomosFile = join(path, VLL_FILE)
 
             # Create list of tomos file (VLL file)
@@ -83,23 +74,6 @@ class DynamoDataViewer(pwviewer.Viewer):
                 for tomo in tomoList:
                     tomoPath = abspath(tomo.getFileName())
                     tomoFid.write(tomoPath + '\n')
-            
-            # Write the coordinates corresponding for each tomogram into a text file that will be read later by Dynamo
-            for tomogram in tomoList:
-                outFileCoord = join(path, removeBaseExt(tomogram.getFileName())) + ".txt"
-                # outFileAngle = join(path, 'angles_' + removeBaseExt(tomogram.getFileName())) + ".txt"
-                coords_tomo = []
-                # angles_tomo = []
-                for coord in outputCoords.iterCoordinates(tomogram):
-                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
-                    # angles_shifts = matrix2eulerAngles(coord.getMatrix())
-                    # angles_tomo.append(angles_shifts[:3])
-                if coords_tomo:
-                    particleCountFile = getCurrentTomoCountFile(path, tomogram)
-                    with open(particleCountFile, 'w') as pf:
-                        pf.write('%i' % len(coords_tomo))
-                    np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
-                    # np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
 
             self.dlg = DynamoTomoDialog(self._tkRoot, path,
                                         provider=tomoProvider,
@@ -108,7 +82,9 @@ class DynamoDataViewer(pwviewer.Viewer):
             import tkinter as tk
             frame = tk.Frame()
             # TODO: check if the user has made changes and only ask in that case
+            # TODO: Refactor this and make a correct output creating according to the last changes
             if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
-                textFile2Coords(self.protocol, outputCoords.getPrecedents(), path, directions=False)
+                # textFile2Coords(self.protocol, outputCoords.getPrecedents(), path, directions=False)
+                self.protocol._createOutput()
 
         return views

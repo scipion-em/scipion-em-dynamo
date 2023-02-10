@@ -40,8 +40,8 @@ VLL_FILE = 'tomograms.vll'
 
 # Test files created to pass data between Scipion and Dynamo
 SUFFIX_COUNT = '_count'
-SUFFIX_ONLY_PICKED = '_onlyPicked'
-SUFFIX_CROPPED = '_cropped'
+BASENAME_PICKED = 'picked'
+BASENAME_CROPPED = 'cropped'
 
 # Tags of Dynamo models
 MB_GENERAL = 'mgeneral'

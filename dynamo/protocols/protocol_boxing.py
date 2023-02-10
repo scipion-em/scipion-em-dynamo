@@ -24,52 +24,46 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
 from enum import Enum
-from os.path import exists, join, abspath
-
+from os.path import exists, abspath
 import numpy as np
-
-from dynamo.utils import getCatalogFile, genMCode4ReadDynModel, genMCode4ReadAndSaveData, \
-    getCurrentTomoPointsFile, getCurrentTomoCroppedFile
+from dynamo.utils import getCatalogFile, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getDynamoModels, readModels, \
+    getPickedFile, getCroppedFile
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
-from pyworkflow import BETA
 import pyworkflow.utils as pwutils
+from pyworkflow import BETA
 from pyworkflow.object import String
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
-from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
-from tomo.objects import SetOfMeshes, Coordinate3D
-
+from tomo.constants import BOTTOM_LEFT_CORNER
+from tomo.objects import SetOfMeshes, Coordinate3D, SetOfCoordinates3D
 from tomo.protocols import ProtTomoPicking
-import tomo.constants as const
-
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 
 
-class OutputDynPicking(Enum):
+class OutputsBoxing(Enum):
+    coordinates = SetOfCoordinates3D
     meshes = SetOfMeshes
 
 
 class DynamoBoxing(ProtTomoPicking):
-    """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
-    direclty loaded with all the models previously saved in the disk (if any).
-    This picking will only save the "user points" defined in a set of models. It is possible to
-    create several models at once in a given tomogram. Once the coordinates are defined,
-    the models are automatically saved in the catalogue and registered.
-
-    Currently the following Dynamo models are supported:
-        - Ellipsoidal Vesicle"""
+    """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will
+     be direclty loaded with all the models previously saved in the disk (if any).
+     This picking will save the "user points" defined in a set of models and generate a set of meshes with them. In case
+     the user carries out the workflow model for each of the models from the Dynamo GUI, a set of coordinates will be
+     also created, containing all the interpolated coordinates, and the calculated orientation. It is possible to
+     create several models at once in a given tomogram. Once the coordinates are defined, the models are automatically
+     saved in the catalogue and registered."""
 
     _label = 'vectorial picking'
     _devStatus = BETA
-    _possibleOutputs = OutputDynPicking
+    _possibleOutputs = OutputsBoxing
 
     def __init__(self, **kwargs):
-        ProtTomoPicking.__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self.dlg = None
         self.dynModelsPathDict = {}  # Used to store the path where the corresponding models to a tomo are stored
 
@@ -123,7 +117,7 @@ class DynamoBoxing(ProtTomoPicking):
                 outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
                 coordsInCurrentTomo = []
                 for coord in inputMeshes.iterCoordinates(tomo.getObjId()):
-                    coordsInCurrentTomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
+                    coordsInCurrentTomo.append(list(coord.getPosition(BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
                 if coordsInCurrentTomo:
                     np.savetxt(outFileCoord, np.asarray(coordsInCurrentTomo), delimiter=' ')
 
@@ -172,59 +166,55 @@ class DynamoBoxing(ProtTomoPicking):
             pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
+        saveCropped = False
+        outCoords = None
+        outPath = self._getExtraPath()
         precedents = self.inputTomograms.get()
+        tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in precedents}
+        tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
+        # Create the output set of meshes (always produced)
         meshes = SetOfMeshes.create(self._getPath(), template='meshes%s.sqlite')
         meshes.setPrecedents(precedents)
         meshes.setSamplingRate(precedents.getSamplingRate())
         meshes.setBoxSize(self.boxSize.get())
-        meshes._dynCatalogue = String(getCatalogFile(self._getExtraPath()))  # Extended attribute
-        tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
-        for tomoId, modelsDir in self.dynModelsPathDict.items():
-            tomo = tomoIdDict[tomoId]
-            pointsFile = getCurrentTomoPointsFile(self._getExtraPath(), tomo)  # For the clicked points
-            croppedFile = getCurrentTomoCroppedFile(self._getExtraPath(), tomo)  # For the cropped points and angles in case of mesh calculation from the GUI
-            modelsDir = self.readModels(modelsDir, tomoId, pointsFile=pointsFile, croppedFile=croppedFile)
-            if modelsDir:
-                with open(pointsFile, 'r') as coordFile:
-                    for line in coordFile:
-                        coord = Coordinate3D()
-                        values = line.replace('\n', '').split('\t')
-                        coord.setVolume(tomo)
-                        coord.setPosition(float(values[0]), float(values[1]), float(values[2]),
-                                          const.BOTTOM_LEFT_CORNER)
-                        coord.setGroupId(int(values[3]))
-                        # Extended attributes
-                        coord._dynModelName = String(values[4])
-                        coord._dynModelFile = String(values[5])
-                        meshes.append(coord)
+        meshes._dynCatalogue = String(getCatalogFile(outPath))  # Extended attribute
+        # Create the output set of coordinates (only for the models to which the user carried out the model workflow
+        # from the Dynamo GUI
+        pickedFile = getPickedFile(outPath)
+        croppedFile = getCroppedFile(outPath)
+        if exists(croppedFile):
+            outCoords = createSetOfOutputCoords(self._getPath(), outPath, precedents, boxSize=self.boxSize.get())
+            saveCropped = True
 
-                # Generate a set of coordinates in case the user generated the meshes from the Dynamo GUI
-                if exists(croppedFile):
-                    pass
+        dynamoModels = getDynamoModels(outPath)
+        if dynamoModels:
+            readModels(self, outPath, dynamoModels, savePicked=True, saveCropped=saveCropped)
+            # Save picked points to Scipion
+            with open(pickedFile, 'r') as coordFile:
+                for line in coordFile:
+                    coord = Coordinate3D()
+                    values = line.replace('\n', '').split('\t')
+                    volumeFile = values[6]
+                    coord.setVolume(tomoFileDict[volumeFile])
+                    coord.setPosition(float(values[0]), float(values[1]), float(values[2]), BOTTOM_LEFT_CORNER)
+                    coord.setGroupId(int(values[3]))
+                    # Extended attributes
+                    coord._dynModelName = String(values[4])
+                    coord._dynModelFile = String(values[5])
+                    meshes.append(coord)
 
-        self._defineOutputs(**{OutputDynPicking.meshes.name: meshes})
+            if saveCropped:
+                dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
+
+        # Define outputs and relations
+        outputDict = {self._possibleOutputs.meshes.name: meshes}
+        if outCoords:
+            outputDict[self._possibleOutputs.coordinates.name] = outCoords
+        self._defineOutputs(**outputDict)
         self._defineSourceRelation(self.inputTomograms, meshes)
-        self._updateOutputSet(OutputDynPicking.meshes.name, meshes, state=meshes.STREAM_CLOSED)
-
-    def readModels(self, modelsDir, tomoId, pointsFile=None, croppedFile=None):
-        """Read the models generated for each tomograms and write the info to a the corresponding file,
-        depending if there was only a picking or a picking and a mesh calculation"""
-        modelsInDir = False
-        modelFilesInDir = glob.glob(join(modelsDir, '*.omd'))
-        if modelFilesInDir:  # The models directories are created before the annotation step, so they can be empty
-            modelsInDir = True
-            vesicleInd = 1
-            for modelFile in modelFilesInDir:  # There's only one model per vesicle, a file is generated for each model
-                contents = genMCode4ReadDynModel(modelFile)  # Read current model
-                contents += genMCode4ReadAndSaveData(vesicleInd, modelFile, pointsFile=pointsFile, croppedFile=croppedFile)
-                vesicleInd += 1
-
-                codeFile = self._getExtraPath('parseModels_%s_%s.m' % (tomoId, removeBaseExt(modelFile)))
-                with open(codeFile, 'w') as codeFid:
-                    codeFid.write(contents)
-                args = ' %s' % codeFile
-                self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
-        return modelsInDir
+        if outCoords:
+            self._defineSourceRelation(self.inputTomograms, outCoords)
+        self._updateOutputSet(self._possibleOutputs.meshes.name, meshes, state=meshes.STREAM_CLOSED)
 
     # --------------------------- DEFINE info functions ----------------------
     @staticmethod

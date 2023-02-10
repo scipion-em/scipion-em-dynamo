@@ -27,7 +27,7 @@ import glob
 import threading
 from os.path import abspath, join
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME, MB_GENERAL
-from dynamo.utils import getCurrentTomoCountFile
+from dynamo.utils import getCurrentTomoCountFile, getDynamoModels
 from pyworkflow.gui.dialog import ToolbarListDialog
 from pyworkflow.utils import makePath
 from pyworkflow.utils.process import runJob
@@ -158,5 +158,5 @@ class DynamoTomoDialog(ToolbarListDialog):
     @staticmethod
     def _isADynamoProj(fpath):
         """Search recursively for Dynamo model files (omd) in a given directory (usually extra)"""
-        modelFiles = glob.glob(join(fpath, '**/*.omd'), recursive=True)
+        modelFiles = getDynamoModels(fpath)
         return True if modelFiles else False

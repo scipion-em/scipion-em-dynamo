@@ -26,14 +26,12 @@
 # **************************************************************************
 from enum import Enum
 from os.path import abspath
-from pyworkflow import BETA
-from pyworkflow.object import String
-from pyworkflow.protocol import params
+
 from pwem.protocols import EMProtocol
-from tomo.constants import BOTTOM_LEFT_CORNER
-from tomo.objects import Coordinate3D, SetOfCoordinates3D
+from pyworkflow import BETA
+from pyworkflow.protocol import params
+from tomo.objects import SetOfCoordinates3D
 from tomo.protocols import ProtTomoBase
-from ..convert.convert import eulerAngles2matrix
 from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NAME, M_SURFACE_NAME, \
     M_ELLIPSOIDAL_VESICLE_NAME, M_GENERAL_WITH_BOXES_NAME, M_SURFACE_DES, \
     M_VESICLE_NAME, M_VESICLE_DES, M_ELLIPSOIDAL_VESICLE_DES, M_MARKED_ELLIP_VESICLE_NAME, M_MARKED_ELLIP_VESICLE_DES, \
@@ -41,7 +39,8 @@ from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NA
     MODELS_NOT_PROCESSED_IN_MW, MODELS_ALLOWED_IN_MW_NAMES
 
 # Model types mapping
-from ..utils import getCatalogFile, genMCode4ReadAndSaveData, genMCode4ReadDynModel
+from ..utils import genMCode4ReadAndSaveData, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getCroppedFile, \
+    genMCode4ReadDynModel
 
 MODEL_CHOICES = [M_ELLIPSOIDAL_VESICLE_NAME, M_SURFACE_NAME, M_GENERAL_NAME]
 
@@ -74,8 +73,10 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     _possibleOutputs = OutputsModelWf
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self.outCoords = None
+        self.precedentsTsIdList = None
+        self.tomoFileDict = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -120,119 +121,99 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     def _insertAllSteps(self):
         self._initialize()
         modelsDict = self.inputMeshes.get().getUniqueValues(['_tomoId', '_dynModelName', '_dynModelFile', '_groupId'])
-        for tomoId, modelName, modelFile, vesicleId in zip(modelsDict['_tomoId'], modelsDict['_dynModelName'],
-                                                           modelsDict['_dynModelFile'], modelsDict['_groupId']):
-            self._insertFunctionStep(self.applyWorkflowStep, tomoId, modelName, modelFile, vesicleId)
+        for tomoId, modelName, modelFile in zip(modelsDict['_tomoId'], modelsDict['_dynModelName'],
+                                                modelsDict['_dynModelFile']):
+            self._insertFunctionStep(self.applyWorkflowStep, tomoId, modelName, modelFile)
             self._insertFunctionStep(self.convertOutputStep, tomoId)
 
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        self.precedentsTsIdList = {tomo.getTsId(): tomo for tomo in self.inputMeshes.get().getPrecedents()}
+        precedents = self.inputMeshes.get().getPrecedents()
+        self.precedentsTsIdList = {tomo.getTsId(): tomo for tomo in precedents}
+        self.tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in precedents}
 
-    def applyWorkflowStep(self, tomoId, modelName, modelFile, vesicleId):
-        commandsFile = self.writeMatlabFile(tomoId, modelName, modelFile, vesicleId)
+    def applyWorkflowStep(self, tomoId, modelName, modelFile):
+        commandsFile = self.writeMatlabFile(tomoId, modelName, modelFile)
         args = ' %s' % commandsFile
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def convertOutputStep(self, tomoId):
+        outPath = self._getExtraPath()
         if not self.outCoords:
             # Create the output set
             precedents = self.inputMeshes.get().getPrecedents()
-            self.outCoords = SetOfCoordinates3D.create(self._getPath(), template='coordinates%s.sqlite')
-            self.outCoords.setPrecedents(precedents)
-            self.outCoords.setSamplingRate(precedents.getSamplingRate())
-            self.outCoords.setBoxSize(self.boxSize.get())
-            self.outCoords._dynCatalogue = String(getCatalogFile(self._getExtraPath()))  # Extended attribute
+            self.outCoords = createSetOfOutputCoords(self._getPath(), outPath, precedents, boxSize=self.boxSize.get())
 
-        tomo = self.precedentsTsIdList[tomoId]
-        with open(self.getMeshResultFile(tomoId), 'r') as coordFile:
-            for line in coordFile:
-                coord = Coordinate3D()
-                values = line.replace('\n', '').split('\t')
-                coord.setVolume(tomo)
-                coordinates = float(values[0]), float(values[1]), float(values[2])
-                angles = float(values[3]), float(values[4]), float(values[5])
-                coord.setPosition(*coordinates, BOTTOM_LEFT_CORNER)
-                matrix = eulerAngles2matrix(*angles, 0, 0, 0)  # There are no shifts at this point
-                coord.setMatrix(matrix)
-                coord.setGroupId(int(values[6]))
-                # Extended attributes
-                coord._dynModelName = String(values[7])
-                coord._dynModelFile = String(values[8])
-                self.outCoords.append(coord)
+        croppedFile = getCroppedFile(outPath)
+        dynamoCroppingResults2Scipion(self.outCoords, croppedFile, self.tomoFileDict)
 
     def createOutputStep(self):
-        self._defineOutputs(**{OutputsModelWf.coordinates.name: self.outCoords})
+        self._defineOutputs(**{self._possibleOutputs.coordinates.name: self.outCoords})
         self._defineSourceRelation(self.inputMeshes, self.outCoords)
-        self._updateOutputSet(OutputsModelWf.coordinates.name, self.outCoords, state=self.outCoords.STREAM_CLOSED)
+        self._updateOutputSet(self._possibleOutputs.coordinates.name, self.outCoords,
+                              state=self.outCoords.STREAM_CLOSED)
 
     # --------------------------- DEFINE utils functions ----------------------
-    def writeMatlabFile(self, tomoId, modelName, modelFile, vesicleId):
+    def writeMatlabFile(self, tomoId, modelName, modelFile):
+        content = ''
         codeFilePath = self._getExtraPath('modelWf_%s_%s.m' % (tomoId, modelName))
         modelType = self._getModelType(modelName)
+        outPath = self._getExtraPath()
         if modelType == M_VESICLE:
-            content = self.genVesicleCmdFileContents(tomoId, modelName, modelFile, vesicleId)
+            content = self.genVesicleCmdFileContents(modelName, modelFile, outPath)
         elif modelType == M_SURFACE:
-            content = self.genSCmdFileContents(tomoId, modelFile, vesicleId)
+            content = self.genSCmdFileContents(modelFile, outPath)
         elif modelType == M_GENERAL:
             # Change its type to surface model and process it
-            content = self.genGen2SurfCmdFileContents(tomoId, modelFile, vesicleId)
+            content = self.genGen2SurfCmdFileContents(modelFile, outPath)
+        content = genMCode4ReadAndSaveData(outPath, modelFile, savePicked=False, saveCropped=True, modelWfCode=content)
         with open(codeFilePath, 'w') as codeFid:
             codeFid.write(content)
         return codeFilePath
 
-    def genVesicleCmdFileContents(self, tomoId, modelName, modelFile, vesicleId):
-        # Load the current Dynamo model
-        content = genMCode4ReadDynModel(modelFile)
+    def genVesicleCmdFileContents(self, modelName, modelFile, outPath):
         # Let Dynamo approximate the geometry based on the points annotated in the boxing protocol
-        content += "m.approximateGeometryFromPoints()\n"
+        contentMWf = "m.approximateGeometryFromPoints()\n"
         # Mesh creation steps (some of which are specific for each sub-model of type vesicle)
-        content += "m.mesh_parameter = %i\n" % self.meshParameter.get()
-        content += "m.crop_mesh_parameter = %i\n" % self.cropping.get()
-        content += "m.mesh_maximum_triangles = %i\n" % self.maxTr.get()
+        contentMWf += "m.mesh_parameter = %i\n" % self.meshParameter.get()
+        contentMWf += "m.crop_mesh_parameter = %i\n" % self.cropping.get()
+        contentMWf += "m.mesh_maximum_triangles = %i\n" % self.maxTr.get()
         if modelName == MB_ELLIPSOIDAL:
-            content += "m.createMesh()\n"
-        content += "m.updateCrop()\n"
-        content += "m.grepTable()\n"
+            contentMWf += "m.createMesh()\n"
+        contentMWf += "m.updateCrop()\n"
+        contentMWf += "m.grepTable()\n"
         # Format and write the output data in a text file that will be read in the step create output
-        content += genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
-        return content
+        return contentMWf
 
-    def genSCmdFileContents(self, tomoId, modelFile, vesicleId):
-        # Load the current Dynamo model
-        content = genMCode4ReadDynModel(modelFile)
+    def genSCmdFileContents(self, modelFile, outPath):
         # Mesh creation steps
-        content += self._genSurfaceModelMeshSteps()
+        contentMWf = self._genSurfaceModelMeshSteps()
         # Format and write the output data in a text file that will be read in the step create output
-        content += genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
-        return content
+        return contentMWf
 
-    def genGen2SurfCmdFileContents(self, tomoId, modelFile, vesicleId):
-        # Load the current Dynamo model
-        content = genMCode4ReadDynModel(modelFile)
+    def genGen2SurfCmdFileContents(self, modelFile, outPath):
         # Change model type from general to surface
-        content += "m = model.changeType(m, '%s')\n" % 'membraneByLevels'
-        content += "zCoords = m.points(:, 3)\n"
-        content += "zUVals = unique(zCoords)\n"
-        content += "nParticles = length(zCoords)\n"
-        content += "groupLabels = zeros(1, nParticles)\n"
-        content += "for i=1:length(zUVals)\n"
-        content += "currentZ = zUVals(i)\n"
-        content += "groupLabels(zCoords == currentZ) = i\n"
-        content += "end\n"
-        content += "m.group_labels = groupLabels\n"
-        content += "m.last_group_label = i\n"
+        contentMWf = "m = model.changeType(m, '%s')\n" % 'membraneByLevels'
+        contentMWf += "zCoords = m.points(:, 3)\n"
+        contentMWf += "zUVals = unique(zCoords)\n"
+        contentMWf += "nParticles = length(zCoords)\n"
+        contentMWf += "groupLabels = zeros(1, nParticles)\n"
+        contentMWf += "for j=1:length(zUVals)\n"
+        contentMWf += "currentZ = zUVals(i)\n"
+        contentMWf += "groupLabels(zCoords == currentZ) = j\n"
+        contentMWf += "end\n"
+        contentMWf += "m.group_labels = groupLabels\n"
+        contentMWf += "m.last_group_label = i\n"
         # Mesh creation steps
-        content += self._genSurfaceModelMeshSteps()
+        contentMWf += self._genSurfaceModelMeshSteps()
         # Format and write the output data in a text file that will be read in the step create output
-        content += genMCode4ReadAndSaveData(vesicleId, modelFile, self.getMeshResultFile(tomoId))
-        return content
+        return contentMWf
 
     @staticmethod
     def _genModelsNotationMsg():
-        modelsHelp = '- %s [EV]\n' % M_ELLIPSOIDAL_VESICLE_NAME
+        modelsHelp = '- %ss [V]\n' % M_VESICLE_NAME
         modelsHelp += '- %s [S]\n' % M_SURFACE_NAME
         # modelsHelp += '- %s [G]\n\n' % M_GENERAL_NAME
         # modelsHelp += '- %s model specific cases:\n' % M_GENERAL_NAME
@@ -261,27 +242,6 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     def getMeshResultFile(self, tomoId):
         return abspath(self._getExtraPath('%s.txt' % tomoId))
-    #
-    # @staticmethod
-    # def _genMCode4ReadDynModel(modelFile):
-    #     """MATLAB code to read a model file from Dynamo"""
-    #     return "m = dread('%s')\n" % abspath(modelFile)  # Load the model created in the boxing protocol
-
-    # @staticmethod
-    # def _genMCode4ReadAndSaveData(vesicleId, modelFile, outputFile):
-    #     """MATLAB code to format and write the output data in a text file that will be read in the step create output.
-    #     The column headers of the generated file are:
-    #     coordX, coordY, coordZ, rot, tilt, psi, vesicleId, modelName, modelFile"""
-    #     content = "coordsMatrix = m.crop_points\n"
-    #     content += "anglesMatrix = m.crop_angles\n"
-    #     content += "nParticles = size(coordsMatrix, 1)\n"
-    #     content += "for row=1:nParticles\n"
-    #     content += "cRow = (100*coordsMatrix(row,:))/100\n"  # Leave only two decimals for the coordinates
-    #     content += "aRow = (100*anglesMatrix(row,:))/100\n"  # The same for the angles
-    #     content += "writecell({cRow(1), cRow(2), cRow(3), aRow(1), aRow(2), aRow(3), %i, m.name, '%s'}, '%s', " \
-    #                "'WriteMode','append', 'Delimiter', 'tab')\n" % (vesicleId, modelFile, outputFile)
-    #     content += "end\n"
-    #     return content
 
     def _genSurfaceModelMeshSteps(self):
         # Mesh creation steps
@@ -296,46 +256,8 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         content += "m.updateCrop()\n"
         content += "m.grepTable()\n"
         return content
-    # --------------------------- DEFINE INFO functions ----------------------
-    # def _methods(self):
-    #     methodsMsgs = ["*Model Type*: %s" % MODEL_CHOICES[self.modelType.get()]]
-    #     if self.modelType.get() == M_ELLIPSOIDAL:
-    #         if self.auto.get():
-    #             methodsMsgs.append("*Geometry Detection*: auto")
-    #         else:
-    #             methodsMsgs.append("*Geometry Detection*: manual")
-    #             methodsMsgs.append("    *Center*: [%s]" % self.center.get())
-    #             methodsMsgs.append("    *Semiaxes Radius*: [%s]" % self.radius.get())
-    #         methodsMsgs.append("*Mesh parameter*: %d" % self.meshParameter.get())
-    #         methodsMsgs.append("*Maximum number triangles*: %d" % self.maxTr.get())
-    #         methodsMsgs.append("*Cropping parameter*: %d" % self.cropping.get())
-    #     elif self.modelType.get() == M_SURFACE:
-    #         methodsMsgs.append("*Model Type*: Surface")
-    #         methodsMsgs.append("*Mesh parameter*: %d" % self.meshParameter.get())
-    #         methodsMsgs.append("*Maximum number triangles*: %d" % self.maxTr.get())
-    #         methodsMsgs.append("*Cropping parameter*: %d" % self.cropping.get())
-    #         methodsMsgs.append("*Number of subdivision steps*: %d" % self.subDivision.get())
-    #     elif self.modelType.get() == M_GENERAL:
-    #         if self.orientMesh.get() is None:
-    #             methodsMsgs.append("Particles extracted without orientation")
-    #         else:
-    #             if self.orientType.get() == M_ELLIPSOIDAL:
-    #                 methodsMsgs.append("*Orientation Model Type*: Ellipsoidal Vesicle")
-    #                 if self.auto.get():
-    #                     methodsMsgs.append("*Geometry Detection*: auto")
-    #                 else:
-    #                     methodsMsgs.append("*Geometry Detection*: manual")
-    #                     methodsMsgs.append("    *Center*: [%s]" % self.center.get())
-    #                     methodsMsgs.append("    *Semiaxes Radius*: [%s]" % self.radius.get())
-    #                 methodsMsgs.append("*Mesh parameter*: %d" % self.meshParameter.get())
-    #                 methodsMsgs.append("*Maximum number triangles*: %d" % self.maxTr.get())
-    #             elif self.orientType.get() == M_SURFACE:
-    #                 methodsMsgs.append("*Orientation Model Type*: Surface")
-    #                 methodsMsgs.append("*Mesh parameter*: %d" % self.meshParameter.get())
-    #                 methodsMsgs.append("*Maximum number triangles*: %d" % self.maxTr.get())
-    #                 methodsMsgs.append("*Number of subdivision steps*: %d" % self.subDivision.get())
-    #     return methodsMsgs
 
+    # --------------------------- DEFINE INFO functions ----------------------
     def _summary(self):
         summary = []
         if self.getOutputsSize() >= 1:
@@ -358,8 +280,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     def _warnings(self):
         warnMsg = []
-        modelsDict = self.inputMeshes.get().getUniqueValues(['_dynModelName'])
-        presentModelList = modelsDict['_dynModelName']
+        presentModelList = self.inputMeshes.get().getUniqueValues(['_dynModelName'])
         for presentModel in presentModelList:
             if presentModel in MODELS_NOT_PROCESSED_IN_MW:
                 warnMsg.append('Some of the models provided are not allowed in this protocol. Allowed models are:\n%s'
