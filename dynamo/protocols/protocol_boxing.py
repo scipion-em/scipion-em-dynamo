@@ -25,10 +25,11 @@
 # *
 # **************************************************************************
 from enum import Enum
-from os.path import exists, abspath
+from os.path import exists, abspath, join
 import numpy as np
-from dynamo.utils import getCatalogFile, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getDynamoModels, readModels, \
-    getPickedFile, getCroppedFile
+from dynamo.utils import getCatalogFile, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getDynamoModels, \
+    readModels, \
+    getPickedFile, getCroppedFile, genMCode4CheckModelWfFromGUI, getFileMwFromGUI
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 import pyworkflow.utils as pwutils
 from pyworkflow import BETA
@@ -170,8 +171,7 @@ class DynamoBoxing(ProtTomoPicking):
         outCoords = None
         outPath = self._getExtraPath()
         precedents = self.inputTomograms.get()
-        tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in precedents}
-        tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
+        tomoFileDict = {abspath(tomo.getFileName()): tomo.clone() for tomo in precedents}
         # Create the output set of meshes (always produced)
         meshes = SetOfMeshes.create(self._getPath(), template='meshes%s.sqlite')
         meshes.setPrecedents(precedents)
@@ -180,22 +180,24 @@ class DynamoBoxing(ProtTomoPicking):
         meshes._dynCatalogue = String(getCatalogFile(outPath))  # Extended attribute
         # Create the output set of coordinates (only for the models to which the user carried out the model workflow
         # from the Dynamo GUI
-        pickedFile = getPickedFile(outPath)
-        croppedFile = getCroppedFile(outPath)
-        if exists(croppedFile):
-            outCoords = createSetOfOutputCoords(self._getPath(), outPath, precedents, boxSize=self.boxSize.get())
-            saveCropped = True
-
+        tmpPath = self._getTmpPath()
+        pickedFile = getPickedFile(tmpPath)
+        croppedFile = getCroppedFile(tmpPath)
         dynamoModels = getDynamoModels(outPath)
         if dynamoModels:
-            readModels(self, outPath, dynamoModels, savePicked=True, saveCropped=saveCropped)
+            saveCropped = self.didUserMwInGui(dynamoModels, tmpPath)
+            readModels(self, outPath, tmpPath, dynamoModels, savePicked=True, saveCropped=saveCropped)
+            if saveCropped:
+                outCoords = createSetOfOutputCoords(self._getPath(), outPath, precedents, boxSize=self.boxSize.get())
             # Save picked points to Scipion
             with open(pickedFile, 'r') as coordFile:
                 for line in coordFile:
                     coord = Coordinate3D()
                     values = line.replace('\n', '').split('\t')
-                    volumeFile = values[6]
-                    coord.setVolume(tomoFileDict[volumeFile])
+                    tomoFile = values[6]
+                    tomo = tomoFileDict[tomoFile]
+                    coord.setVolume(tomo)
+                    coord.setTomoId(tomo.getTsId())
                     coord.setPosition(float(values[0]), float(values[1]), float(values[2]), BOTTOM_LEFT_CORNER)
                     coord.setGroupId(int(values[3]))
                     # Extended attributes
@@ -215,6 +217,17 @@ class DynamoBoxing(ProtTomoPicking):
         if outCoords:
             self._defineSourceRelation(self.inputTomograms, outCoords)
         self._updateOutputSet(self._possibleOutputs.meshes.name, meshes, state=meshes.STREAM_CLOSED)
+
+    def didUserMwInGui(self, dynamoModels, tmpPath):
+        """Reads the generated models and creates an empty txt file in case the user carried out at least one
+        model workflow from the boxing GUI"""
+        mCode = genMCode4CheckModelWfFromGUI(dynamoModels, tmpPath)
+        mCodeFile = self._getExtraPath('checkModelWfFromGUI.m')
+        with open(mCodeFile, 'w') as codeFid:
+            codeFid.write(mCode)
+        args = ' %s' % mCodeFile
+        Plugin.runDynamo(self, args)
+        return exists(getFileMwFromGUI(tmpPath))
 
     # --------------------------- DEFINE info functions ----------------------
     @staticmethod

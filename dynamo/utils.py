@@ -27,7 +27,7 @@ import glob
 from os import remove
 from os.path import join, basename, abspath, exists
 from dynamo import CATALOG_FILENAME, CATALOG_BASENAME, SUFFIX_COUNT, Plugin, \
-    BASENAME_CROPPED, BASENAME_PICKED
+    BASENAME_CROPPED, BASENAME_PICKED, GUI_MW_FILE
 from dynamo.convert import eulerAngles2matrix
 from pyworkflow.object import String
 from pyworkflow.utils import removeBaseExt
@@ -53,6 +53,10 @@ def getCurrentTomoCountFile(filePath, tomo, ext='.txt'):
     return getTomoPathAndBasename(filePath, tomo) + SUFFIX_COUNT + ext
 
 
+def getFileMwFromGUI(outPath):
+    return join(outPath, GUI_MW_FILE)
+
+
 # def getCurrentTomoPointsFile(filePath, tomo, ext='.txt'):
 #     return getTomoPathAndBasename(filePath, tomo) + SUFFIX_ONLY_PICKED + ext
 #
@@ -69,15 +73,34 @@ def genMCode4ReadDynModel(modelFile):
     """MATLAB code to read a model file from Dynamo"""
     return "m = dread('%s')\n" % abspath(modelFile)  # Load the model created in the boxing protocol
 
-def readModels(prot, outPath, modelList, savePicked=True, saveCropped=True):
+
+def readModels(prot, outPath, tmpPath, modelList, savePicked=True, saveCropped=True):
     """Read the models generated for each tomograms and write the info to a the corresponding file,
     depending if there was only a picking or a picking and a mesh calculation"""
     codeFile = join(outPath, 'parseModels.m')
-    contents = genMCode4ReadAndSaveData(outPath, modelList, savePicked=savePicked, saveCropped=saveCropped)
+    contents = genMCode4ReadAndSaveData(tmpPath, modelList, savePicked=savePicked, saveCropped=saveCropped)
     with open(codeFile, 'w') as codeFid:
         codeFid.write(contents)
     args = ' %s' % codeFile
     Plugin.runDynamo(prot, args)
+
+
+def genMCode4CheckModelWfFromGUI(modelFileList, outPath):
+    """Create MATLAB code to read the generated models and write an empty file in case
+    that the user carried out the model workflow from the boxing GUI"""
+    if isinstance(modelFileList, str):
+        modelFileList = [modelFileList]
+    content = "modelList = {'%s'}\n" % "', '".join(modelFileList)
+    content += "for i=1:length(modelList)\n"
+    content += "modelFile = modelList{i}\n"
+    content += "m = dread(modelFile)\n"  # Load the model
+    content += "if not(isempty(m.crop_points))\n"
+    content += "fid = fopen('%s', 'w')\n" % getFileMwFromGUI(outPath)
+    content += "fclose(fid)\n"
+    content += "break\n"
+    content += "end\n"
+    content += "end\n"
+    return content
 
 
 def genMCode4ReadAndSaveData(outPath, modelFileList, savePicked=True, saveCropped=True, modelWfCode=''):
@@ -97,10 +120,10 @@ def genMCode4ReadAndSaveData(outPath, modelFileList, savePicked=True, saveCroppe
     content += "m = dread(modelFile)\n"  # Load the model
     content += "modelVolume = m.cvolume.file\n"
     if savePicked:  # If a points file name is introduced, it means that the clicked points must be saves
-        # Remove previous file to avoid data repetition because of the append mode
+        # # Remove previous file to avoid data repetition because of the append mode
         pointsFile = getPickedFile(outPath)
-        if exists(pointsFile):
-            remove(pointsFile)
+        # if exists(pointsFile):
+        #     remove(pointsFile)
         content += "pointsClickedMatrix = m.points\n"
         content += "for row=1:size(pointsClickedMatrix, 1)\n"
         content += "cRow = pointsClickedMatrix(row, :)\n"
@@ -108,10 +131,10 @@ def genMCode4ReadAndSaveData(outPath, modelFileList, savePicked=True, saveCroppe
                    "'WriteMode','append', 'Delimiter', 'tab')\n" % pointsFile
         content += "end\n"
     if saveCropped:
-        # Remove previous file to avoid data repetition because of the append mode
+        # # Remove previous file to avoid data repetition because of the append mode
         croppedFile = getCroppedFile(outPath)
-        if exists(croppedFile):
-            remove(croppedFile)
+        # if exists(croppedFile):
+        #     remove(croppedFile)
         # In the meshes were generated (in the Dynamo GUI or with the model workflow protocol), then there will
         # be cropped points and angles
         if modelWfCode:
@@ -145,8 +168,10 @@ def dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict):
         for line in coordFile:
             coord = Coordinate3D()
             values = line.replace('\n', '').split('\t')
-            volumeFile = values[9]
-            coord.setVolume(tomoFileDict[volumeFile])
+            tomoFile = values[9]
+            tomo = tomoFileDict[tomoFile]
+            coord.setVolume(tomo)
+            coord.setTomoId(tomo.getTsId())
             coordinates = float(values[0]), float(values[1]), float(values[2])
             angles = float(values[3]), float(values[4]), float(values[5])
             coord.setPosition(*coordinates, BOTTOM_LEFT_CORNER)
@@ -157,46 +182,6 @@ def dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict):
             coord._dynModelName = String(values[7])
             coord._dynModelFile = String(values[8])
             outCoords.append(coord)
-
-
-# def _createOutput(precedents, outPath, boxSize=20):
-#     outCoords = None
-#     tomoIdDict = {tomo.getTsId(): tomo for tomo in precedents}
-#     # Create the output set of meshes (always produced)
-#     meshes = SetOfMeshes.create(join('..', outPath), template='meshes%s.sqlite')
-#     meshes.setPrecedents(precedents)
-#     meshes.setSamplingRate(precedents.getSamplingRate())
-#     meshes.setBoxSize(boxSize)
-#     meshes._dynCatalogue = String(getCatalogFile(outPath))  # Extended attribute
-#     # Create the output set of coordinates (only for the models to which the user carried out the model workflow
-#     # from the Dynamo GUI
-#     croppedFiles = glob.glob(join(outPath, '*%s.txt') % SUFFIX_CROPPED)
-#     if croppedFiles:
-#         outCoords = createSetOfOutputCoords(outPath, precedents, boxSize=boxSize)
-#
-#     dynamoModels = getDynamoModels(outPath)
-#     for tomoId, modelsDir in self.dynModelsPathDict.items():
-#         tomo = tomoIdDict[tomoId]
-#         pointsFile = getCurrentTomoPointsFile(outPath, tomo)  # For the clicked points
-#         croppedFile = getCurrentTomoCroppedFile(outPath, tomo)  # For the cropped points and angles in case of mesh calculation from the GUI
-#         modelsInDir = readModels(modelsDir, tomoId, pointsFile=pointsFile, croppedFile=croppedFile)
-#         # Fill the output set of meshes
-#         if modelsInDir:
-#             with open(pointsFile, 'r') as coordFile:
-#                 for line in coordFile:
-#                     coord = Coordinate3D()
-#                     values = line.replace('\n', '').split('\t')
-#                     coord.setVolume(tomo)
-#                     coord.setPosition(float(values[0]), float(values[1]), float(values[2]), BOTTOM_LEFT_CORNER)
-#                     coord.setGroupId(int(values[3]))
-#                     # Extended attributes
-#                     coord._dynModelName = String(values[4])
-#                     coord._dynModelFile = String(values[5])
-#                     meshes.append(coord)
-#
-#             # Fill the output set of coordinates in case the user generated the meshes from the Dynamo GUI
-#             if exists(croppedFile):
-#                 dynamoCroppingResults2Scipion(tomo, outCoords, croppedFile)
 
 
 def getDynamoModels(fpath):

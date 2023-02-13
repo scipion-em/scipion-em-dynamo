@@ -42,6 +42,7 @@ VLL_FILE = 'tomograms.vll'
 SUFFIX_COUNT = '_count'
 BASENAME_PICKED = 'picked'
 BASENAME_CROPPED = 'cropped'
+GUI_MW_FILE = 'guiModelWf.txt'
 
 # Tags of Dynamo models
 MB_GENERAL = 'mgeneral'

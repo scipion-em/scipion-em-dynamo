@@ -25,6 +25,7 @@
 # *
 # **************************************************************************
 from enum import Enum
+from os import remove
 from os.path import abspath
 
 from pwem.protocols import EMProtocol
@@ -74,9 +75,6 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.outCoords = None
-        self.precedentsTsIdList = None
-        self.tomoFileDict = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -119,61 +117,50 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._initialize()
         modelsDict = self.inputMeshes.get().getUniqueValues(['_tomoId', '_dynModelName', '_dynModelFile', '_groupId'])
         for tomoId, modelName, modelFile in zip(modelsDict['_tomoId'], modelsDict['_dynModelName'],
                                                 modelsDict['_dynModelFile']):
             self._insertFunctionStep(self.applyWorkflowStep, tomoId, modelName, modelFile)
-            self._insertFunctionStep(self.convertOutputStep, tomoId)
-
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
-    def _initialize(self):
-        precedents = self.inputMeshes.get().getPrecedents()
-        self.precedentsTsIdList = {tomo.getTsId(): tomo for tomo in precedents}
-        self.tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in precedents}
-
     def applyWorkflowStep(self, tomoId, modelName, modelFile):
         commandsFile = self.writeMatlabFile(tomoId, modelName, modelFile)
         args = ' %s' % commandsFile
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
-    def convertOutputStep(self, tomoId):
-        outPath = self._getExtraPath()
-        if not self.outCoords:
-            # Create the output set
-            precedents = self.inputMeshes.get().getPrecedents()
-            self.outCoords = createSetOfOutputCoords(self._getPath(), outPath, precedents, boxSize=self.boxSize.get())
-
-        croppedFile = getCroppedFile(outPath)
-        dynamoCroppingResults2Scipion(self.outCoords, croppedFile, self.tomoFileDict)
-
     def createOutputStep(self):
-        self._defineOutputs(**{self._possibleOutputs.coordinates.name: self.outCoords})
-        self._defineSourceRelation(self.inputMeshes, self.outCoords)
-        self._updateOutputSet(self._possibleOutputs.coordinates.name, self.outCoords,
-                              state=self.outCoords.STREAM_CLOSED)
+        precedents = self.inputMeshes.get().getPrecedents()
+        tomoList = [tomo.clone() for tomo in precedents]
+        tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in tomoList}
+        croppedFile = getCroppedFile(self._getTmpPath())
+        outCoords = createSetOfOutputCoords(self._getPath(), self._getExtraPath(), precedents, boxSize=self.boxSize.get())
+        dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
+        # Remove previous file to avoid data repetition because of the append mode
+        remove(croppedFile)
+        # Define outputs and relations
+        self._defineOutputs(**{self._possibleOutputs.coordinates.name: outCoords})
+        self._defineSourceRelation(self.inputMeshes, outCoords)
+        self._updateOutputSet(self._possibleOutputs.coordinates.name, outCoords, state=outCoords.STREAM_CLOSED)
 
     # --------------------------- DEFINE utils functions ----------------------
     def writeMatlabFile(self, tomoId, modelName, modelFile):
         content = ''
         codeFilePath = self._getExtraPath('modelWf_%s_%s.m' % (tomoId, modelName))
         modelType = self._getModelType(modelName)
-        outPath = self._getExtraPath()
         if modelType == M_VESICLE:
-            content = self.genVesicleCmdFileContents(modelName, modelFile, outPath)
+            content = self.genVesicleCmdFileContents(modelName)
         elif modelType == M_SURFACE:
-            content = self.genSCmdFileContents(modelFile, outPath)
+            content = self.genSCmdFileContents()
         elif modelType == M_GENERAL:
             # Change its type to surface model and process it
-            content = self.genGen2SurfCmdFileContents(modelFile, outPath)
-        content = genMCode4ReadAndSaveData(outPath, modelFile, savePicked=False, saveCropped=True, modelWfCode=content)
+            content = self.genGen2SurfCmdFileContents()
+        content = genMCode4ReadAndSaveData(self._getTmpPath(), modelFile, savePicked=False, saveCropped=True, modelWfCode=content)
         with open(codeFilePath, 'w') as codeFid:
             codeFid.write(content)
         return codeFilePath
 
-    def genVesicleCmdFileContents(self, modelName, modelFile, outPath):
+    def genVesicleCmdFileContents(self, modelName):
         # Let Dynamo approximate the geometry based on the points annotated in the boxing protocol
         contentMWf = "m.approximateGeometryFromPoints()\n"
         # Mesh creation steps (some of which are specific for each sub-model of type vesicle)
@@ -187,13 +174,13 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         # Format and write the output data in a text file that will be read in the step create output
         return contentMWf
 
-    def genSCmdFileContents(self, modelFile, outPath):
+    def genSCmdFileContents(self):
         # Mesh creation steps
         contentMWf = self._genSurfaceModelMeshSteps()
         # Format and write the output data in a text file that will be read in the step create output
         return contentMWf
 
-    def genGen2SurfCmdFileContents(self, modelFile, outPath):
+    def genGen2SurfCmdFileContents(self):
         # Change model type from general to surface
         contentMWf = "m = model.changeType(m, '%s')\n" % 'membraneByLevels'
         contentMWf += "zCoords = m.points(:, 3)\n"

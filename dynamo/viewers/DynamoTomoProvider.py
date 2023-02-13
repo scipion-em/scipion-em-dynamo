@@ -30,9 +30,9 @@ from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 
 class DynamoTomogramProvider(TomogramsTreeProvider):
 
-    def __init__(self, tomoList, path, mode=None, nParticles=0):
+    def __init__(self, tomoList, path, mode=None, nParticlesDict=None):
         super().__init__(tomoList, path, mode)
-        self.nParticles = nParticles
+        self.nParticlesDict = nParticlesDict
 
     def getColumns(self):
         return [('TomoId', 200), ("No. coords", 100), ('status', 150)]
@@ -44,8 +44,8 @@ class DynamoTomogramProvider(TomogramsTreeProvider):
                    'values': (count, 'TO DO'),
                    'tags': 'pending'}
         coordsInTomoCountFile = getCurrentTomoCountFile(self._path, tomogram)
-        if self.nParticles:
-            count = self.nParticles
+        if self.nParticlesDict:
+            count = self.nParticlesDict[tomogram.getTsId()]
         elif exists(coordsInTomoCountFile):
             with open(coordsInTomoCountFile, 'r') as fn:
                 count = int(fn.read())
