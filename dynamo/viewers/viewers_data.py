@@ -24,13 +24,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import datetime
 from os.path import join, abspath, exists
+from dynamo.utils import createBoxingOutputObjects, getNewestModelModDate, getDynamoModels
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 from pwem.viewers import ObjectView
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import askYesNo
+from pyworkflow.utils import makePath, removeBaseExt
 from pyworkflow.utils.properties import Message
+from tomo.constants import BOTTOM_LEFT_CORNER
 from tomo.objects import SetOfCoordinates3D, SetOfMeshes
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 from dynamo import VLL_FILE
@@ -51,41 +54,65 @@ class DynamoDataViewer(pwviewer.Viewer):
         return ObjectView(
             self._project, obj.strId(), fn, viewParams=viewParams)
 
-    def _visualize(self, obj, **kwargs):
+    def _visualize(self, obj, coord=None, **kwargs):
         views = []
+        path = self.protocol._getExtraPath()
 
         if isinstance(obj, SetOfCoordinates3D) or isinstance(obj, SetOfMeshes):
             outputCoords = obj
+            precedentsPointer = outputCoords._precedentsPointer
             precedents = outputCoords.getPrecedents()
             tomoIdDict = {tomo.getTsId(): tomo.clone() for tomo in precedents}
             tomoList = list(tomoIdDict.values())
             nCoordsDict = {}
+            # Write the coordinates to text files, as expected by Dynamo
             for tomo in tomoList:
+                coordCounter = 0
                 tomoId = tomo.getTsId()
-                nCoordsDict[tomoId] = len(list(outputCoords.iterItems(where='_tomoId=="%s"' % tomoId)))
+                with open(join(path, removeBaseExt(tomo.getFileName()) + '.txt'), 'w') as fid:
+                    for coord in outputCoords.iterCoordinates(tomo):
+                        coords = list(coord.getPosition(BOTTOM_LEFT_CORNER))
+                        # angles = list(matrix2eulerAngles(coord.getMatrix()))[:3]  # Keep the angles, not the shifts (Dynamo boxing GUI is not expecting them at this point)
+                        fid.write(",".join(map(str, coords + [coord.getGroupId()])) + "\n")
+                        coordCounter += 1
+                nCoordsDict[tomoId] = coordCounter
 
-            path = self.protocol._getExtraPath()
             tomoProvider = DynamoTomogramProvider(tomoList, path, nParticlesDict=nCoordsDict)
             listTomosFile = join(path, VLL_FILE)
 
             # Create list of tomos file (VLL file), only required if using the Dynamo viewer in a protocol from any
             # other plugin
-            if not(exists(listTomosFile)):
+            if not exists(listTomosFile):
                 with open(listTomosFile, 'w') as tomoFid:
                     for tomo in tomoList:
                         tomoPath = abspath(tomo.getFileName())
                         tomoFid.write(tomoPath + '\n')
 
+            dynamoDialogCallingTime = datetime.datetime.now()
             self.dlg = DynamoTomoDialog(self._tkRoot, path,
                                         provider=tomoProvider,
                                         calledFromViewer=True)
 
-            import tkinter as tk
-            frame = tk.Frame()
-            # TODO: check if the user has made changes and only ask in that case
-            # TODO: Refactor this and make a correct output creating according to the last changes
-            if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
-                # textFile2Coords(self.protocol, outputCoords.getPrecedents(), path, directions=False)
-                self.protocol._createOutput()
+            modelList = getDynamoModels(path)
+            if modelList:
+                # Check if the modification file of the newest model file is higher than the time capture right before
+                # calling the Dynamo dialog. In that case, it means that some modification was carried out by the user from
+                # it and we have to ask if the changes should be saved
+                if dynamoDialogCallingTime < getNewestModelModDate(modelList):
+                    import tkinter as tk
+                    from dynamo.protocols.protocol_boxing import OutputsBoxing
 
-        return views
+                    frame = tk.Frame()
+                    # Because the coordinates are written as general models, they'll have cropped points and angles defined
+                    # (particularity of Dynamo for this kind of models). Hence, coordinates will be saved as if the model
+                    # workflow had been carried out
+                    if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
+                        tmpPath = self.protocol._getTmpPath()
+                        if not exists(tmpPath):  # Some files will be created there, and it may not exist
+                            makePath(tmpPath)
+                        _, outCoords = createBoxingOutputObjects(self.protocol, precedentsPointer,
+                                                                 boxSize=outputCoords.getBoxSize(),
+                                                                 savePicked=False)
+                        self.protocol._defineOutputs(**{OutputsBoxing.coordinates.name: outputCoords})
+                        self.protocol._defineSourceRelation(precedentsPointer, outCoords)
+            return views

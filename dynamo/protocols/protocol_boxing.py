@@ -25,21 +25,16 @@
 # *
 # **************************************************************************
 from enum import Enum
-from os.path import exists, abspath, join
-import numpy as np
-from dynamo.utils import getCatalogFile, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getDynamoModels, \
-    readModels, \
-    getPickedFile, getCroppedFile, genMCode4CheckModelWfFromGUI, getFileMwFromGUI
+from os.path import abspath
+from dynamo.utils import getCatalogFile, createBoxingOutputObjects
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 import pyworkflow.utils as pwutils
 from pyworkflow import BETA
-from pyworkflow.object import String
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
-from tomo.constants import BOTTOM_LEFT_CORNER
-from tomo.objects import SetOfMeshes, Coordinate3D, SetOfCoordinates3D
+from tomo.objects import SetOfMeshes, SetOfCoordinates3D
 from tomo.protocols import ProtTomoPicking
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
@@ -73,16 +68,6 @@ class DynamoBoxing(ProtTomoPicking):
         ProtTomoPicking._defineParams(self, form)
 
         form.addParam('boxSize', IntParam, label="Box Size")
-        form.addParam('modPrevMeshes', BooleanParam,
-                      default=False,
-                      label='Modify previous meshes?',
-                      help='This option allows to add and/or remove coordinates to a previous SetOfMeshes')
-        form.addParam('inputMeshes', PointerParam,
-                      label="Input Meshes",
-                      condition='modPrevMeshes',
-                      allowsNull=True,
-                      pointerClass='SetOfMeshes',
-                      help='Select the previous SetOfMeshes you want to modify')
         form.addParam('deleteGenMFiles', BooleanParam,
                       default=True,
                       label='Remove the .m files generated after the execution?',
@@ -109,43 +94,12 @@ class DynamoBoxing(ProtTomoPicking):
                                                                             'volume_%i' % tomoCounter, 'models')
                 tomoCounter += 1
 
+        # Create the catalog
         catalogFile = getCatalogFile(self._getExtraPath(), withExt=False)
-        if self.modPrevMeshes.get():
-            # Save coordinates into .txt file for each tomogram and pass them to dynamo
-            inputMeshes = self.inputMeshes.get()
-            inputTomograms = self.inputTomograms.get()
-            for tomo in inputTomograms:
-                outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
-                coordsInCurrentTomo = []
-                for coord in inputMeshes.iterCoordinates(tomo.getObjId()):
-                    coordsInCurrentTomo.append(list(coord.getPosition(BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
-                if coordsInCurrentTomo:
-                    np.savetxt(outFileCoord, np.asarray(coordsInCurrentTomo), delimiter=' ')
-
-            # Create small program to tell Dynamo to save the inputMeshes in a Ellipsoidal Vesicle Model
-            contents = "dcm -create %s -fromvll %s\n" % (catalogFile, vllFile)
-            contents += "catalogue=dread('%s')\n" % getCatalogFile(self._getExtraPath())
-            contents += "nVolumes=length(catalogue.volumes)\n"
-            contents += "for idv=1:nVolumes\n"
-            contents += "tomoPath=catalogue.volumes{idv}.fullFileName()\n"
-            contents += "tomoIndex=catalogue.volumes{idv}.index\n"
-            contents += "[~,tomoName,~]=fileparts(tomoPath)\n"
-            contents += "coordFile=fullfile('%s', tomoName '.txt']\n" % self._getExtraPath()
-            contents += "if ~isfile(coordFile)\n"
-            contents += "continue\n"
-            contents += "end\n"
-            contents += "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n"
-            contents += "idm_vec=unique(coords_ids(:,4))'\n"
-            contents += "end\n"
-            contents += "exit\n"
-        else:
-            contents = "dcm -create %s -vll %s\n" % (catalogFile, vllFile)
-
+        contents = "dcm -create %s -vll %s\n" % (catalogFile, vllFile)
         codeFile = self._getExtraPath('coords2model.m')
         with open(codeFile, 'w') as codeFid:
             codeFid.write(contents)
-
-        # Tell Dynamo to create the catalogue with the models
         args = ' %s' % codeFile
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
@@ -167,67 +121,17 @@ class DynamoBoxing(ProtTomoPicking):
             pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
-        saveCropped = False
-        outCoords = None
-        outPath = self._getExtraPath()
-        precedents = self.inputTomograms.get()
-        tomoFileDict = {abspath(tomo.getFileName()): tomo.clone() for tomo in precedents}
-        # Create the output set of meshes (always produced)
-        meshes = SetOfMeshes.create(self._getPath(), template='meshes%s.sqlite')
-        meshes.setPrecedents(precedents)
-        meshes.setSamplingRate(precedents.getSamplingRate())
-        meshes.setBoxSize(self.boxSize.get())
-        meshes._dynCatalogue = String(getCatalogFile(outPath))  # Extended attribute
-        # Create the output set of coordinates (only for the models to which the user carried out the model workflow
-        # from the Dynamo GUI
-        tmpPath = self._getTmpPath()
-        pickedFile = getPickedFile(tmpPath)
-        croppedFile = getCroppedFile(tmpPath)
-        dynamoModels = getDynamoModels(outPath)
-        if dynamoModels:
-            saveCropped = self.didUserMwInGui(dynamoModels, tmpPath)
-            readModels(self, outPath, tmpPath, dynamoModels, savePicked=True, saveCropped=saveCropped)
-            if saveCropped:
-                outCoords = createSetOfOutputCoords(self._getPath(), outPath, precedents, boxSize=self.boxSize.get())
-            # Save picked points to Scipion
-            with open(pickedFile, 'r') as coordFile:
-                for line in coordFile:
-                    coord = Coordinate3D()
-                    values = line.replace('\n', '').split('\t')
-                    tomoFile = values[6]
-                    tomo = tomoFileDict[tomoFile]
-                    coord.setVolume(tomo)
-                    coord.setTomoId(tomo.getTsId())
-                    coord.setPosition(float(values[0]), float(values[1]), float(values[2]), BOTTOM_LEFT_CORNER)
-                    coord.setGroupId(int(values[3]))
-                    # Extended attributes
-                    coord._dynModelName = String(values[4])
-                    coord._dynModelFile = String(values[5])
-                    meshes.append(coord)
-
-            if saveCropped:
-                dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
-
+        precedentsPointer = self.inputTomograms
+        meshes, outCoords = createBoxingOutputObjects(self, precedentsPointer, boxSize=self.boxSize.get())
         # Define outputs and relations
         outputDict = {self._possibleOutputs.meshes.name: meshes}
         if outCoords:
             outputDict[self._possibleOutputs.coordinates.name] = outCoords
         self._defineOutputs(**outputDict)
-        self._defineSourceRelation(self.inputTomograms, meshes)
+        self._defineSourceRelation(precedentsPointer, meshes)
         if outCoords:
-            self._defineSourceRelation(self.inputTomograms, outCoords)
+            self._defineSourceRelation(precedentsPointer, outCoords)
         self._updateOutputSet(self._possibleOutputs.meshes.name, meshes, state=meshes.STREAM_CLOSED)
-
-    def didUserMwInGui(self, dynamoModels, tmpPath):
-        """Reads the generated models and creates an empty txt file in case the user carried out at least one
-        model workflow from the boxing GUI"""
-        mCode = genMCode4CheckModelWfFromGUI(dynamoModels, tmpPath)
-        mCodeFile = self._getExtraPath('checkModelWfFromGUI.m')
-        with open(mCodeFile, 'w') as codeFid:
-            codeFid.write(mCode)
-        args = ' %s' % mCodeFile
-        Plugin.runDynamo(self, args)
-        return exists(getFileMwFromGUI(tmpPath))
 
     # --------------------------- DEFINE info functions ----------------------
     @staticmethod

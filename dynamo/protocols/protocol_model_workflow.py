@@ -130,11 +130,12 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def createOutputStep(self):
-        precedents = self.inputMeshes.get().getPrecedents()
+        precedentsPointer = self.inputMeshes.get()._precedentsPointer
+        precedents = precedentsPointer.get()
         tomoList = [tomo.clone() for tomo in precedents]
         tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in tomoList}
         croppedFile = getCroppedFile(self._getTmpPath())
-        outCoords = createSetOfOutputCoords(self._getPath(), self._getExtraPath(), precedents, boxSize=self.boxSize.get())
+        outCoords = createSetOfOutputCoords(self._getPath(), self._getExtraPath(), precedentsPointer, boxSize=self.boxSize.get())
         dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
         # Remove previous file to avoid data repetition because of the append mode
         remove(croppedFile)

@@ -44,11 +44,11 @@ class DynamoTomogramProvider(TomogramsTreeProvider):
                    'values': (count, 'TO DO'),
                    'tags': 'pending'}
         coordsInTomoCountFile = getCurrentTomoCountFile(self._path, tomogram)
-        if self.nParticlesDict:
-            count = self.nParticlesDict[tomogram.getTsId()]
-        elif exists(coordsInTomoCountFile):
+        if exists(coordsInTomoCountFile):
             with open(coordsInTomoCountFile, 'r') as fn:
                 count = int(fn.read())
+        elif self.nParticlesDict:
+            count = self.nParticlesDict[tomogram.getTsId()]
 
         if count > 0:
             resDict['values'] = (count, 'DONE')

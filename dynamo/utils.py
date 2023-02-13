@@ -23,8 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import datetime
 import glob
-from os import remove
+import pathlib
 from os.path import join, basename, abspath, exists
 from dynamo import CATALOG_FILENAME, CATALOG_BASENAME, SUFFIX_COUNT, Plugin, \
     BASENAME_CROPPED, BASENAME_PICKED, GUI_MW_FILE
@@ -57,14 +58,6 @@ def getFileMwFromGUI(outPath):
     return join(outPath, GUI_MW_FILE)
 
 
-# def getCurrentTomoPointsFile(filePath, tomo, ext='.txt'):
-#     return getTomoPathAndBasename(filePath, tomo) + SUFFIX_ONLY_PICKED + ext
-#
-#
-# def getCurrentTomoCroppedFile(filePath, tomo, ext='.txt'):
-#     return getTomoPathAndBasename(filePath, tomo) + SUFFIX_CROPPED + ext
-
-
 def getCatalogFile(fpath, withExt=True):
     return join(basename(CATALOG_FILENAME)) if withExt else join(fpath, CATALOG_BASENAME)
 
@@ -82,7 +75,11 @@ def readModels(prot, outPath, tmpPath, modelList, savePicked=True, saveCropped=T
     with open(codeFile, 'w') as codeFid:
         codeFid.write(contents)
     args = ' %s' % codeFile
-    Plugin.runDynamo(prot, args)
+    try:
+        Plugin.runDynamo(prot, args)
+    except:
+        from pyworkflow.utils.process import runJob
+        runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
 
 def genMCode4CheckModelWfFromGUI(modelFileList, outPath):
@@ -108,7 +105,14 @@ def genMCode4ReadAndSaveData(outPath, modelFileList, savePicked=True, saveCroppe
     The column headers of the generated file are:
         - When no meshes were generated (only the clicked points, then): coordX, coordY, coordZ, vesicleId, modelName, modelFile, volumeFile
         - When meshes were generated (cropped points and angles, interpolation): coordX, coordY, coordZ, rot, tilt, psi, vesicleId, modelName, modelFile, volumeFile
-    Input modelWfCode can be used to introduce specific code for a model workflow processing"""
+    Input modelWfCode can be used to introduce specific code for a model workflow processing
+    :param outPath: path where the results files will be generated, normally the directory 'extra'.
+    :param modelFileList: list of the Dynamo model files to be processed.
+    :param savePicked: flag to indicate if the manually picked points should be saved.
+    :param saveCropped: the same as the previous one, but for the interpolated (model workflow result) points and angles.
+    :param modelWfCode: string containing the MATLAB code which corresponds to the steps that have to be carried out for
+    a specific Dynamo model.
+    """
     # Generate the MATLAB code
     if isinstance(modelFileList, str):
         modelFileList = [modelFileList]
@@ -120,10 +124,7 @@ def genMCode4ReadAndSaveData(outPath, modelFileList, savePicked=True, saveCroppe
     content += "m = dread(modelFile)\n"  # Load the model
     content += "modelVolume = m.cvolume.file\n"
     if savePicked:  # If a points file name is introduced, it means that the clicked points must be saves
-        # # Remove previous file to avoid data repetition because of the append mode
         pointsFile = getPickedFile(outPath)
-        # if exists(pointsFile):
-        #     remove(pointsFile)
         content += "pointsClickedMatrix = m.points\n"
         content += "for row=1:size(pointsClickedMatrix, 1)\n"
         content += "cRow = pointsClickedMatrix(row, :)\n"
@@ -131,17 +132,13 @@ def genMCode4ReadAndSaveData(outPath, modelFileList, savePicked=True, saveCroppe
                    "'WriteMode','append', 'Delimiter', 'tab')\n" % pointsFile
         content += "end\n"
     if saveCropped:
-        # # Remove previous file to avoid data repetition because of the append mode
         croppedFile = getCroppedFile(outPath)
-        # if exists(croppedFile):
-        #     remove(croppedFile)
         # In the meshes were generated (in the Dynamo GUI or with the model workflow protocol), then there will
         # be cropped points and angles
         if modelWfCode:
             content += modelWfCode
         content += "coordsMatrix = m.crop_points\n"
         content += "anglesMatrix = m.crop_angles\n"
-        # content += "if not(isempty(coordsMatrix))\n"
         content += "for row=1:size(coordsMatrix, 1)\n"
         content += "cRow = coordsMatrix(row, :)\n"  # Leave only two decimals for the coordinates
         content += "aRow = anglesMatrix(row, :)\n"  # The same for the angles
@@ -153,10 +150,11 @@ def genMCode4ReadAndSaveData(outPath, modelFileList, savePicked=True, saveCroppe
     return content
 
 
-def createSetOfOutputCoords(protPath, outPath, precedents, boxSize=20):
+def createSetOfOutputCoords(protPath, outPath, precedentsPointer, boxSize=20):
     # Create the output set
+    precedents = precedentsPointer.get()
     outCoords = SetOfCoordinates3D.create(protPath, template='coordinates3d%s.sqlite')
-    outCoords.setPrecedents(precedents)
+    outCoords.setPrecedents(precedentsPointer)
     outCoords.setSamplingRate(precedents.getSamplingRate())
     outCoords.setBoxSize(boxSize)
     outCoords._dynCatalogue = String(getCatalogFile(outPath))  # Extended attribute
@@ -187,3 +185,70 @@ def dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict):
 def getDynamoModels(fpath):
     """Search recursively for Dynamo model files (omd) in a given directory (usually extra)"""
     return glob.glob(join(fpath, '**/*.omd'), recursive=True)
+
+
+def createBoxingOutputObjects(prot, precedentsPointer, boxSize=20, savePicked=True):
+    meshes = None
+    outCoords = None
+    precedents = precedentsPointer.get()
+    outPath = prot._getExtraPath()
+    tomoFileDict = {abspath(tomo.getFileName()): tomo.clone() for tomo in precedents}
+    # Create the output set of coordinates (only for the models to which the user carried out the model workflow
+    # from the Dynamo GUI
+    tmpPath = prot._getTmpPath()
+    pickedFile = getPickedFile(tmpPath)
+    croppedFile = getCroppedFile(tmpPath)
+    dynamoModels = getDynamoModels(outPath)
+    if dynamoModels:
+        saveCropped = didUserMwInGui(prot, dynamoModels)
+        readModels(prot, outPath, tmpPath, dynamoModels, savePicked=savePicked, saveCropped=saveCropped)
+        if savePicked:
+            # Create the output set of meshes (always produced)
+            meshes = SetOfMeshes.create(prot._getPath(), template='meshes%s.sqlite')
+            meshes.setPrecedents(precedents)
+            meshes.setSamplingRate(precedents.getSamplingRate())
+            meshes.setBoxSize(boxSize)
+            meshes._dynCatalogue = String(getCatalogFile(outPath))  # Extended attribute
+            # Save picked points to Scipion
+            with open(pickedFile, 'r') as coordFile:
+                for line in coordFile:
+                    coord = Coordinate3D()
+                    values = line.replace('\n', '').split('\t')
+                    tomoFile = values[6]
+                    tomo = tomoFileDict[tomoFile]
+                    coord.setVolume(tomo)
+                    coord.setTomoId(tomo.getTsId())
+                    coord.setPosition(float(values[0]), float(values[1]), float(values[2]), BOTTOM_LEFT_CORNER)
+                    coord.setGroupId(int(values[3]))
+                    # Extended attributes
+                    coord._dynModelName = String(values[4])
+                    coord._dynModelFile = String(values[5])
+                    meshes.append(coord)
+        if saveCropped:
+            outCoords = createSetOfOutputCoords(prot._getPath(), outPath, precedentsPointer, boxSize=prot.boxSize.get())
+            dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
+
+    return meshes, outCoords
+
+
+def didUserMwInGui(prot, dynamoModels):
+    """Reads the generated models and creates an empty txt file in case the user carried out at least one
+    model workflow from the boxing GUI"""
+    tmpPath = prot._getTmpPath()
+    mCode = genMCode4CheckModelWfFromGUI(dynamoModels, tmpPath)
+    mCodeFile = prot._getExtraPath('checkModelWfFromGUI.m')
+    with open(mCodeFile, 'w') as codeFid:
+        codeFid.write(mCode)
+    args = ' %s' % mCodeFile
+    try:
+        Plugin.runDynamo(prot, args)
+    except:
+        from pyworkflow.utils.process import runJob
+        runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+    return exists(getFileMwFromGUI(tmpPath))
+
+
+def getNewestModelModDate(modelList):
+    """Get the last modification datetime of the newest model file"""
+    tSt = sorted([pathlib.Path(fname).stat().st_mtime for fname in modelList])[-1]
+    return datetime.datetime.fromtimestamp(tSt)

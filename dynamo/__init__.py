@@ -68,7 +68,7 @@ class Plugin(pwem.Plugin):
         return join(cls.getHome(), 'matlab', 'bin', DYNAMO_PROGRAM)
 
     @classmethod
-    def runDynamo(cls, protocol, args, cwd=None):
+    def runDynamo(cls, protocol, args):
         """ Run Dynamo command from a given protocol. """
         # args will be the .doc file which contains the MATLAB code
         program = cls.getDynamoProgram()

@@ -23,7 +23,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
 import threading
 from os.path import abspath, join
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME, MB_GENERAL
@@ -91,7 +90,7 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "if not(isfile(coordFile))\n"
             contents += "continue\n"
             contents += "end\n"
-            contents += "coordsMatrix=readmatrix(coordFile,'Delimiter',' ')\n"  # Read it
+            contents += "coordsMatrix=readmatrix(coordFile,'Delimiter',',')\n"  # Read it
             contents += "idm_vec=unique(coordsMatrix(:,4))'\n"  # Get the groupIds
             contents += "for idm=1:length(idm_vec)\n"
             contents += "model_name=['%s_',num2str(idm)]\n" % MB_GENERAL
