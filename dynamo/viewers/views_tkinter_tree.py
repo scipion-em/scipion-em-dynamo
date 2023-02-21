@@ -25,8 +25,8 @@
 # **************************************************************************
 import threading
 from os.path import abspath, join
-from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, CATALOG_FILENAME, MB_GENERAL
-from dynamo.utils import getCurrentTomoCountFile, getDynamoModels
+from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, MB_GENERAL
+from dynamo.utils import getCurrentTomoCountFile, getDynamoModels, getCatalogFile
 from pyworkflow.gui.dialog import ToolbarListDialog
 from pyworkflow.utils import makePath
 from pyworkflow.utils.process import runJob
@@ -42,6 +42,7 @@ class DynamoTomoDialog(ToolbarListDialog):
         self.proc = None
         self.currentTomoTxtFile = None
         self.tomo = None
+        self.catalgueMngCode = ''
         self.path = path
         self.coordsFileDict = kwargs.get('writtenCoordsFilesDict', None)
         self.calledFromViewer = kwargs.get('calledFromViewer', False)
@@ -64,8 +65,8 @@ class DynamoTomoDialog(ToolbarListDialog):
         self.currentTomoTxtFile = getCurrentTomoCountFile(self.path, e)
         # Create a catalogue with the Coordinates to be visualized
         extraPath = self.path
-        catalogue = join(extraPath, CATALOG_BASENAME)
-        catalogueWithExt = join(extraPath, CATALOG_FILENAME)
+        catalogue = getCatalogFile(extraPath, withExt=False)
+        catalogueWithExt = getCatalogFile(extraPath)
         listTomosFile = join(extraPath, VLL_FILE)
         if self.calledFromViewer and not self._isADynamoProj(extraPath):
             makePath(catalogue)  # Needed for a correct catalog creation
@@ -109,10 +110,14 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "end\n"
             contents += "end\n"
             contents += "dynamo_write(catalogue, '%s')\n" % catalogueWithExt
-            with open(codeFile, 'w') as codeFid:
-                codeFid.write(contents)
-            args = ' %s' % codeFile
-            runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+        else:
+            contents = "dcm -create %s -vll %s\n" % (catalogue, listTomosFile)
+
+        self.catalgueMngCode = contents
+        # with open(codeFile, 'w') as codeFid:
+        #     codeFid.write(contents)
+        # args = ' %s' % codeFile
+        # runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
         self.proc = threading.Thread(target=self.lanchDynamoForTomogram, args=(self.tomo,))
         self.proc.start()
@@ -130,7 +135,8 @@ class DynamoTomoDialog(ToolbarListDialog):
 
         # Write code to Matlab code file
         with open(codeFilePath, 'w') as codeFid:
-            content = "ctlgNoExt = '%s'\n" % catalogue
+            content = self.catalgueMngCode
+            content += "ctlgNoExt = '%s'\n" % catalogue
             content += "ctlgName = [ctlgNoExt, '.ctlg']\n"
             content += "ctlg = dread(ctlgName)\n"  # Load the catalogue
             content += "tomoFiles = cellfun(@(x) x.file, ctlg.volumes, 'UniformOutput', false)\n"  # Cell with the tomo names

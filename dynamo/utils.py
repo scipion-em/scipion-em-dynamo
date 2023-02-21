@@ -59,7 +59,7 @@ def getFileMwFromGUI(outPath):
 
 
 def getCatalogFile(fpath, withExt=True):
-    return join(basename(CATALOG_FILENAME)) if withExt else join(fpath, CATALOG_BASENAME)
+    return join(fpath, basename(CATALOG_FILENAME)) if withExt else join(fpath, CATALOG_BASENAME)
 
 
 def genMCode4ReadDynModel(modelFile):

@@ -94,15 +94,6 @@ class DynamoBoxing(ProtTomoPicking):
                                                                             'volume_%i' % tomoCounter, 'models')
                 tomoCounter += 1
 
-        # Create the catalog
-        catalogFile = getCatalogFile(self._getExtraPath(), withExt=False)
-        contents = "dcm -create %s -vll %s\n" % (catalogFile, vllFile)
-        codeFile = self._getExtraPath('coords2model.m')
-        with open(codeFile, 'w') as codeFid:
-            codeFid.write(contents)
-        args = ' %s' % codeFile
-        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
-
     def launchDynamoBoxingStep(self):
         tomoList = []
         for tomo in self.inputTomograms.get().iterItems():
@@ -110,7 +101,9 @@ class DynamoBoxing(ProtTomoPicking):
             tomoList.append(tomogram)
 
         tomoProvider = DynamoTomogramProvider(tomoList, self._getExtraPath(), "txt")
-        self.dlg = DynamoTomoDialog(None, self._getExtraPath(), provider=tomoProvider)
+        self.dlg = DynamoTomoDialog(None, self._getExtraPath(),
+                                    provider=tomoProvider,
+                                    calledFromViewer=False)
 
         # Open dialog to request confirmation to create output
         import tkinter as tk
