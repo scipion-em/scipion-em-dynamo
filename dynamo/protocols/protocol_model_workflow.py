@@ -35,14 +35,14 @@ from tomo.objects import SetOfCoordinates3D
 from tomo.protocols import ProtTomoBase
 from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NAME, M_SURFACE_NAME, \
     M_ELLIPSOIDAL_VESICLE_NAME, M_GENERAL_WITH_BOXES_NAME, M_SURFACE_DES, \
-    M_VESICLE_NAME, M_VESICLE_DES, M_ELLIPSOIDAL_VESICLE_DES, M_MARKED_ELLIP_VESICLE_NAME, M_MARKED_ELLIP_VESICLE_DES, \
+    M_SPH_VESICLE_NAME, M_VESICLE_DES, M_ELLIPSOIDAL_VESICLE_DES, M_MARKED_ELLIP_VESICLE_NAME, \
+    M_MARKED_ELLIP_VESICLE_DES, \
     MB_BY_LEVELS, MB_ELLIPSOIDAL, MB_GENERAL, MB_GENERAL_BOXES, MB_VESICLE, MB_ELLIPSOIDAL_MARKED, \
-    MODELS_NOT_PROCESSED_IN_MW, MODELS_ALLOWED_IN_MW_NAMES
+    MODELS_NOT_PROCESSED_IN_MW, MODELS_ALLOWED_IN_MW_NAMES, M_VESICLE_NAME
+from ..utils import genMCode4ReadAndSaveData, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getCroppedFile
+
 
 # Model types mapping
-from ..utils import genMCode4ReadAndSaveData, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getCroppedFile, \
-    genMCode4ReadDynModel
-
 MODEL_CHOICES = [M_ELLIPSOIDAL_VESICLE_NAME, M_SURFACE_NAME, M_GENERAL_NAME]
 
 # Model types encoding
@@ -91,26 +91,26 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                       important=True)
 
         form.addSection('Model parameters')
-        form.addLine('Available models:')
-        form.addLine('Description --> ', help=self._genModelsDescriptionMsg())
-        form.addLine('Notation --> ', help=self._genModelsNotationMsg())
+        form.addLine('Available models: description in help --> ', help=self._genModelsDescriptionMsg())
+        form.addLine('Notation: %s' % self._genModelsNotationMsg(),
+                     help='The meshes for the general models will be calculated treating them as surface models')
         group = form.addGroup('Common to multiple models')
         group.addParam('meshParameter', params.IntParam,
                        default=5,
-                       label='Mesh parameter [EV][S]',
+                       label='Mesh parameter [G][S][V]',
                        help='Intended mesh parameter for the "mesh" that supports the depiction of the model')
         group.addParam('maxTr', params.IntParam,
                        default=100000,
-                       label="Maximun number of triangles [EV][S]",
+                       label="Maximun number of triangles [G][S][V]",
                        help='Maximum number of triangles allowed during generation of a depiction mesh')
         group.addParam('cropping', params.IntParam,
                        default=10,
-                       label="Cropping parameter [EV][S]",
+                       label="Cropping parameter [G][S][V]",
                        help='Intended mesh parameter for the "crop_mesh" that defined a cropping '
                             'geometry on a surface')
         group.addParam('subDivision', params.IntParam,
                        default=2,
-                       label="Number of Subdivision steps [S]",
+                       label="Number of Subdivision steps [G][S]",
                        help="Specifiy the number of times the Mesh geometry will be subdivided. This will increase the "
                             "number of triangles in the mesh, making it smoother. However, it will also increase the "
                             "number of cropping points")
@@ -201,13 +201,9 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     @staticmethod
     def _genModelsNotationMsg():
-        modelsHelp = '- %ss [V]\n' % M_VESICLE_NAME
-        modelsHelp += '- %s [S]\n' % M_SURFACE_NAME
-        # modelsHelp += '- %s [G]\n\n' % M_GENERAL_NAME
-        # modelsHelp += '- %s model specific cases:\n' % M_GENERAL_NAME
-        # modelsHelp += '   - If oriented with an ellipsoidal vesicle model mesh [GE]\n'
-        # modelsHelp += '   - If oriented with a surface model mesh [GS]\n'
-        # modelsHelp += '   - Parameters corresponding to models not present in your picking data can be ignored\n'
+        modelsHelp = '[G]: %s,  ' % M_GENERAL_NAME
+        modelsHelp += '[S]: %s,  ' % M_SURFACE_NAME
+        modelsHelp += '[V]: %s' % M_VESICLE_NAME
         return modelsHelp
 
     @staticmethod
@@ -215,10 +211,9 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         modelsHelp = '*%s* (NOTE: they will be converted into surface model to generate the mesh):\n\n' % M_GENERAL_NAME.upper()
         modelsHelp += '\t1) *%s*: %s\n\n' % (M_GENERAL_NAME, M_GENERAL_DES)
         modelsHelp += '\t2) *%s*: %s\n\n\n' % (M_GENERAL_WITH_BOXES_NAME, M_GENERAL_WITH_BOXES_DES)
-        # modelsHelp += '*%s*:\n%s\n\n\n' % (M_DIPOLE_SET_NAME.upper(), M_DIPOLE_SET_DES)
         modelsHelp += '*%s*:\n%s\n\n\n' % (M_SURFACE_NAME.upper(), M_SURFACE_DES)
         modelsHelp += '*%s*:\n\n' % M_VESICLE_NAME.upper()
-        modelsHelp += '\t1) *%s*: %s\n\n' % (M_VESICLE_NAME, M_VESICLE_DES)
+        modelsHelp += '\t1) *%s*: %s\n\n' % (M_SPH_VESICLE_NAME, M_VESICLE_DES)
         modelsHelp += '\t2) *%s*: %s\n\n' % (M_ELLIPSOIDAL_VESICLE_NAME, M_ELLIPSOIDAL_VESICLE_DES)
         modelsHelp += '\t3) *%s*: %s\n\n\n' % (M_MARKED_ELLIP_VESICLE_NAME, M_MARKED_ELLIP_VESICLE_DES)
         return modelsHelp

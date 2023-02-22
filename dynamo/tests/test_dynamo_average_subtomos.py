@@ -1,4 +1,4 @@
-# ding=utf-8
+# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
 # * Authors:     Scipion Team  (scipion@cnb.csic.es) [1]
@@ -24,11 +24,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from xmipp3.constants import MASK3D_CYLINDER
-from xmipp3.protocols import XmippProtCreateMask3D
-from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
-
+from os.path import exists
 from dynamo.protocols import DynamoProtAvgSubtomograms
+from dynamo.protocols.protocol_average_subtomograms import DynAvgOutputs
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING, DynamoExtraction, DynExtractionOutputs
 from imod.protocols import ProtImodTomoNormalization
 from imod.protocols.protocol_base import OUTPUT_TOMOGRAMS_NAME
@@ -58,29 +56,10 @@ class TestDynamoAverageSubtomograms(BaseTest):
 
     @classmethod
     def runPreviousProtocols(cls):
-        cls.mask = cls.runCreate3dMask()
         importedTomos = cls.runImportTomograms()
         binned2Tomos = cls.runBinTomograms(importedTomos)
         importedCoords = cls.runImport3dCoords(binned2Tomos)
         cls.extractedSubtomos = cls.runExtractSubtomograms(importedCoords, boxSize=cls.boxSize)
-
-    @classmethod
-    def runCreate3dMask(cls):
-        print(magentaStr("\n==> Generating the 3D mask:"))
-        protCreateParticleMask = cls.newProtocol(XmippProtCreateMask3D,
-                                                 source=SOURCE_GEOMETRY,
-                                                 samplingRate=cls.sRate,
-                                                 size=cls.boxSize,
-                                                 geo=MASK3D_CYLINDER,
-                                                 radius=6,
-                                                 shiftCenter=True,
-                                                 centerZ=3,
-                                                 height=15,
-                                                 doSmooth=True)
-        cls.launchProtocol(protCreateParticleMask)
-        genMask = getattr(protCreateParticleMask, 'outputMask', None)
-        cls.assertIsNotNone(genMask, 'the 3D mask was not generated')
-        return genMask
 
     @classmethod
     def runImportTomograms(cls):
@@ -145,3 +124,17 @@ class TestDynamoAverageSubtomograms(BaseTest):
         protAvgSubtomo = cls.newProtocol(DynamoProtAvgSubtomograms,
                                          inSubtomos=cls.extractedSubtomos)
         cls.launchProtocol(protAvgSubtomo)
+        return getattr(protAvgSubtomo, DynAvgOutputs.average.name, None)
+
+    def test_average(self):
+        testBoxSize = (self.boxSize, self.boxSize, self.boxSize)
+        avg = self.runAverageSubtomograms()
+        self.assertIsNotNone(avg)
+        self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
+        self.assertTrue(avg.getFileName().endswith(".mrc"))
+        # Dynamo average protocol doesn't generate halves
+        self.assertFalse(avg.hasHalfMaps())
+        # The imported coordinates correspond to a binned 2 tomogram
+        self.assertEqual(avg.getSamplingRate(), self.Bin2SRate)
+        self.assertEqual(avg.getDimensions(), testBoxSize)
+

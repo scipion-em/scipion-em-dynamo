@@ -27,7 +27,7 @@
 import os
 from dynamo.protocols.protocol_bin_tomograms import DynBinTomosOutputs
 from dynamo.protocols.protocol_extraction import DynExtractionOutputs, SAME_AS_PICKING, OTHER
-from pyworkflow.object import Pointer, String
+from pyworkflow.object import String
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms

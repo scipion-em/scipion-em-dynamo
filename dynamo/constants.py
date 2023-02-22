@@ -65,7 +65,8 @@ M_GENERAL_NAME = "General"
 M_GENERAL_WITH_BOXES_NAME = "General (shown in boxes)"
 M_DIPOLE_SET_NAME = "Oriented particles (dipole set)"
 M_SURFACE_NAME = "Surface"
-M_VESICLE_NAME = "Vesicle (spherical)"
+M_VESICLE_NAME = "Vesicle"
+M_SPH_VESICLE_NAME = "Vesicle (spherical)"
 M_ELLIPSOIDAL_VESICLE_NAME = "Ellipsoidal vesicle"
 M_MARKED_ELLIP_VESICLE_NAME = "Marked ellipsoidal vesicle"
 M_FILAMENT_NAME = "Filament (crop along axis)"
@@ -73,7 +74,7 @@ M_FIL_WITH_TORSION_NAME = "Filament (crop on walls)"
 M_FIL_HELIX_NAME = "Filament (crop on helical path)"
 M_FIL_RINGS_NAME = "Filament (crop on rings along path)"
 MODELS_ALLOWED_IN_MW_NAMES = [M_GENERAL_NAME, M_GENERAL_WITH_BOXES_NAME, M_SURFACE_NAME,
-                              M_VESICLE_NAME, M_ELLIPSOIDAL_VESICLE_NAME, M_MARKED_ELLIP_VESICLE_NAME]
+                              M_SPH_VESICLE_NAME, M_ELLIPSOIDAL_VESICLE_NAME, M_MARKED_ELLIP_VESICLE_NAME]
 
 # Description of Dynamo models
 M_GENERAL_DES = "Coordinates (x, y, z) without any specific property."
