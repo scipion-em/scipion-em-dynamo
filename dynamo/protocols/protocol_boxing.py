@@ -24,9 +24,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import datetime
 from enum import Enum
 from os.path import abspath
-from dynamo.utils import getCatalogFile, createBoxingOutputObjects
+from dynamo.utils import getCatalogFile, createBoxingOutputObjects, getDynamoModels, getNewestModelModDate
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 import pyworkflow.utils as pwutils
 from pyworkflow import BETA
@@ -101,17 +102,24 @@ class DynamoBoxing(ProtTomoPicking):
             tomoList.append(tomogram)
 
         tomoProvider = DynamoTomogramProvider(tomoList, self._getExtraPath(), "txt")
+        dynamoDialogCallingTime = datetime.datetime.now()
         self.dlg = DynamoTomoDialog(None, self._getExtraPath(),
                                     provider=tomoProvider,
                                     calledFromViewer=False)
 
-        # Open dialog to request confirmation to create output
-        import tkinter as tk
-        if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, tk.Frame()):
-            self._createOutput()
-            # Delete the .m generated files if requested
-        if self.deleteGenMFiles.get():
-            pwutils.cleanPattern(self._getExtraPath('*.m'))
+        modelList = getDynamoModels(self._getExtraPath())
+        if modelList:
+            # Check if the modification file of the newest model file is higher than the time capture right before
+            # calling the Dynamo dialog. In that case, it means that some modification was carried out by the user from
+            # it and we have to ask if the changes should be saved
+            if dynamoDialogCallingTime < getNewestModelModDate(modelList):
+                # Open dialog to request confirmation to create output
+                import tkinter as tk
+                if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, tk.Frame()):
+                    self._createOutput()
+                    # Delete the .m generated files if requested
+                if self.deleteGenMFiles.get():
+                    pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
         precedentsPointer = self.inputTomograms

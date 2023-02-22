@@ -71,7 +71,6 @@ class DynamoTomoDialog(ToolbarListDialog):
         listTomosFile = join(extraPath, VLL_FILE)
         if self.calledFromViewer and not self._isADynamoProj(extraPath):
             makePath(catalogue)  # Needed for a correct catalog creation
-            codeFile = join(extraPath, 'writectlg.m')
             # Dynamo fails if trying to create a catalog that already exists, so the previous one is deleted
             contents = "if exist('%s', 'file') == 2\n" % catalogueWithExt
             contents += "delete('%s')\n" % catalogueWithExt
@@ -92,11 +91,11 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "if not(isfile(coordFile))\n"
             contents += "continue\n"
             contents += "end\n"
-            contents += "coordsMatrix=readmatrix(coordFile,'Delimiter',',')\n"  # Read it
-            contents += "idm_vec=unique(coordsMatrix(:,4))'\n"  # Get the groupIds
+            contents += "coordsMatrix = readmatrix(coordFile,'Delimiter',',')\n"  # Read it
+            contents += "idm_vec = unique(coordsMatrix(:,4))'\n"  # Get the groupIds
             contents += "for idm=1:length(idm_vec)\n"
-            contents += "model_name=['%s_',num2str(idm)]\n" % MB_GENERAL
-            contents += "coords=coordsMatrix(coordsMatrix(:,4)==idm_vec(idm),:)\n"  # Use them for logical indexing of the coords
+            contents += "model_name = ['%s_',num2str(idm)]\n" % MB_GENERAL
+            contents += "coords = coordsMatrix(coordsMatrix(:,4)==idm_vec(idm),:)\n"  # Use them for logical indexing of the coords
             contents += "modelFilePath = fullfile(currentTomoModelsDir, [model_name, '.omd'])\n"
             contents += "model=dmodels.general()\n"  # Create a general model for each groupId in each tomogram
             contents += "model.file = modelFilePath\n"
@@ -105,7 +104,6 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "nParticles = size(coords, 1)\n"
             contents += "model.individual_labels = 1:nParticles\n"
             contents += "addPoint(model, coords(:,1:3), coords(:,4))\n"  # Add the points to the model
-            # TODO: think about a method to check if the user has made any changes in the points, apart from just visualizing
             contents += "model.linkCatalogue('%s','i',tomoIndex,'s',1)\n" % abspath(catalogue)
             contents += "model.saveInCatalogue()\n"
             contents += "end\n"
@@ -115,11 +113,6 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents = "dcm -create %s -vll %s\n" % (catalogue, listTomosFile)
 
         self.catalgueMngCode = contents
-        # with open(codeFile, 'w') as codeFid:
-        #     codeFid.write(contents)
-        # args = ' %s' % codeFile
-        # runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
-
         self.proc = threading.Thread(target=self.lanchDynamoForTomogram, args=(self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui)

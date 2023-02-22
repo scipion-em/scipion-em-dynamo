@@ -231,7 +231,7 @@ def createBoxingOutputObjects(prot, precedentsPointer, boxSize=20, savePicked=Tr
     return meshes, outCoords
 
 
-def didUserMwInGui(prot, dynamoModels):
+def didUserMwInGui(prot, dynamoModels) -> bool:
     """Reads the generated models and creates an empty txt file in case the user carried out at least one
     model workflow from the boxing GUI"""
     tmpPath = prot._getTmpPath()
@@ -248,7 +248,7 @@ def didUserMwInGui(prot, dynamoModels):
     return exists(getFileMwFromGUI(tmpPath))
 
 
-def getNewestModelModDate(modelList):
+def getNewestModelModDate(modelList) -> datetime.datetime:
     """Get the last modification datetime of the newest model file"""
     tSt = sorted([pathlib.Path(fname).stat().st_mtime for fname in modelList])[-1]
     return datetime.datetime.fromtimestamp(tSt)
