@@ -1,3 +1,5 @@
+V3.1.14
+  - Hotfix
 V3.1.13
   - Protocol for averaging subtomograms added.
   - Boxing protocol improved to be able to work with multiple types of models and generate an adapted
