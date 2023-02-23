@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# *              Scipion Team (scipion@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -23,26 +24,19 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-import os
-import numpy as np
-
+import datetime
+from os.path import join, abspath, exists
+from dynamo.utils import createBoxingOutputObjects, getNewestModelModDate, getDynamoModels
+from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 from pwem.viewers import ObjectView
-
 import pyworkflow.viewer as pwviewer
-import pyworkflow.utils as pwutils
 from pyworkflow.gui.dialog import askYesNo
+from pyworkflow.utils import makePath, removeBaseExt
 from pyworkflow.utils.properties import Message
-from pyworkflow.utils.process import runJob
-
-import tomo.objects
-from tomo.viewers.views_tkinter_tree import MeshesTreeProvider, TomogramsTreeProvider
-import tomo.constants as const
-
+from tomo.constants import BOTTOM_LEFT_CORNER
+from tomo.objects import SetOfCoordinates3D, SetOfMeshes
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo.convert import textFile2Coords, matrix2eulerAngles
-from dynamo import Plugin
-
+from dynamo import VLL_FILE
 
 
 class DynamoDataViewer(pwviewer.Viewer):
@@ -50,10 +44,7 @@ class DynamoDataViewer(pwviewer.Viewer):
     with the Xmipp program xmipp_showj
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [
-        tomo.objects.SetOfMeshes,
-        tomo.objects.SetOfCoordinates3D
-    ]
+    _targets = [SetOfMeshes, SetOfCoordinates3D]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -63,54 +54,65 @@ class DynamoDataViewer(pwviewer.Viewer):
         return ObjectView(
             self._project, obj.strId(), fn, viewParams=viewParams)
 
-    def _visualize(self, obj, **kwargs):
+    def _visualize(self, obj, coord=None, **kwargs):
         views = []
-        cls = type(obj)
+        path = self.protocol._getExtraPath()
 
-        if issubclass(cls, tomo.objects.SetOfCoordinates3D) or issubclass(cls, tomo.objects.SetOfMeshes):
+        if isinstance(obj, SetOfCoordinates3D) or isinstance(obj, SetOfMeshes):
             outputCoords = obj
-            tomos = outputCoords.getPrecedents()
+            precedentsPointer = outputCoords._precedentsPointer
+            precedents = outputCoords.getPrecedents()
+            tomoIdDict = {tomo.getTsId(): tomo.clone() for tomo in precedents}
+            tomoList = list(tomoIdDict.values())
+            nCoordsDict = {}
+            # Write the coordinates to text files, as expected by Dynamo
+            for tomo in tomoList:
+                coordCounter = 0
+                tomoId = tomo.getTsId()
+                with open(join(path, removeBaseExt(tomo.getFileName()) + '.txt'), 'w') as fid:
+                    for coord in outputCoords.iterCoordinates(tomo):
+                        coords = list(coord.getPosition(BOTTOM_LEFT_CORNER))
+                        # angles = list(matrix2eulerAngles(coord.getMatrix()))[:3]  # Keep the angles, not the shifts (Dynamo boxing GUI is not expecting them at this point)
+                        fid.write(",".join(map(str, coords + [coord.getGroupId()])) + "\n")
+                        coordCounter += 1
+                nCoordsDict[tomoId] = coordCounter
 
-            volIds = outputCoords.aggregate(["MAX", "COUNT"], "_volId", ["_volId"])
-            volIds = [(d['_volId'], d["COUNT"]) for d in volIds]
+            tomoProvider = DynamoTomogramProvider(tomoList, path, nParticlesDict=nCoordsDict)
+            listTomosFile = join(path, VLL_FILE)
 
-            tomoList = []
-            for objId in volIds:
-                tomogram = tomos[objId[0]].clone()
-                tomogram.count = objId[1]
-                tomoList.append(tomogram)
+            # Create list of tomos file (VLL file), only required if using the Dynamo viewer in a protocol from any
+            # other plugin
+            if not exists(listTomosFile):
+                with open(listTomosFile, 'w') as tomoFid:
+                    for tomo in tomoList:
+                        tomoPath = abspath(tomo.getFileName())
+                        tomoFid.write(tomoPath + '\n')
 
-            path = self.protocol._getExtraPath()
+            dynamoDialogCallingTime = datetime.datetime.now()
+            self.dlg = DynamoTomoDialog(self._tkRoot, path,
+                                        provider=tomoProvider,
+                                        calledFromViewer=True)
 
-            tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
+            modelList = getDynamoModels(path)
+            if modelList:
+                # Check if the modification file of the newest model file is higher than the time capture right before
+                # calling the Dynamo dialog. In that case, it means that some modification was carried out by the user from
+                # it and we have to ask if the changes should be saved
+                if dynamoDialogCallingTime < getNewestModelModDate(modelList):
+                    import tkinter as tk
+                    from dynamo.protocols.protocol_boxing import OutputsBoxing
 
-            listTomosFile = os.path.join(path, "tomos.vll")
-
-            # Create list of tomos file
-            tomoFid = open(listTomosFile, 'w')
-            for tomoFile in tomos.getFiles():
-                tomoPath = os.path.abspath(tomoFile)
-                tomoFid.write(tomoPath + '\n')
-            tomoFid.close()
-
-            for tomogram in tomoList:
-                outFileCoord = os.path.join(path, pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
-                # outFileAngle = os.path.join(path, 'angles_' + pwutils.removeBaseExt(tomogram.getFileName())) + ".txt"
-                coords_tomo = []
-                # angles_tomo = []
-                for coord in outputCoords.iterCoordinates(tomogram):
-                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
-                    # angles_shifts = matrix2eulerAngles(coord.getMatrix())
-                    # angles_tomo.append(angles_shifts[:3])
-                if coords_tomo:
-                    np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
-                    # np.savetxt(outFileAngle, np.asarray(angles_tomo), delimiter=' ')
-
-            self.dlg = DynamoTomoDialog(self._tkRoot, path, provider=tomoProvider)
-
-            import tkinter as tk
-            frame = tk.Frame()
-            if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
-                textFile2Coords(self.protocol, outputCoords.getPrecedents(), path, directions=False)
-
-        return views
+                    frame = tk.Frame()
+                    # Because the coordinates are written as general models, they'll have cropped points and angles defined
+                    # (particularity of Dynamo for this kind of models). Hence, coordinates will be saved as if the model
+                    # workflow had been carried out
+                    if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
+                        tmpPath = self.protocol._getTmpPath()
+                        if not exists(tmpPath):  # Some files will be created there, and it may not exist
+                            makePath(tmpPath)
+                        _, outCoords = createBoxingOutputObjects(self.protocol, precedentsPointer,
+                                                                 boxSize=outputCoords.getBoxSize(),
+                                                                 savePicked=False)
+                        self.protocol._defineOutputs(**{OutputsBoxing.coordinates.name: outputCoords})
+                        self.protocol._defineSourceRelation(precedentsPointer, outCoords)
+            return views

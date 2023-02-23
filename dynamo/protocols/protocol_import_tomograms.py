@@ -38,9 +38,9 @@ from ..convert import readDynCatalogue
 
 
 class DynamoImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
-    '''This protocols imports a series of Tomogram stored in a Dynamo catalogue into Scipion.
+    """This protocols imports a series of Tomogram stored in a Dynamo catalogue into Scipion.
     In order to avoid handling a MatLab binary, the script relies on MatLab itself to turn a
-    binary MatLab object into an Structure which can be afterwards read by Python.'''
+    binary MatLab object into an Structure which can be afterwards read by Python."""
 
     _label = 'import tomograms from Dynamo'
     _devStatus = BETA

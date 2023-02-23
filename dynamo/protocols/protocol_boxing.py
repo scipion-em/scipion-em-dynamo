@@ -1,21 +1,22 @@
 # **************************************************************************
 # *
 # * Authors:    David Herreros Calero (dherreros@cnb.csic.es)
+# *             Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
-# * This program is free software; you can redistribute it and/or modify
+# * This program is free software you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
-# * the Free Software Foundation; either version 2 of the License, or
+# * the Free Software Foundation either version 2 of the License, or
 # * (at your option) any later version.
 # *
 # * This program is distributed in the hope that it will be useful,
-# * but WITHOUT ANY WARRANTY; without even the implied warranty of
+# * but WITHOUT ANY WARRANTY without even the implied warranty of
 # * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # * GNU General Public License for more details.
 # *
 # * You should have received a copy of the GNU General Public License
-# * along with this program; if not, write to the Free Software
+# * along with this program if not, write to the Free Software
 # * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 # * 02111-1307  USA
 # *
@@ -23,162 +24,119 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-import os
-import numpy as np
-
-from pyworkflow import BETA
+import datetime
+from enum import Enum
+from os.path import abspath
+from dynamo.utils import getCatalogFile, createBoxingOutputObjects, getDynamoModels, getNewestModelModDate
+from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 import pyworkflow.utils as pwutils
-from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
+from pyworkflow import BETA
+from pyworkflow.protocol import LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
-
+from tomo.objects import SetOfMeshes, SetOfCoordinates3D
 from tomo.protocols import ProtTomoPicking
-from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
-import tomo.constants as const
-
-from dynamo import Plugin
+from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo.convert import textFile2Coords
+
+
+class OutputsBoxing(Enum):
+    coordinates = SetOfCoordinates3D
+    meshes = SetOfMeshes
+
 
 class DynamoBoxing(ProtTomoPicking):
-    """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will be
-    direclty loaded with all the models previously saved in the disk (if any).
-    This picking will only save the "user points" defined in a set of models. It is possible to
-    create several models at once in a given tomogram. Once the coordinates are defined,
-    the models are automatically saved in the catalogue and registered.
-
-    Currently the following Dynamo models are supported:
-        - Ellipsoidal Vesicle"""
+    """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will
+     be direclty loaded with all the models previously saved in the disk (if any).
+     This picking will save the "user points" defined in a set of models and generate a set of meshes with them. In case
+     the user carries out the workflow model for each of the models from the Dynamo GUI, a set of coordinates will be
+     also created, containing all the interpolated coordinates, and the calculated orientation. It is possible to
+     create several models at once in a given tomogram. Once the coordinates are defined, the models are automatically
+     saved in the catalogue and registered."""
 
     _label = 'vectorial picking'
     _devStatus = BETA
-
-    modelChoices = ["Ellipsoidal Vesicle", "Surface", "General"]
-    modelNames = {modelChoices[0]: "ellipsoidalVesicle", modelChoices[1]: "surface", modelChoices[2]: "general"}
-    OUTPUT_PREFIX = 'outputMeshes'
+    _possibleOutputs = OutputsBoxing
 
     def __init__(self, **kwargs):
-        ProtTomoPicking.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self.dlg = None
+        self.dynModelsPathDict = {}  # Used to store the path where the corresponding models to a tomo are stored
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         ProtTomoPicking._defineParams(self, form)
 
         form.addParam('boxSize', IntParam, label="Box Size")
-        form.addParam('selection', EnumParam, choices=['Yes', 'No'], default=1,
-                      label='Modify previous meshes?', display=EnumParam.DISPLAY_HLIST,
-                      help='This option allows to add and/or remove coordinates to a previous SetOfMeshes')
-        form.addParam('inputMeshes', PointerParam, label="Input Meshes", condition='selection == 0',
-                      allowsNull=True, pointerClass='SetOfMeshes',
-                      help='Select the previous SetOfMeshes you want to modify')
-        form.addParam('modelType', EnumParam,
-                      choices=self.modelChoices, default=0,
-                      label='Model type',
-                      help='Select the type of model defined in the Tomograms.')
+        form.addParam('deleteGenMFiles', BooleanParam,
+                      default=True,
+                      label='Remove the .m files generated after the execution?',
+                      expertLevel=LEVEL_ADVANCED,
+                      help='It can be useful for developers to check exactly what was .m files were generated by '
+                           'Scipion and executed by Dynamo.')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        # Copy input coordinates to Extra Path
-        self._insertFunctionStep('copyInputMeshes')
-
-        # Launch Boxing GUI
-        self._insertFunctionStep('launchDynamoBoxingStep', interactive=True)
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.launchDynamoBoxingStep, interactive=True)
 
     # --------------------------- STEPS functions -----------------------------
-
-    def copyInputMeshes(self):
-        # Initialize the catalogue
-        listTomosFile = self._getExtraPath("tomos.vll")
-        catalogue = os.path.abspath(self._getExtraPath("tomos"))
-
-        # Create list of tomos file
-        tomoFid = open(listTomosFile, 'w')
-        for tomo in self.inputTomograms.get().iterItems():
-            tomoPath = os.path.abspath(tomo.getFileName())
-            tomoFid.write(tomoPath + '\n')
-        tomoFid.close()
-
-        # Save coordinates into .txt file for each tomogram
-        codeFile = self._getExtraPath('coords2model.m')
-        if self.selection.get() == 0:
-            inputMeshes = self.inputMeshes.get()
-            inputTomograms = self.inputTomograms.get()
-            for tomo in inputTomograms.iterItems(iterate=False):
-                outFileCoord = self._getExtraPath(pwutils.removeBaseExt(tomo.getFileName())) + ".txt"
-                coords_tomo = []
-                for coord in inputMeshes.iterCoordinates(tomo.getObjId()):
-                    coords_tomo.append(list(coord.getPosition(const.BOTTOM_LEFT_CORNER)) + [coord.getGroupId()])
-                if coords_tomo:
-                    np.savetxt(outFileCoord, np.asarray(coords_tomo), delimiter=' ')
-
-            # Create small program to tell Dynamo to save the inputMeshes in a Ellipsoidal Vesicle Model
-            contents = "dcm -create %s -fromvll %s\n" \
-                       "path='%s'\n" \
-                       "catalogue=dread(['%s' '.ctlg'])\n" \
-                       "nVolumes=length(catalogue.volumes)\n" \
-                       "for idv=1:nVolumes\n" \
-                       "tomoPath=catalogue.volumes{idv}.fullFileName()\n" \
-                       "tomoIndex=catalogue.volumes{idv}.index\n" \
-                       "[~,tomoName,~]=fileparts(tomoPath)\n" \
-                       "coordFile=[path '/' tomoName '.txt']\n" \
-                       "if ~isfile(coordFile)\n" \
-                       "continue\n" \
-                       "end\n" \
-                       "coords_ids=readmatrix(coordFile,'Delimiter',' ')\n" \
-                       "idm_vec=unique(coords_ids(:,4))'\n" \
-                       "for idm=idm_vec\n" \
-                       "model_name=['model_',num2str(idm)]\n" \
-                       "coords=coords_ids(coords_ids(:,4)==idm,1:3)\n" \
-                       "vesicle=dmodels.%s()\n" \
-                       "vesicle.name=model_name\n" \
-                       "addPoint(vesicle,coords(:,1:3),coords(:,3))\n" \
-                       "vesicle.linkCatalogue('%s','i',tomoIndex,'s',1)\n" \
-                       "vesicle.saveInCatalogue()\n" \
-                       "end\n" \
-                       "end\n" \
-                       "exit\n" % (catalogue, listTomosFile, os.path.abspath(self._getExtraPath()), catalogue,
-                                   self.modelNames[self.modelChoices[self.modelType.get()]], catalogue)
-        else:
-            contents = "dcm -create %s -fromvll %s\n" % (catalogue, listTomosFile)
-
-        codeFid = open(codeFile, 'w')
-        codeFid.write(contents)
-        codeFid.close()
-
-        # Tell Dynamo to create the catalogue with the models
-        args = ' %s' % codeFile
-        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+    def convertInputStep(self):
+        """Initialize the catalogue"""
+        # Create the vll (list of tomos) file
+        vllFile = self._getExtraPath(VLL_FILE)
+        tomoCounter = 1  # Matlab begins counting in 1
+        with open(vllFile, 'w') as tomoFid:
+            for tomo in self.inputTomograms.get().iterItems():
+                tomoPath = abspath(tomo.getFileName())
+                tomoFid.write(tomoPath + '\n')
+                self.dynModelsPathDict[tomo.getTsId()] = self._getExtraPath(CATALOG_BASENAME, 'tomograms',
+                                                                            'volume_%i' % tomoCounter, 'models')
+                tomoCounter += 1
 
     def launchDynamoBoxingStep(self):
-
         tomoList = []
         for tomo in self.inputTomograms.get().iterItems():
             tomogram = tomo.clone()
-            tomoName = pwutils.removeBaseExt(tomo.getFileName())
-            outFile = self._getExtraPath(tomoName + '.txt')
-            if os.path.isfile(outFile):
-                tomogram.count = np.loadtxt(outFile, delimiter=' ').shape[0]
-            else:
-                tomogram.count = 0
             tomoList.append(tomogram)
 
-        tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "txt")
+        tomoProvider = DynamoTomogramProvider(tomoList, self._getExtraPath(), "txt")
+        dynamoDialogCallingTime = datetime.datetime.now()
+        self.dlg = DynamoTomoDialog(None, self._getExtraPath(),
+                                    provider=tomoProvider,
+                                    calledFromViewer=False)
 
-        self.dlg = DynamoTomoDialog(None, self._getExtraPath(), provider=tomoProvider)
-
-        # Open dialog to request confirmation to create output
-        import tkinter as tk
-        if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, tk.Frame()):
-            self._createOutput()
-
-        pwutils.cleanPattern(self._getExtraPath('*.m'))
+        modelList = getDynamoModels(self._getExtraPath())
+        if modelList:
+            # Check if the modification file of the newest model file is higher than the time capture right before
+            # calling the Dynamo dialog. In that case, it means that some modification was carried out by the user from
+            # it and we have to ask if the changes should be saved
+            if dynamoDialogCallingTime < getNewestModelModDate(modelList):
+                # Open dialog to request confirmation to create output
+                import tkinter as tk
+                if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, tk.Frame()):
+                    self._createOutput()
+                    # Delete the .m generated files if requested
+                if self.deleteGenMFiles.get():
+                    pwutils.cleanPattern(self._getExtraPath('*.m'))
 
     def _createOutput(self):
-        textFile2Coords(self, self.inputTomograms.get(), self._getExtraPath(), False, True)
+        precedentsPointer = self.inputTomograms
+        meshes, outCoords = createBoxingOutputObjects(self, precedentsPointer, boxSize=self.boxSize.get())
+        # Define outputs and relations
+        outputDict = {self._possibleOutputs.meshes.name: meshes}
+        if outCoords:
+            outputDict[self._possibleOutputs.coordinates.name] = outCoords
+        self._defineOutputs(**outputDict)
+        self._defineSourceRelation(precedentsPointer, meshes)
+        if outCoords:
+            self._defineSourceRelation(precedentsPointer, outCoords)
+        self._updateOutputSet(self._possibleOutputs.meshes.name, meshes, state=meshes.STREAM_CLOSED)
 
     # --------------------------- DEFINE info functions ----------------------
-    def getMethods(self, output):
+    @staticmethod
+    def getMethods(output):
         msg = 'User picked %d particles ' % output.getSize()
         msg += 'with a particle size of %s.' % output.getBoxSize()
         return msg

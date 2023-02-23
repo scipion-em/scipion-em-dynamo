@@ -38,7 +38,7 @@ from tomo.protocols import ProtTomoBase
 import tomo.constants as const
 from tomo.objects import SetOfMeshes, MeshPoint
 
-from dynamo import Plugin
+from dynamo import Plugin, VLL_FILE, CATALOG_FILENAME
 
 
 class DynamoCoordsToModel(EMProtocol, ProtTomoBase):
@@ -81,7 +81,7 @@ class DynamoCoordsToModel(EMProtocol, ProtTomoBase):
         out_meshes.setName("meshesFromCoords")
         out_meshes.setSamplingRate(tomos.getSamplingRate())
         out_meshes.setBoxSize(inputCoords.getBoxSize())
-        out_meshes._dynCatalogue = pwobj.String(os.path.join(self._getExtraPath(), "tomos.ctlg"))
+        out_meshes._dynCatalogue = pwobj.String(os.path.join(self._getExtraPath(), CATALOG_FILENAME))
 
         for tomo in tomos.iterItems():
             outPoints = pwutils.join(self._getExtraPath(), pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
@@ -104,7 +104,7 @@ class DynamoCoordsToModel(EMProtocol, ProtTomoBase):
     # --------------------------- DEFINE utils functions ----------------------
     def writeMatlabFile(self, tomos, coords):
         # Catalogue initialization files
-        listTomosFile = self._getExtraPath("tomos.vll")
+        listTomosFile = self._getExtraPath(VLL_FILE)
         catalogue = os.path.abspath(self._getExtraPath("tomos"))
         tomoFid = open(listTomosFile, 'w')
         for tomo in tomos.iterItems():

@@ -30,7 +30,7 @@ import pwem
 import pyworkflow.utils as pwutils
 from .constants import *
 
-__version__ = '3.1.12'
+__version__ = '3.1.13'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -68,11 +68,11 @@ class Plugin(pwem.Plugin):
         return join(cls.getHome(), 'matlab', 'bin', DYNAMO_PROGRAM)
 
     @classmethod
-    def runDynamo(cls, protocol, args, cwd=None):
+    def runDynamo(cls, protocol, args):
         """ Run Dynamo command from a given protocol. """
         # args will be the .doc file which contains the MATLAB code
         program = cls.getDynamoProgram()
-        protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+        protocol.runJob(program, args, env=cls.getEnviron())
 
     @classmethod
     def defineBinaries(cls, env):
