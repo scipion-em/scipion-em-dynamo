@@ -24,7 +24,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+from .protocol_average_subtomograms import DynamoProtAvgSubtomograms
 from .protocol_subtomo_MRA import DynamoSubTomoMRA
 from .protocol_extraction import DynamoExtraction
 from .protocol_boxing import DynamoBoxing

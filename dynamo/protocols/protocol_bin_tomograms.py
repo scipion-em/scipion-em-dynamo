@@ -23,20 +23,26 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
 import os
+from enum import Enum
+from os.path import join
 
+from pwem.emlib.image import ImageHandler
 from pyworkflow import BETA
 from pyworkflow.protocol import params, STEPS_PARALLEL
 import pyworkflow.utils as pwutils
 
 from pwem.protocols import EMProtocol
+from pyworkflow.utils import getExt, makePath, removeBaseExt
 
 from tomo.protocols import ProtTomoBase
-from tomo.objects import Tomogram
+from tomo.objects import Tomogram, SetOfTomograms
 
 from dynamo import Plugin
+
+
+class DynBinTomosOutputs(Enum):
+    tomograms = SetOfTomograms
 
 
 class DynamoBinTomograms(EMProtocol, ProtTomoBase):
@@ -44,14 +50,13 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
 
     _label = 'bin tomograms'
     _devStatus = BETA
-
-    OUTPUT_PREFIX = 'resizedTomograms'
+    _possibleOutputs = DynBinTomosOutputs
+    inTomosDir = 'inTomograms'
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
 
-   # --------------------------- DEFINE param functions ----------------------
+    # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputTomos', params.PointerParam, pointerClass='SetOfTomograms',
@@ -69,15 +74,31 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        binning_steps = []
-        self.inputTomos = self.inputTomos.get()
-        for tomo in self.inputTomos:
-            binning_steps.append(self._insertFunctionStep('binTomosStep',
-                                                          tomo.getFileName(), tomo.getObjId()))
-        self._insertFunctionStep('createOutputStep', prerequisites=binning_steps)
+        self._initialize()
+        if self.doConvertFiles:
+            makePath(self.getInTomosDir())
+            for tomo in self.inputTomos:
+                fName = tomo.getFileName()
+                self._insertFunctionStep(self.convertInputStep, fName)
+                self._insertFunctionStep(self.binTomosStep, fName, tomo.getObjId())
+        else:
+            for tomo in self.inputTomos:
+                self._insertFunctionStep(self.binTomosStep, tomo.getFileName(), tomo.getObjId())
+
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
+    def _initialize(self):
+        self.inputTomos = self.inputTomos.get()
+        self.doConvertFiles = not self.isCompatibleFileFormat()
+
+    def convertInputStep(self, inFileName):
+        ih = ImageHandler()
+        ih.convert(inFileName, self.getConvertedOutFileName(inFileName))
+
     def binTomosStep(self, tomoName, tomoId):
+        if self.doConvertFiles:
+            tomoName = self.getConvertedOutFileName(tomoName)
         commandsFile = self.writeMatlabFile(os.path.abspath(tomoName), tomoId)
         args = ' %s' % commandsFile
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
@@ -102,8 +123,7 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
             tomo.setAcquisition(inTomo.getAcquisition())
             binned_tomos.append(tomo)
 
-        args = {self.OUTPUT_PREFIX: binned_tomos}
-        self._defineOutputs(**args)
+        self._defineOutputs(**{DynBinTomosOutputs.tomograms.name: binned_tomos})
         self._defineSourceRelation(self.inputTomos, binned_tomos)
 
     # --------------------------- DEFINE utils functions ----------------------
@@ -118,6 +138,18 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
         codeFid.write(content)
         codeFid.close()
         return codeFilePath
+
+    def isCompatibleFileFormat(self):
+        """Compatible with MRC and em"""
+        compatibleExts = ['.em', '.mrc']
+        return True if getExt(self.inputTomos.getFirstItem().getFileName()) not in compatibleExts else False
+
+    def getInTomosDir(self, *pathList):
+        return self._getExtraPath(self.inTomosDir, *pathList)
+
+    def getConvertedOutFileName(self, inFileName):
+        outBaseName = removeBaseExt(inFileName)
+        return self.getInTomosDir(outBaseName + '.mrc')
 
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):

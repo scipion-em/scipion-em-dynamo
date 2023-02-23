@@ -249,7 +249,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'estimation provided for the first iteration of the round. The origin of the shifts will '
                            'change at each round. 4:  limits are understood from the estimation provided for the first '
                            'iteration')
-        form.addParallelSection(threads=1, mpi=0)
+        form.addParallelSection(threads=2, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
 

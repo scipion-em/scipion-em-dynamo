@@ -1,3 +1,14 @@
+V3.1.13
+  - Protocol for averaging subtomograms added.
+  - Boxing protocol improved to be able to work with multiple types of models and generate an adapted
+    output depending on if the user carried out the model workflow from Dynamo's boxing GUI or not.
+  - As a viewer, Dynamo is launched faster, with only one call to MATLAB no matter if the current protocol
+    is a Dynamo project or not.
+  - In both the boxing protocol and the viewer, the message box to ask the user to save the changes made or not
+    appears only if new data was generated instead of always.
+  - Message box push button label changed from Cancel to Close, for coherence.
+  - Model Workflow protocol simplified in terms of GUI parameters and improved to make it able to work with different
+    model types, and also adapt the general models detected to surfaces to provide a mesh.
 V3.1.12
   - Dynamo's alignment step call .exe file to get output "on the fly"
 V3.1.11
@@ -5,7 +16,6 @@ V3.1.11
        many params allow specification of round like "360 180 90". Labeled with (R)
        Protocol convert creates de catalog and templates and so on but processing params are moved to alignStep
        alignStep is resumable, but not yet from a specific iteration (TODO)
-
 V3.1.10
 20-January-2023.  - Fixing an error in the import subtomograms test
                   - Updating README.txt
