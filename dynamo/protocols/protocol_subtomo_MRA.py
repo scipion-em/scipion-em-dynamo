@@ -43,11 +43,8 @@ from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SubTomogram
 
 IMPORT_CMD_FILE = 'commands1.doc'
-
 SHOW_PROJECT_CMD_FILE = "showProject.doc"
-
 ALIGNMENT_CMD_FILE = "commands2.doc"
-
 DEFAULT_DIM = "0"
 DYNAMO_ALIGNMENT_PROJECT = 'dynamoAlignmentProject'
 
@@ -56,7 +53,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     """ This protocol will align subtomograms using Dynamo MRA Subtomogram Averaging"""
 
     _label = 'Subtomogram alignment'
-    _devStatus = BETA
 
     @classmethod
     def getUrl(cls):
@@ -64,8 +60,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)
-
-
 
     # --------------------------- DEFINE param functions ------------------------
 

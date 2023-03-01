@@ -26,17 +26,13 @@
 # **************************************************************************
 
 import glob
-from enum import Enum
 from os.path import abspath, join, basename
+from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from dynamo.utils import getCatalogFile
-from pyworkflow import BETA
-import pyworkflow.protocol.params as params
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pwem.protocols import EMProtocol
+from pyworkflow.protocol import PointerParam, EnumParam, FloatParam, IntParam, BooleanParam, LEVEL_ADVANCED
 from pyworkflow.utils import removeExt
-
-from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram
 import tomo.constants as const
 from dynamo import Plugin, VLL_FILE
@@ -47,16 +43,10 @@ SAME_AS_PICKING = 0
 OTHER = 1
 
 
-class DynExtractionOutputs(Enum):
-    subtomograms = SetOfSubTomograms
-
-
-class DynamoExtraction(EMProtocol, ProtTomoBase):
+class DynamoExtraction(DynamoProtocolBase):
     """Extraction of subtomograms using Dynamo"""
 
     _label = 'vectorial extraction'
-    _devStatus = BETA
-    _possibleOutputs = DynExtractionOutputs
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -70,47 +60,47 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputCoordinates', params.PointerParam, label="Input Coordinates", important=True,
-                      pointerClass='SetOfCoordinates3D', help='Select the SetOfCoordinates3D.')
-        form.addParam('tomoSource', params.EnumParam,
+        form.addParam('inputCoordinates', PointerParam,
+                      label="Input Coordinates",
+                      important=True,
+                      pointerClass='SetOfCoordinates3D')
+        form.addParam('tomoSource', EnumParam,
                       choices=['same as picking', 'other'],
-                      default=0,
-                      display=params.EnumParam.DISPLAY_HLIST,
+                      default=SAME_AS_PICKING,
+                      display=EnumParam.DISPLAY_HLIST,
                       label='Tomogram source',
-                      help='By default the subtomograms will be extracted '
-                           'from the tomogram used in the picking '
-                           'step ( _same as picking_ option ). \n'
-                           'If you select _other_ option, you must provide '
-                           'a different tomogram to extract from. \n'
-                           '*Note*: In the _other_ case, ensure that provided '
+                      help='By default the subtomograms will be extracted from the tomogram used in the picking '
+                           'step ( _same as picking_ option ).\nIf you select _other_ option, you must provide '
+                           'a different tomogram to extract from.\n*Note*: In the _other_ case, ensure that provided '
                            'tomogram and coordinates are related ')
-
-        form.addParam('inputTomograms', params.PointerParam,
+        form.addParam('inputTomograms', PointerParam,
                       pointerClass='SetOfTomograms',
                       condition='tomoSource != %s' % SAME_AS_PICKING,
                       label='Input tomogram',
                       help='Select the tomogram from which to extract.')
-
-        form.addParam('boxSize', params.FloatParam,
+        form.addParam('boxSize', IntParam,
                       label='Box size',
-                      help='The subtomograms are extracted as a cubic box of this size.\n'
-                           'The wizard selects same box size as picking.\n'
-                           'Dynamo only accepts even numbers as box sizes. Otherwise, an exception will '
-                           'be returned.')
-
-        form.addParam('downFactor', params.FloatParam, default=1.0,
+                      help='The subtomograms are extracted as a cubic box of this size. '
+                           'The wizard will select the box size considering the sampling rate ratio between the '
+                           'introduced coordinates and the tomograms that will br used for the extraction.')
+        form.addParam('downFactor', FloatParam,
+                      expertLevel=LEVEL_ADVANCED,
+                      default=1.0,
                       label='Downsampling factor',
-                      help='If 1.0 is used, no downsample is applied. '
-                           'Non-integer downsample factors are possible. ')
-
-        form.addSection(label='Preprocess')
-        form.addParam('doInvert', params.BooleanParam, default=False,
+                      help='It can be used to directly interpolate the extracted subtomograms to '
+                           'another size that may correspond to the size of a tomogram that has not been '
+                           'reconstructed and this way it is not necessary to reconstruct it. '
+                           'If 1.0 is used, no downsampling is applied. Non-integer downsampling factors are '
+                           'allowed.\n\nIMPORTANT: the box size of the generated particles will be the result of'
+                           'multiplying the introduced box size by this factor.')
+        form.addSection(label='Postprocess')
+        form.addParam('doInvert', BooleanParam,
+                      default=False,
                       label='Invert contrast?',
                       help='Invert the contrast if your tomogram is black '
                            'over a white background.  Xmipp, Spider, Relion '
                            'and Eman require white particles over a black '
                            'background.')
-
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -171,14 +161,10 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     def createOutputStep(self):
         outSubtomos = SetOfSubTomograms.create(self._getPath(), template='submograms%s.sqlite')
-        outSubtomos.setSamplingRate(self.getInputTomograms().getSamplingRate() * self.downFactor.get())
-        outSubtomos.setCoordinates3D(self.inputCoordinates)
+        finalSRate = self.getInputTomograms().getSamplingRate() / self.downFactor.get()
+        outSubtomos.setSamplingRate(finalSRate)
+        outSubtomos._coordsPointer = self.inputCoordinates
         if self.getInputTomograms().getFirstItem().getAcquisition():
-            # acquisition = TomoAcquisition()
-            # tomosAcq = self.getInputTomograms().getFirstItem().getAcquisition()
-            # acquisition.setAngleMin(tomosAcq.getAngleMin())
-            # acquisition.setAngleMax(tomosAcq.getAngleMax())
-            # acquisition.setStep(tomosAcq.getStep())
             outSubtomos.setAcquisition(self.getInputTomograms().getFirstItem().getAcquisition())
 
         for ind in range(len(self.dynamoTomoIdDict.values())):
@@ -191,6 +177,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                 subtomogram = SubTomogram()
                 transform = Transform()
                 currentCoord = currentCoords[i]
+                subtomogram.setSamplingRate(finalSRate)
                 dfactor = self.downFactor.get()
                 if dfactor != 1:
                     ImageHandler.scaleSplines(subtomoFile + ':mrc', subtomoFile, dfactor)
@@ -206,7 +193,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                   "folder. If it's the case, check that the tomograms from were the particles are desired to be " \
                   "extracted are the ones in which the picking was performed, or a binned version of them."
 
-        self._defineOutputs(**{DynExtractionOutputs.subtomograms.name: outSubtomos})
+        self._defineOutputs(**{super()._possibleOutputs.subtomograms.name: outSubtomos})
         self._defineSourceRelation(self.inputCoordinates, outSubtomos)
 
     # --------------------------- DEFINE utils functions ----------------------
@@ -219,16 +206,11 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     def writeMatlabCode(self):
         codeFilePath = self._getExtraPath("DynamoExtraction.m")
-        # Check of box size is an even number (as required by Dynamo)
-        boxSize = round(self.scaleFactor * self.boxSize.get())
-        if boxSize % 2 != 0:
-            boxSize += 1
-
         # Write code to Matlab code file
         with open(codeFilePath, 'w') as codeFid:
             catalogue = getCatalogFile(self._getExtraPath())
             content = "savePath = '%s'\n" % self.cropDirName
-            content += "box = %i\n" % boxSize
+            content += "box = %i\n" % self.boxSize.get()
             content += "dcm -create '%s' -fromvll '%s'\n" % (removeExt(catalogue), self._getExtraPath(VLL_FILE))
             content += "c = dread('%s')\n" % catalogue
             content += "coordsData = readmatrix('%s')\n" % self.coordsFileName
@@ -265,24 +247,12 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         return outputSubTomogramsSet
 
     # --------------------------- DEFINE info functions ----------------------
-    def _validate(self):
-        errors = []
-        if not self.boxSize.get() % 2 == 0:
-            errors.append('The box size provided to Dynamo is an odd number. '
-                          'This will rise an execption when Dynamo is invoked.\n'
-                          'Please, provide an even number to continue with the extraction.')
-        return errors
-
-    def _tomosOther(self):
-        """ Return True if other tomograms are used for extract. """
-        return self.tomoSource == OTHER
-
     def _methods(self):
         methodsMsgs = []
         if self.getOutputsSize() >= 1:
-            msg = ("A total of %s subtomograms of size %s were extracted"
-                   % (str(self.inputCoordinates.get().getSize()), self.boxSize.get()))
-            if self._tomosOther():
+            msg = ("A total of %i subtomograms of size %i were extracted"
+                   % (self.inputCoordinates.get().getSize(), self.boxSize.get()))
+            if self.tomoSource.get() == OTHER:
                 msg += (" from another set of tomograms: %s"
                         % self.getObjectTag('inputTomogram'))
             msg += " using coordinates %s" % self.getObjectTag('inputCoordinates')
@@ -296,15 +266,12 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         return methodsMsgs
 
     def _summary(self):
-        summary = []
-        summary.append("Tomogram source: *%s*"
-                       % self.getEnumText("tomoSource"))
-        if self.getOutputsSize() >= 1:
-            summary.append("Particle box size: *%s*" % self.boxSize.get())
-            summary.append("Subtomogram extracted: *%s*" %
-                           self.inputCoordinates.get().getSize())
-        else:
-            summary.append("Output subtomograms not ready yet.")
+        summary = ["Tomogram source: *%s*" % self.getEnumText("tomoSource")]
+        # if self.getOutputsSize() >= 1:
+        #     summary.append("Particle box size: *%s*" % self.boxSize.get())
+        #     summary.append("Subtomogram extracted: *%s*" % self.inputCoordinates.get().getSize())
+        # else:
+        #     summary.append("Output subtomograms not ready yet.")
         if self.doInvert:
             summary.append('*Contrast was inverted.*')
         return summary

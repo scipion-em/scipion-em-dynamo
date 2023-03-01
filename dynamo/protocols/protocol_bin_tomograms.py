@@ -24,34 +24,21 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-from enum import Enum
+from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.emlib.image import ImageHandler
-from pyworkflow import BETA
 from pyworkflow.protocol import params, GT
-from pwem.protocols import EMProtocol
-from pyworkflow.utils import getExt, removeBaseExt
-
-from tomo.protocols import ProtTomoBase
+from pyworkflow.utils import removeBaseExt
 from tomo.objects import Tomogram, SetOfTomograms
-
 from dynamo import Plugin
 
 
-class DynBinTomosOutputs(Enum):
-    tomograms = SetOfTomograms
-
-
-class DynamoBinTomograms(EMProtocol, ProtTomoBase):
+class DynamoBinTomograms(DynamoProtocolBase):
     """Reduce the size of a SetOfTomograms by a binning factor"""
 
     _label = 'bin tomograms'
-    _devStatus = BETA
-    _possibleOutputs = DynBinTomosOutputs
-    inTomosDir = 'inTomograms'
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self.content = ''
         self.finalTomoNamesDict = {}
 
@@ -94,7 +81,7 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         self.inputTomos = self.inputTomos.get()
-        self.doConvertFiles = not self.isCompatibleFileFormat()
+        self.doConvertFiles = not super().isCompatibleFileFormat()
 
     @staticmethod
     def convertInputStep(origName, finalName):
@@ -112,7 +99,7 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
         # p.addParamValue('showStatistics',false,'short','sst');
         # ______________________________________________________________________________________________
         self.content += "dpktomo.tools.bin('%s', '%s', %i, 'ss', %i, 'mw', %i, 'sst', true)\n" % \
-                        (origTomoName, finalTomoName, self.getBinningFactor(), self.zChunk.get(),
+                        (origTomoName, finalTomoName, super().getBinningFactor(), self.zChunk.get(),
                          self.numberOfThreads.get())
 
     def binTomosStep(self):
@@ -123,7 +110,7 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def createOutputStep(self):
-        sr = self.inputTomos.getSamplingRate() * self.getBinningFactor(forDynamo=False)  # Not for, but from
+        sr = self.inputTomos.getSamplingRate() * super().getBinningFactor(forDynamo=False)  # Not for, but from
         outTomos = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
         outTomos.setSamplingRate(sr)
         for tomoName, inTomo in self.finalTomoNamesDict.items():
@@ -133,24 +120,12 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
             tomo.setFileName(tomoName)
             outTomos.append(tomo)
 
-        self._defineOutputs(**{DynBinTomosOutputs.tomograms.name: outTomos})
+        self._defineOutputs(**{super()._possibleOutputs.tomograms.name: outTomos})
         self._defineSourceRelation(self.inputTomos, outTomos)
 
     # --------------------------- DEFINE utils functions ----------------------
-    def isCompatibleFileFormat(self):
-        """Compatible with MRC and em"""
-        compatibleExts = ['.em', '.mrc']
-        return True if getExt(self.inputTomos.getFirstItem().getFileName()) not in compatibleExts else False
-
     def getConvertedOutFileName(self, inFileName):
         return self._getExtraPath(removeBaseExt(inFileName) + '.mrc')
-
-    def getBinningFactor(self, forDynamo=True):
-        """From Dynamo: a binning Factor of 1 will decrease the size of the Tomograms by 2,
-        a Binning Factor of 2 by 4... So Dynamo interprets the binning factor as 2**binFactor, while IMOD
-        interprets it literally. Thus, this method will convert the binning introduced by the user in the
-        Dynamo convention"""
-        return (2**(self.binning.get() - 1)) / 2 if forDynamo else self.binning.get()
 
     def getFinalTomoName(self, tomo):
         return self.getConvertedOutFileName(tomo.getFileName())
