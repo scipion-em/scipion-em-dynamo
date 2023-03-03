@@ -63,7 +63,6 @@ class DynamoSubBoxing(EMProtocol, ProtTomoBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        Plugin.checkDynamoVersion()
         self._insertFunctionStep('writeSetOfCoordinates3D')
         self._insertFunctionStep('launchDynamoSubBoxingStep')
         self._insertFunctionStep('createOutputStep')

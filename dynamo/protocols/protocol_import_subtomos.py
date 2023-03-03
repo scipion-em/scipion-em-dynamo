@@ -32,7 +32,7 @@ from pyworkflow.utils.path import createAbsLink, copyFile
 from pwem.emlib.image import ImageHandler
 
 from tomo.protocols.protocol_base import ProtTomoImportFiles
-from tomo.objects import SubTomogram
+from tomo.objects import SubTomogram, SetOfSubTomograms
 from tomo.utils import _getUniqueFileName
 from .. import Plugin
 
@@ -59,33 +59,32 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        Plugin.checkDynamoVersion()
-        self._insertFunctionStep('importSubTomogramsStep', self.getPattern(), self.samplingRate.get())
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.importSubTomogramsStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
-    def importSubTomogramsStep(self, pattern, samplingRate):
-        self.info("Using pattern: '%s'" % pattern)
+    def importSubTomogramsStep(self):
         subtomo = SubTomogram()
+        samplingRate = self.samplingRate.get()
         subtomo.setSamplingRate(samplingRate)
         imgh = ImageHandler()
-        self.subtomoSet = self._createSetOfSubTomograms()
-        self.subtomoSet.setSamplingRate(samplingRate)
-        dynTable = self._getExtraPath('dynamo_table.tbl')
-        copyFile(self.tablePath.get(), dynTable)
-        self.fhTable = open(dynTable, 'r')
-        for fileName, fileId in self.iterFiles():
-            _, _, _, n = imgh.getDimensions(fileName)
-            newFileName = _getUniqueFileName(self.getPattern(), fileName)
-            if fileName.endswith(':mrc'):
-                fileName = fileName[:-4]
-            createAbsLink(fileName, newFileName)
-            if n == 1:
-                self._addSubtomogram(subtomo, fileName, newFileName)
-            else:
-                for index in range(1, n + 1):
-                    self._addSubtomogram(subtomo, newFileName, index=index)
-        self.fhTable.close()
+        subtomoSet = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
+        subtomoSet.setSamplingRate(samplingRate)
+        # dynTable = self._getExtraPath('dynamo_table.tbl')
+        # copyFile(self.tablePath.get(), dynTable)
+        with open(self.tablePath.get(), 'r') as fhTable:
+            for fileName, fileId in self.iterFiles():
+                _, _, _, n = imgh.getDimensions(fileName)
+                newFileName = _getUniqueFileName(self.getPattern(), fileName)
+                if fileName.endswith(':mrc'):
+                    fileName = fileName[:-4]
+                createAbsLink(fileName, newFileName)
+                if n == 1:
+                    self._addSubtomogram(subtomo, fileName, newFileName)
+                else:
+                    for index in range(1, n + 1):
+                        self._addSubtomogram(subtomo, newFileName, index=index)
+        self._defineOutputs(outputSubTomograms=subtomoSet)
 
     def _addSubtomogram(self, subtomo, newFileName, index=None):
         """ adds a subtomogram to a set """
@@ -97,9 +96,6 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
             subtomo.setLocation(index, newFileName)
         readDynTable(self, subtomo, tomoSet)
         self.subtomoSet.append(subtomo)
-
-    def createOutputStep(self):
-        self._defineOutputs(outputSubTomograms=self.subtomoSet)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):

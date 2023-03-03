@@ -36,18 +36,10 @@ from tomo.tests import DataSet
 import tomo.constants as const
 from xmipp3.protocols import XmippProtCreateMask3D
 from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoBinTomograms
-from tomo.tests.test_base_coordinates_and_subtomos import TestUtilsExtractSubtomos
 
-# sRate = 5
-# nParticles = 5
-# binningFactor = 2
-# bin2SRate = 10
-# boxSize = 32
-# bin2BoxSize = 16
+
 DYNAMOPARAMNAME = "dyn"
 MYPROJECT = "myproject"
-# ds = DataSet.getDataSet('tomo-em')
-# tomoFiles = ds.getFile('tomo1')
 
 
 class TestDynamoSubTomogramsAlignment(TestDynamoStaBase):
@@ -300,134 +292,6 @@ class TestDynamoBinTomograms(TestDynamoStaBase):
         self.assertSetSize(binnedTomograms, 1)
         self.assertEqual(binnedTomograms.getSamplingRate(), self.bin2SRate)
         self.assertTrue(np.array_equal(np.array(binnedTomograms.getDimensions()), self.origSize / self.binningFactor))
-
-
-class TestDynamoExtraction(TestDynamoStaBase):
-    """This class checks if the protocol to extract subtomograms
-    works properly"""
-    dynCoords = None
-    emanCoords = None
-    binned2Tomos = None
-    orientedCoords = None
-    nonOrientedCoords = None
-    tomoFiles = None
-    nParticles = 5
-    binningFactor = 2
-    boxSize = 32
-    bin2BoxSize = 16
-    sRate = 5
-    bin2SRate = 10
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        ds = DataSet.getDataSet('tomo-em')
-        cls.tomoFiles = ds.getFile('tomo1')
-        cls.emanCoords = ds.getFile('overview_wbp.txt')
-        cls.dynCoords = ds.getFile('overview_wbp.tbl')
-        cls.runPreviousProtocols()
-
-    @classmethod
-    def runPreviousProtocols(cls):
-        importedTomos = super().runImportTomograms(tomoFiles=cls.tomoFiles, sRate=cls.sRate)
-        cls.binned2Tomos = super().runBinTomograms(importedTomos, binning=cls.binningFactor)
-        cls.nonOrientedCoords = cls._runImportCoords(cls.emanCoords, importedTomos)
-        cls.orientedCoords = cls._runImportCoords(cls.dynCoords, importedTomos, orientedCoords=True)
-
-    @classmethod
-    def _runImportCoords(cls, coordsFile, tomograms, orientedCoords=False):
-        print(magentaStr("\n==> Importing the 3D coordinates:"))
-        objLabel = 'Oriented coords' if orientedCoords else 'Non-oriented coords'
-        protImportCoordinates = cls.newProtocol(ProtImportCoordinates3D,
-                                                objLabel=objLabel,
-                                                filesPath=coordsFile,
-                                                importTomograms=tomograms,
-                                                filesPattern='',
-                                                boxSize=cls.boxSize,
-                                                samplingRate=cls.sRate)
-        cls.launchProtocol(protImportCoordinates)
-        importedCoords = protImportCoordinates.outputCoordinates
-        cls.assertIsNotNone(importedCoords, "There was a problem importing the 3d coordinates")
-        return importedCoords
-
-    @classmethod
-    def _runExtraction(cls, inputCoordinates, tomoSource=SAME_AS_PICKING, tomograms=None, downFactor=1,
-                       boxSize=-1, text=''):
-        print(magentaStr("\n==> Extracting the subtomograms:"))
-        argsDict = {
-            'objLabel': 'Extraction - %s' % text,
-            'inputCoordinates': inputCoordinates,
-            'tomoSource': tomoSource,
-            'boxSize': boxSize,
-            'downFactor': downFactor
-        }
-        if tomoSource == OTHER:
-            argsDict['inputTomograms'] = tomograms
-        protDynamoExtraction = cls.newProtocol(DynamoExtraction, **argsDict)
-        cls.launchProtocol(protDynamoExtraction)
-        subtomograms = getattr(protDynamoExtraction, protDynamoExtraction._possibleOutputs.subtomograms.name, None)
-        return subtomograms
-
-    def test_Extraction_SameAsPicking(self):
-        inCoords = self.orientedCoords
-        boxSize = self.boxSize
-        outSubtomos = self._runExtraction(inCoords,
-                                          tomoSource=SAME_AS_PICKING,
-                                          boxSize=boxSize,
-                                          text='Same as Picking')
-        super().checkExtractedSubtomos(inCoords, outSubtomos,
-                                       expectedSetSize=self.nParticles,
-                                       expectedBoxSize=boxSize,
-                                       expectedSRate=self.sRate,
-                                       convention=const.TR_EMAN,
-                                       orientedParticles=True)
-
-    def test_Extraction_Other(self):
-        inCoords = self.orientedCoords
-        boxSize = self.bin2BoxSize
-        outSubtomos = self._runExtraction(inCoords,
-                                          tomoSource=OTHER,
-                                          tomograms=self.binned2Tomos,
-                                          boxSize=boxSize,
-                                          text='Other Source')
-        super().checkExtractedSubtomos(inCoords, outSubtomos,
-                                       expectedSetSize=self.nParticles,
-                                       expectedBoxSize=boxSize,
-                                       expectedSRate=self.bin2SRate,
-                                       convention=const.TR_EMAN,
-                                       orientedParticles=True)
-
-    def test_Extraction_DownSampling(self):
-        inCoords = self.nonOrientedCoords
-        boxSize = self.boxSize
-        downFactor = 2
-        outSubtomos = self._runExtraction(inCoords,
-                                          boxSize=boxSize,
-                                          downFactor=downFactor,
-                                          text='Same as picking, downS=%i' % downFactor)
-        super().checkExtractedSubtomos(inCoords, outSubtomos,
-                                       expectedSetSize=self.nParticles,
-                                       expectedBoxSize=boxSize * downFactor,
-                                       expectedSRate=self.sRate / downFactor,
-                                       convention=const.TR_EMAN,
-                                       orientedParticles=False)
-
-    def test_Extraction_All(self):
-        downFactor = 2
-        inCoords = self.nonOrientedCoords
-        boxSize = self.bin2BoxSize
-        outSubtomos = self._runExtraction(inCoords,
-                                          tomoSource=OTHER,
-                                          tomograms=self.binned2Tomos,
-                                          downFactor=downFactor,
-                                          boxSize=boxSize,
-                                          text='All Options, other, downS=%i' % downFactor)
-        super().checkExtractedSubtomos(inCoords, outSubtomos,
-                                       expectedSetSize=self.nParticles,
-                                       expectedBoxSize=boxSize * downFactor,
-                                       expectedSRate=self.bin2SRate / downFactor,
-                                       convention=const.TR_EMAN,
-                                       orientedParticles=False)
 
 
 # class TestDynamoImportSubTomograms(BaseTest):

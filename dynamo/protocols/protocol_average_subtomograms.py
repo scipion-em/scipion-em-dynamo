@@ -105,7 +105,6 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
-        Plugin.checkDynamoVersion()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.avgStep)
         self._insertFunctionStep(self.convertOutputStep)

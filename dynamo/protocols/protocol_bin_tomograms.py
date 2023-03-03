@@ -80,7 +80,6 @@ class DynamoBinTomograms(DynamoProtocolBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        Plugin.checkDynamoVersion()
         self.inputTomos = self.inputTomos.get()
         self.doConvertFiles = not super().isCompatibleFileFormat()
 

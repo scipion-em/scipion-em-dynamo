@@ -85,16 +85,6 @@ class DynamoExtraction(DynamoProtocolBase):
                       help='The subtomograms are extracted as a cubic box of this size. '
                            'The wizard will select the box size considering the sampling rate ratio between the '
                            'introduced coordinates and the tomograms that will br used for the extraction.')
-        form.addParam('downFactor', FloatParam,
-                      expertLevel=LEVEL_ADVANCED,
-                      default=1.0,
-                      label='Downsampling factor',
-                      help='It can be used to directly interpolate the extracted subtomograms to '
-                           'another size that may correspond to the size of a tomogram that has not been '
-                           'reconstructed and this way it is not necessary to reconstruct it. '
-                           'If 1.0 is used, no downsampling is applied. Non-integer downsampling factors are '
-                           'allowed.\n\nIMPORTANT: the box size of the generated particles will be the result of'
-                           'multiplying the introduced box size by this factor.')
         form.addSection(label='Postprocess')
         form.addParam('doInvert', BooleanParam,
                       default=False,
@@ -115,7 +105,6 @@ class DynamoExtraction(DynamoProtocolBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        Plugin.checkDynamoVersion()
         self.cropDirName = self._getExtraPath('Crop')
         # Get the intersection between the tomograms and coordinates provided (this covers possible subsets made)
         inTomos = self.getInputTomograms()
@@ -164,7 +153,7 @@ class DynamoExtraction(DynamoProtocolBase):
 
     def createOutputStep(self):
         outSubtomos = SetOfSubTomograms.create(self._getPath(), template='submograms%s.sqlite')
-        finalSRate = self.getInputTomograms().getSamplingRate() / self.downFactor.get()
+        finalSRate = self.getInputTomograms().getSamplingRate()
         outSubtomos.setSamplingRate(finalSRate)
         outSubtomos._coordsPointer = self.inputCoordinates
         if self.getInputTomograms().getFirstItem().getAcquisition():
@@ -181,9 +170,6 @@ class DynamoExtraction(DynamoProtocolBase):
                 transform = Transform()
                 currentCoord = currentCoords[i]
                 subtomogram.setSamplingRate(finalSRate)
-                dfactor = self.downFactor.get()
-                if dfactor != 1:
-                    ImageHandler.scaleSplines(subtomoFile + ':mrc', subtomoFile, dfactor)
                 subtomogram.setFileName(subtomoFile)
                 subtomogram.setVolName(currentTomoFName)
                 subtomogram.setCoordinate3D(currentCoord)
@@ -231,26 +217,6 @@ class DynamoExtraction(DynamoProtocolBase):
 
         return codeFilePath
 
-    # def readSetOfSubTomograms(self, workDir, outputSubTomogramsSet, coordSet):
-    #     coords = [coord.clone() for coord in self.inputCoordinates.get()]
-    #     for i, subTomoFile in enumerate(sorted(glob.glob(join(workDir, '*' + '.mrc')))):
-    #         subtomogram = SubTomogram()
-    #         subtomogram.cleanObjId()
-    #         subtomogram.setLocation(subTomoFile)
-    #         dfactor = self.downFactor.get()
-    #         if dfactor != 1:
-    #             fnSubtomo = self._getExtraPath(basename(workDir.strip("/")) + "_downsampled_subtomo%d.mrc" % (i + 1))
-    #             ImageHandler.scaleSplines(subtomogram.getFileName() + ':mrc', fnSubtomo, dfactor)
-    #             subtomogram.setLocation(fnSubtomo)
-    #         subtomogram.setCoordinate3D(coords[coordSet[i]])
-    #         subtomogram.setVolName(coords[coordSet[i]].getVolName())
-    #         transform = Transform()
-    #         trMatrix = coords[i].getMatrix()
-    #         transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
-    #         subtomogram.setTransform(transform)
-    #         outputSubTomogramsSet.append(subtomogram)
-    #     return outputSubTomogramsSet
-
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):
         methodsMsgs = []
@@ -265,9 +231,9 @@ class DynamoExtraction(DynamoProtocolBase):
             methodsMsgs.append(msg)
         else:
             methodsMsgs.append("Set of Subtomograms not ready yet")
-        if self.downFactor.get() != 1:
-            methodsMsgs.append("Subtomograms downsample by factor %d."
-                               % self.downFactor.get())
+        # if self.downFactor.get() != 1:
+        #     methodsMsgs.append("Subtomograms downsample by factor %d."
+        #                        % self.downFactor.get())
         return methodsMsgs
 
     def _summary(self):

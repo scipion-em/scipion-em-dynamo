@@ -115,7 +115,6 @@ class DynamoImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     # ----------------------- INSERT STEPS functions --------------------------
     def _insertAllSteps(self):
-        Plugin.checkDynamoVersion()
         self._insertFunctionStep('importDynamoTomogramsStep', self.samplingRate.get())
 
     # --------------------------- STEPS functions -----------------------------

@@ -142,3 +142,8 @@ class Plugin(pwem.Plugin):
                             'version if you have already installed a more recent version of Dynamo that suits or if '
                             'not, consider to reinstall the plugin to the latest version.*' %
                             (dynamoVer, DYNAMO_VERSION_1_1_532))
+
+    @classmethod
+    def validateInstallation(cls):
+        super().validateInstallation()
+        cls.checkDynamoVersion()

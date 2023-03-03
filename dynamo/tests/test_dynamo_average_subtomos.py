@@ -57,9 +57,9 @@ class TestDynamoAverageSubtomograms(TestDynamoStaBase):
         tomosBinned = super().runBinTomograms(inTomos=tomoImported,
                                               binning=DataSetEmd10439.binFactor.value)
         # Import the coordinates from the binned tomogram
-        coordsImported = super().runImport3dCoords(sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
-                                                   inTomos=tomosBinned,
-                                                   boxSize=cls.bin2BoxSize)
+        coordsImported = super().runImport3dCoordsSqlite(sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
+                                                         inTomos=tomosBinned,
+                                                         boxSize=cls.bin2BoxSize)
         # Extract subtomograms
         return super().runExtractSubtomograms(inCoords=coordsImported,
                                               tomoSource=SAME_AS_PICKING,

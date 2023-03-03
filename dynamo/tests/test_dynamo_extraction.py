@@ -23,18 +23,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from dynamo.protocols.protocol_extraction import OTHER
+from dynamo.protocols.protocol_extraction import OTHER, SAME_AS_PICKING
 from dynamo.tests.test_dynamo_sta_base import TestDynamoStaBase
 from pyworkflow.tests import DataSet
 from pyworkflow.utils import magentaStr
 from tomo.constants import TR_DYNAMO
-from tomo.protocols import ProtTomoExtractCoords
+from tomo.protocols import ProtTomoExtractCoords, ProtImportCoordinates3D
 from tomo.protocols.protocol_extract_coordinates import Output3dCoordExtraction
 from tomo.tests import EMD_10439, DataSetEmd10439
 
 
-class TestDynamoSubtomoExtraction(TestDynamoStaBase):
-
+class TestSubtomoExtractionCombinedWithCoordExtraction(TestDynamoStaBase):
     ds = None
     tomoImported = None
     coordsImported = None
@@ -67,9 +66,10 @@ class TestDynamoSubtomoExtraction(TestDynamoStaBase):
         cls.tomosBinned = super().runBinTomograms(inTomos=cls.tomoImported,
                                                   binning=DataSetEmd10439.binFactor.value)
         # Import the coordinates from the binned tomogram
-        cls.coordsImported = super().runImport3dCoords(sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
-                                                       inTomos=cls.tomosBinned,
-                                                       boxSize=cls.bin2BoxSize)
+        cls.coordsImported = super().runImport3dCoordsSqlite(
+            sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
+            inTomos=cls.tomosBinned,
+            boxSize=cls.bin2BoxSize)
         cls.subtomosSameAsPicking = super().runExtractSubtomograms(cls.coordsImported,
                                                                    boxSize=cls.bin2BoxSize)
         cls.subtomosAnotherTomo = super().runExtractSubtomograms(cls.coordsImported,
@@ -160,3 +160,104 @@ class TestDynamoSubtomoExtraction(TestDynamoStaBase):
                                             expectedSRate=self.bin2SRate,
                                             convention=TR_DYNAMO,
                                             orientedParticles=True)  # Picked with PySeg
+
+
+class TestDynamoExtraction(TestDynamoStaBase):
+    dynCoords = None
+    emanCoords = None
+    binned2Tomos = None
+    orientedCoords = None
+    nonOrientedCoords = None
+    tomoFiles = None
+    nParticles = 5
+    binningFactor = 2
+    boxSize = 32
+    bin2BoxSize = 16
+    sRate = 5
+    bin2SRate = 10
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        ds = DataSet.getDataSet('tomo-em')
+        cls.tomoFiles = ds.getFile('tomo1')
+        cls.emanCoords = ds.getFile('overview_wbp.txt')
+        cls.dynCoords = ds.getFile('overview_wbp.tbl')
+        cls.runPreviousProtocols()
+
+    @classmethod
+    def runPreviousProtocols(cls):
+        importedTomos = super().runImportTomograms(tomoFiles=cls.tomoFiles, sRate=cls.sRate)
+        cls.binned2Tomos = super().runBinTomograms(importedTomos, binning=cls.binningFactor)
+        cls.nonOrientedCoords = cls._runImportCoords(cls.emanCoords, importedTomos)
+        cls.orientedCoords = cls._runImportCoords(cls.dynCoords, importedTomos, orientedCoords=True)
+
+    @classmethod
+    def _runImportCoords(cls, coordsFile, tomograms, orientedCoords=False):
+        print(magentaStr("\n==> Importing the 3D coordinates:"))
+        objLabel = 'Oriented coords' if orientedCoords else 'Non-oriented coords'
+        protImportCoordinates = cls.newProtocol(ProtImportCoordinates3D,
+                                                objLabel=objLabel,
+                                                filesPath=coordsFile,
+                                                importTomograms=tomograms,
+                                                filesPattern='',
+                                                boxSize=cls.boxSize,
+                                                samplingRate=cls.sRate)
+        cls.launchProtocol(protImportCoordinates)
+        importedCoords = protImportCoordinates.outputCoordinates
+        cls.assertIsNotNone(importedCoords, "There was a problem importing the 3d coordinates")
+        return importedCoords
+
+    def test_Extraction_SameAsPicking_Oriented(self):
+        inCoords = self.orientedCoords
+        boxSize = self.boxSize
+        outSubtomos = super().runExtractSubtomograms(inCoords=inCoords,
+                                                     tomoSource=SAME_AS_PICKING,
+                                                     boxSize=boxSize)
+        super().checkExtractedSubtomos(inCoords, outSubtomos,
+                                       expectedSetSize=self.nParticles,
+                                       expectedBoxSize=boxSize,
+                                       expectedSRate=self.sRate,
+                                       convention=TR_DYNAMO,
+                                       orientedParticles=True)
+
+    def test_Extraction_Other_Oriented(self):
+        inCoords = self.orientedCoords
+        boxSize = self.bin2BoxSize
+        outSubtomos = super().runExtractSubtomograms(inCoords=inCoords,
+                                                     tomoSource=OTHER,
+                                                     tomograms=self.binned2Tomos,
+                                                     boxSize=boxSize)
+        super().checkExtractedSubtomos(inCoords, outSubtomos,
+                                       expectedSetSize=self.nParticles,
+                                       expectedBoxSize=boxSize,
+                                       expectedSRate=self.bin2SRate,
+                                       convention=TR_DYNAMO,
+                                       orientedParticles=True)
+
+    def test_Extraction_SameAsPicking_NonOriented(self):
+        inCoords = self.nonOrientedCoords
+        boxSize = self.boxSize
+        outSubtomos = super().runExtractSubtomograms(inCoords=inCoords,
+                                                     tomoSource=SAME_AS_PICKING,
+                                                     boxSize=boxSize)
+        super().checkExtractedSubtomos(inCoords, outSubtomos,
+                                       expectedSetSize=self.nParticles,
+                                       expectedBoxSize=boxSize,
+                                       expectedSRate=self.sRate,
+                                       convention=TR_DYNAMO,
+                                       orientedParticles=False)
+
+    def test_Extraction_Other_NonOriented(self):
+        inCoords = self.nonOrientedCoords
+        boxSize = self.bin2BoxSize
+        outSubtomos = super().runExtractSubtomograms(inCoords=inCoords,
+                                                     tomoSource=OTHER,
+                                                     tomograms=self.binned2Tomos,
+                                                     boxSize=boxSize)
+        super().checkExtractedSubtomos(inCoords, outSubtomos,
+                                       expectedSetSize=self.nParticles,
+                                       expectedBoxSize=boxSize,
+                                       expectedSRate=self.bin2SRate,
+                                       convention=TR_DYNAMO,
+                                       orientedParticles=False)

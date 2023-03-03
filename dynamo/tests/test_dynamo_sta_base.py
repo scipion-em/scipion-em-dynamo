@@ -66,7 +66,7 @@ class TestDynamoStaBase(TestUtilsExtractSubtomos, TestUtilsExtractCoords, TestUt
         return tomosBinned
 
     @classmethod
-    def runImport3dCoords(cls, sqliteFile=None, inTomos=None, boxSize=None):
+    def runImport3dCoordsSqlite(cls, sqliteFile=None, inTomos=None, boxSize=None):
         # Import coordinates
         print(magentaStr("\n==> Importing the 3D coordinates:"))
         protImportCoordinates3d = cls.newProtocol(ProtImportCoordinates3DFromScipion,
