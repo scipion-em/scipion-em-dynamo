@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 from enum import Enum
-
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.utils import getExt

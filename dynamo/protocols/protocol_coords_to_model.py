@@ -62,6 +62,7 @@ class DynamoCoordsToModel(EMProtocol, ProtTomoBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
+        Plugin.checkDynamoVersion()
         self._insertFunctionStep('modelFromCoordsStep')
         self._insertFunctionStep('createOutputStep')
 

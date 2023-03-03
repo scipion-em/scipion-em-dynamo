@@ -47,7 +47,7 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
     averageDirName = 'average'
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        super().__init__(**kwargs)
 
     # --------------- DEFINE param functions ---------------
     def _defineParams(self, form):
@@ -105,6 +105,7 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
+        Plugin.checkDynamoVersion()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.avgStep)
         self._insertFunctionStep(self.convertOutputStep)

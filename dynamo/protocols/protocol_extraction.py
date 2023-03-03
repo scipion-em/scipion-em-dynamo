@@ -24,9 +24,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import copy
 import glob
-from os.path import abspath, join, basename
+from os.path import abspath, join
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from dynamo.utils import getCatalogFile
 from pwem.emlib.image import ImageHandler
@@ -39,6 +39,8 @@ from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
 
 # Tomogram type constants for particle extraction
+from tomo.utils import scaleTrMatrixShifts
+
 SAME_AS_PICKING = 0
 OTHER = 1
 
@@ -113,6 +115,7 @@ class DynamoExtraction(DynamoProtocolBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
+        Plugin.checkDynamoVersion()
         self.cropDirName = self._getExtraPath('Crop')
         # Get the intersection between the tomograms and coordinates provided (this covers possible subsets made)
         inTomos = self.getInputTomograms()
@@ -184,7 +187,8 @@ class DynamoExtraction(DynamoProtocolBase):
                 subtomogram.setFileName(subtomoFile)
                 subtomogram.setVolName(currentTomoFName)
                 subtomogram.setCoordinate3D(currentCoord)
-                transform.setMatrix(currentCoord.getMatrix())
+                trMatrix = copy.copy(currentCoord.getMatrix())
+                transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
                 subtomogram.setTransform(transform)
                 outSubtomos.append(subtomogram)
 
@@ -227,24 +231,25 @@ class DynamoExtraction(DynamoProtocolBase):
 
         return codeFilePath
 
-    def readSetOfSubTomograms(self, workDir, outputSubTomogramsSet, coordSet):
-        coords = self.inputCoordinates.get()
-        for ids, subTomoFile in enumerate(sorted(glob.glob(join(workDir, '*' + '.mrc')))):
-            subtomogram = SubTomogram()
-            subtomogram.cleanObjId()
-            subtomogram.setLocation(subTomoFile)
-            dfactor = self.downFactor.get()
-            if dfactor != 1:
-                fnSubtomo = self._getExtraPath(basename(workDir.strip("/")) + "_downsampled_subtomo%d.mrc" % (ids + 1))
-                ImageHandler.scaleSplines(subtomogram.getFileName() + ':mrc', fnSubtomo, dfactor)
-                subtomogram.setLocation(fnSubtomo)
-            subtomogram.setCoordinate3D(coords[coordSet[ids]])
-            subtomogram.setVolName(coords[coordSet[ids]].getVolName())
-            transform = Transform()
-            transform.setMatrix(coords[coordSet[ids]].getMatrix())
-            subtomogram.setTransform(transform)
-            outputSubTomogramsSet.append(subtomogram)
-        return outputSubTomogramsSet
+    # def readSetOfSubTomograms(self, workDir, outputSubTomogramsSet, coordSet):
+    #     coords = [coord.clone() for coord in self.inputCoordinates.get()]
+    #     for i, subTomoFile in enumerate(sorted(glob.glob(join(workDir, '*' + '.mrc')))):
+    #         subtomogram = SubTomogram()
+    #         subtomogram.cleanObjId()
+    #         subtomogram.setLocation(subTomoFile)
+    #         dfactor = self.downFactor.get()
+    #         if dfactor != 1:
+    #             fnSubtomo = self._getExtraPath(basename(workDir.strip("/")) + "_downsampled_subtomo%d.mrc" % (i + 1))
+    #             ImageHandler.scaleSplines(subtomogram.getFileName() + ':mrc', fnSubtomo, dfactor)
+    #             subtomogram.setLocation(fnSubtomo)
+    #         subtomogram.setCoordinate3D(coords[coordSet[i]])
+    #         subtomogram.setVolName(coords[coordSet[i]].getVolName())
+    #         transform = Transform()
+    #         trMatrix = coords[i].getMatrix()
+    #         transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
+    #         subtomogram.setTransform(transform)
+    #         outputSubTomogramsSet.append(subtomogram)
+    #     return outputSubTomogramsSet
 
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):

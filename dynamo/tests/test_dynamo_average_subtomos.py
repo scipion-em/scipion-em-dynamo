@@ -27,28 +27,43 @@
 from dynamo.protocols import DynamoProtAvgSubtomograms
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING
 from dynamo.tests.test_dynamo_sta_base import TestDynamoStaBase
-from pyworkflow.tests import setupTestProject
+from pyworkflow.tests import DataSet
 from pyworkflow.utils import magentaStr
+from tomo.tests import EMD_10439, DataSetEmd10439
 
 
 class TestDynamoAverageSubtomograms(TestDynamoStaBase):
 
+    ds = None
+    tomoFiles = None
+    sqliteFile = None
+    binFactor = None
+    bin2BoxSize = None
     subtomosExtracted = None
 
     @classmethod
     def setUpClass(cls):
-        setupTestProject(cls)
+        super().setUpClass()
+        cls.ds = DataSet.getDataSet(EMD_10439)
+        cls.bin2BoxSize = DataSetEmd10439.bin2BoxSize.value
         cls.subtomosExtracted = cls.runPreviousProtocols()
 
     @classmethod
     def runPreviousProtocols(cls):
-        tomoImported = super().runImportTomograms()  # Import tomograms
-        tomosBinned = super().runBinTomograms(tomoImported)  # Bin the tomogram to make it smaller
-        coordsImported = super().runImport3dCoords(tomosBinned)  # Import the coordinates from the binned tomogram
+        # Import the tomogram
+        tomoImported = super().runImportTomograms(tomoFiles=cls.ds.getFile(DataSetEmd10439.tomoEmd10439.name),
+                                                  sRate=DataSetEmd10439.unbinnedSRate.value)
+        # Bin the tomogram to make it smaller
+        tomosBinned = super().runBinTomograms(inTomos=tomoImported,
+                                              binning=DataSetEmd10439.binFactor.value)
+        # Import the coordinates from the binned tomogram
+        coordsImported = super().runImport3dCoords(sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
+                                                   inTomos=tomosBinned,
+                                                   boxSize=cls.bin2BoxSize)
         # Extract subtomograms
-        return super().runExtractSubtomograms(coordsImported,
+        return super().runExtractSubtomograms(inCoords=coordsImported,
                                               tomoSource=SAME_AS_PICKING,
-                                              boxSize=super().bin2BoxSize)
+                                              boxSize=cls.bin2BoxSize)
 
     @classmethod
     def runAverageSubtomograms(cls):
@@ -60,6 +75,6 @@ class TestDynamoAverageSubtomograms(TestDynamoStaBase):
     def test_average(self):
         avg = self.runAverageSubtomograms()  # The imported coordinates correspond to a binned 2 tomogram
         super().checkAverage(avg,
-                             expectedSRate=super().bin2SRate,
-                             expectedBoxSize=super().bin2BoxSize,
+                             expectedSRate=DataSetEmd10439.bin2SRate.value,
+                             expectedBoxSize=self.bin2BoxSize,
                              hasHalves=False)  # Dynamo average protocol doesn't generate halves

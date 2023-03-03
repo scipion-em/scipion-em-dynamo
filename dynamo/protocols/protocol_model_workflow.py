@@ -109,6 +109,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
+        Plugin.checkDynamoVersion()
         modelsDict = self.inputMeshes.get().getUniqueValues(['_tomoId', '_dynModelName', '_dynModelFile', '_groupId'])
         for tomoId, modelName, modelFile in zip(modelsDict['_tomoId'], modelsDict['_dynModelName'],
                                                 modelsDict['_dynModelFile']):

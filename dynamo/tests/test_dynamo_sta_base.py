@@ -36,59 +36,53 @@ from tomo.tests.test_base_coordinates_and_subtomos import TestUtilsAverageOfSubt
 
 class TestDynamoStaBase(TestUtilsExtractSubtomos, TestUtilsExtractCoords, TestUtilsAverageOfSubtomos):
 
-    ds = DataSet.getDataSet(EMD_10439)
-    nParticles = 39
-    bin2BoxSize = 44
-    unbinnedBoxSize = 88
-    unbinnedSRate = 13.68
-    bin2SRate = 27.36
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
 
     @classmethod
-    def runImportTomograms(cls):
+    def runImportTomograms(cls, tomoFiles=None, sRate=None):
         # Import tomograms
         print(magentaStr("\n==> Importing the tomograms:"))
         protImportTomogram = cls.newProtocol(ProtImportTomograms,
-                                             filesPath=cls.ds.getFile(DataSetEmd10439.tomoEmd10439.name),
-                                             samplingRate=cls.unbinnedSRate, )
+                                             filesPath=tomoFiles,
+                                             samplingRate=sRate)
 
         cls.launchProtocol(protImportTomogram)
         tomoImported = protImportTomogram.outputTomograms
-        cls.assertIsNotNone(tomoImported, "There was a problem with tomogram output")
+        cls.assertIsNotNone(tomoImported, "There was a problem while importing the tomograms")
         return tomoImported
 
     @classmethod
-    def runImport3dCoords(cls, tomoImported):
-        # Import coordinates
-        print(magentaStr("\n==> Importing the 3D coordinates:"))
-        protImportCoordinates3d = cls.newProtocol(ProtImportCoordinates3DFromScipion,
-                                                  sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
-                                                  importTomograms=tomoImported,
-                                                  boxSize=cls.bin2BoxSize)
-
-        cls.launchProtocol(protImportCoordinates3d)
-        coordsImported = getattr(protImportCoordinates3d, outputObjs.coordinates.name, None)
-        cls.assertIsNotNone(coordsImported, "There was a problem with the 3D coordinates output")
-        return coordsImported
-
-    @classmethod
-    def runBinTomograms(cls, tomoImported, binning=2):
+    def runBinTomograms(cls, inTomos=None, binning=None):
         # Bin the tomogram to make it smaller
         print(magentaStr("\n==> Tomogram binning:"))
         protBinTomos = cls.newProtocol(DynamoBinTomograms,
-                                       inputTomos=tomoImported,
+                                       inputTomos=inTomos,
                                        binning=binning)
-
         cls.launchProtocol(protBinTomos)
         tomosBinned = getattr(protBinTomos, protBinTomos._possibleOutputs.tomograms.name, None)
         cls.assertIsNotNone(tomosBinned, 'No tomograms were binned.')
         return tomosBinned
 
     @classmethod
-    def runExtractSubtomograms(cls, coordsImported, tomoSource=SAME_AS_PICKING, tomograms=None, boxSize=None):
-        # Extract subtomograms
+    def runImport3dCoords(cls, sqliteFile=None, inTomos=None, boxSize=None):
+        # Import coordinates
+        print(magentaStr("\n==> Importing the 3D coordinates:"))
+        protImportCoordinates3d = cls.newProtocol(ProtImportCoordinates3DFromScipion,
+                                                  sqliteFile=sqliteFile,
+                                                  importTomograms=inTomos,
+                                                  boxSize=boxSize)
+        cls.launchProtocol(protImportCoordinates3d)
+        coordsImported = getattr(protImportCoordinates3d, outputObjs.coordinates.name, None)
+        cls.assertIsNotNone(coordsImported, "There was a problem with the 3D coordinates output")
+        return coordsImported
+
+    @classmethod
+    def runExtractSubtomograms(cls, inCoords=None, tomoSource=SAME_AS_PICKING, tomograms=None, boxSize=None):
         print(magentaStr("\n==> Extracting the subtomograms:"))
         protLabel = 'Extraction - same as picking'
-        argsDict = {'inputCoordinates': coordsImported,
+        argsDict = {'inputCoordinates': inCoords,
                     'tomoSource': tomoSource,
                     'boxSize': boxSize,
                     'doInvert': True}

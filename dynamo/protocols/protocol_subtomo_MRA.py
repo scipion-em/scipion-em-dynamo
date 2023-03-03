@@ -248,6 +248,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     # --------------------------- INSERT steps functions --------------------------------------------
 
     def _insertAllSteps(self):
+        Plugin.checkDynamoVersion()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.alignStep)
         self._insertFunctionStep(self.createOutputStep)

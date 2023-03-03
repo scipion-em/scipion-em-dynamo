@@ -35,7 +35,7 @@ from pyworkflow.protocol.params import IntParam, BooleanParam
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
 from tomo.protocols import ProtTomoPicking
-from dynamo import VLL_FILE, CATALOG_BASENAME
+from dynamo import VLL_FILE, CATALOG_BASENAME, Plugin
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 
 
@@ -69,6 +69,7 @@ class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
+        Plugin.checkDynamoVersion()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.launchDynamoBoxingStep, interactive=True)
 

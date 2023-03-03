@@ -25,37 +25,57 @@
 # **************************************************************************
 from dynamo.protocols.protocol_extraction import OTHER
 from dynamo.tests.test_dynamo_sta_base import TestDynamoStaBase
-from pyworkflow.tests import setupTestProject
+from pyworkflow.tests import DataSet
 from pyworkflow.utils import magentaStr
 from tomo.constants import TR_DYNAMO
 from tomo.protocols import ProtTomoExtractCoords
 from tomo.protocols.protocol_extract_coordinates import Output3dCoordExtraction
+from tomo.tests import EMD_10439, DataSetEmd10439
 
 
 class TestDynamoSubtomoExtraction(TestDynamoStaBase):
 
-    tomosImported = None
+    ds = None
+    tomoImported = None
     coordsImported = None
     tomosBinned = None
+    subtomosSameAsPicking = None
+    subtomosAnotherTomo = None
+    bin2BoxSize = None
+    unbinnedBoxSize = None
+    bin2SRate = None
+    nParticles = None
+    unbinnedSRate = None
 
     @classmethod
     def setUpClass(cls):
-        setupTestProject(cls)
         super().setUpClass()
-        cls.tomosImported, cls.coordsImported, cls.tomosBinned = cls.runPreviousProtocols()
-        cls.subtomosSameAsPicking = super().runExtractSubtomograms(cls.coordsImported,
-                                                                   boxSize=super().bin2BoxSize)
-        cls.subtomosAnotherTomo = super().runExtractSubtomograms(cls.coordsImported,
-                                                                 tomoSource=OTHER,
-                                                                 tomograms=cls.tomosImported,
-                                                                 boxSize=super().unbinnedBoxSize)
+        cls.ds = DataSet.getDataSet(EMD_10439)
+        cls.bin2BoxSize = DataSetEmd10439.bin2BoxSize.value
+        cls.unbinnedBoxSize = DataSetEmd10439.unbinnedBoxSize.value
+        cls.bin2SRate = DataSetEmd10439.bin2SRate.value
+        cls.nParticles = DataSetEmd10439.nParticles.value
+        cls.unbinnedSRate = DataSetEmd10439.unbinnedSRate.value
+        cls.runPreviousProtocols()
 
     @classmethod
     def runPreviousProtocols(cls):
-        tomoImported = super().runImportTomograms()  # Import tomograms
-        tomosBinned = super().runBinTomograms(tomoImported)  # Bin the tomogram to make it smaller
-        coordsImported = super().runImport3dCoords(tomosBinned)  # Import coordinates
-        return tomoImported, coordsImported, tomosBinned
+        # Import the tomogram
+        cls.tomoImported = super().runImportTomograms(tomoFiles=cls.ds.getFile(DataSetEmd10439.tomoEmd10439.name),
+                                                      sRate=DataSetEmd10439.unbinnedSRate.value)
+        # Bin the tomogram to make it smaller
+        cls.tomosBinned = super().runBinTomograms(inTomos=cls.tomoImported,
+                                                  binning=DataSetEmd10439.binFactor.value)
+        # Import the coordinates from the binned tomogram
+        cls.coordsImported = super().runImport3dCoords(sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
+                                                       inTomos=cls.tomosBinned,
+                                                       boxSize=cls.bin2BoxSize)
+        cls.subtomosSameAsPicking = super().runExtractSubtomograms(cls.coordsImported,
+                                                                   boxSize=cls.bin2BoxSize)
+        cls.subtomosAnotherTomo = super().runExtractSubtomograms(cls.coordsImported,
+                                                                 tomoSource=OTHER,
+                                                                 tomograms=cls.tomoImported,
+                                                                 boxSize=cls.unbinnedBoxSize)
 
     @classmethod
     def runExtract3dCoords(cls, inputSubTomos=None, inputTomos=None, boxSize=None):
@@ -64,7 +84,6 @@ class TestDynamoSubtomoExtraction(TestDynamoStaBase):
                                               inputSubTomos=inputSubTomos,
                                               inputTomos=inputTomos,
                                               boxSize=boxSize)
-
         cls.launchProtocol(protExtract3dCoords)
         coordsExtracted = getattr(protExtract3dCoords, Output3dCoordExtraction.coordinates3d.name, None)
         cls.assertIsNotNone(coordsExtracted, "There was a problem with the 3d coordinates extraction")
@@ -74,18 +93,18 @@ class TestDynamoSubtomoExtraction(TestDynamoStaBase):
         # The imported 3d coordinates were picked from the binned tomogram
         super().checkExtractedSubtomos(self.coordsImported,
                                        self.subtomosSameAsPicking,
-                                       expectedSetSize=super().nParticles,
-                                       expectedSRate=super().bin2SRate,
-                                       expectedBoxSize=super().bin2BoxSize,
+                                       expectedSetSize=self.nParticles,
+                                       expectedSRate=self.bin2SRate,
+                                       expectedBoxSize=self.bin2BoxSize,
                                        convention=TR_DYNAMO,
                                        orientedParticles=True)  # Picked with PySeg
 
     def test_extractParticlesOtherTomoSource(self):
         super().checkExtractedSubtomos(self.coordsImported,
                                        self.subtomosAnotherTomo,
-                                       expectedSetSize=super().nParticles,
-                                       expectedSRate=super().unbinnedSRate,
-                                       expectedBoxSize=super().unbinnedBoxSize,
+                                       expectedSetSize=self.nParticles,
+                                       expectedSRate=self.unbinnedSRate,
+                                       expectedBoxSize=self.unbinnedBoxSize,
                                        convention=TR_DYNAMO,
                                        orientedParticles=True)  # Picked with PySeg
 
@@ -100,47 +119,44 @@ class TestDynamoSubtomoExtraction(TestDynamoStaBase):
     def test_extract3dCoordsToBiggerTomo(self):
         """Subtomos extracted from the same tomo used for the picking, which was at bin 2. Coordinates will
         be extracted to the original size (unbinned)."""
-        boxSize = super().unbinnedBoxSize
+        boxSize = self.unbinnedBoxSize
         extractedCoords = self.runExtract3dCoords(inputSubTomos=self.subtomosSameAsPicking,
-                                                  inputTomos=self.tomosImported,
+                                                  inputTomos=self.tomoImported,
                                                   boxSize=boxSize)
-
         super().checkExtracted3dCoordinates(self.subtomosSameAsPicking,
                                             extractedCoords,
-                                            expectedSetSize=super().nParticles,
+                                            expectedSetSize=self.nParticles,
                                             expectedBoxSize=boxSize,
-                                            expectedSRate=super().unbinnedSRate,
+                                            expectedSRate=self.unbinnedSRate,
                                             convention=TR_DYNAMO,
                                             orientedParticles=True)  # Picked with PySeg
 
     def test_extract3dCoordsToSmallerTomo(self):
         """Subtomos extracted from the another tomo source, which was unbinned. Coordinates will
         be extracted to bin 2."""
-        boxSize = super().bin2BoxSize
+        boxSize = self.bin2BoxSize
         extractedCoords = self.runExtract3dCoords(inputSubTomos=self.subtomosAnotherTomo,
                                                   inputTomos=self.tomosBinned,
                                                   boxSize=boxSize)
-
         self.checkExtracted3dCoordinates(self.subtomosAnotherTomo,
                                          extractedCoords,
-                                         expectedSetSize=super().nParticles,
+                                         expectedSetSize=self.nParticles,
                                          expectedBoxSize=boxSize,
-                                         expectedSRate=super().bin2SRate,
+                                         expectedSRate=self.bin2SRate,
                                          convention=TR_DYNAMO,
                                          orientedParticles=True)  # Picked with PySeg
 
     def test_extract3dCoordsToTheSameTomo(self):
         """Subtomos extracted from the same tomo used for the picking, which was at bin 2. Coordinates will
         be extracted to the same tomogram."""
-        boxSize = super().bin2BoxSize
+        boxSize = self.bin2BoxSize
         extractedCoords = self.runExtract3dCoords(inputSubTomos=self.subtomosSameAsPicking,
                                                   inputTomos=self.tomosBinned,
                                                   boxSize=boxSize)
-
         super().checkExtracted3dCoordinates(self.subtomosSameAsPicking,
                                             extractedCoords,
-                                            expectedSetSize=super().nParticles,
+                                            expectedSetSize=self.nParticles,
                                             expectedBoxSize=boxSize,
-                                            expectedSRate=super().bin2SRate,
+                                            expectedSRate=self.bin2SRate,
                                             convention=TR_DYNAMO,
                                             orientedParticles=True)  # Picked with PySeg

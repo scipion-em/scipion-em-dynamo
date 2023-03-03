@@ -34,6 +34,7 @@ from pwem.emlib.image import ImageHandler
 from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import SubTomogram
 from tomo.utils import _getUniqueFileName
+from .. import Plugin
 
 from ..convert import readDynTable
 
@@ -58,6 +59,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
+        Plugin.checkDynamoVersion()
         self._insertFunctionStep('importSubTomogramsStep', self.getPattern(), self.samplingRate.get())
         self._insertFunctionStep('createOutputStep')
 
