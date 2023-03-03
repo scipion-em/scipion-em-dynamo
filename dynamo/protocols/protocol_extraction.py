@@ -29,18 +29,16 @@ import glob
 from os.path import abspath, join
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from dynamo.utils import getCatalogFile
-from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.protocol import PointerParam, EnumParam, FloatParam, IntParam, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam
 from pyworkflow.utils import removeExt
 from tomo.objects import SetOfSubTomograms, SubTomogram
 import tomo.constants as const
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
-
-# Tomogram type constants for particle extraction
 from tomo.utils import scaleTrMatrixShifts
 
+# Tomogram type constants for particle extraction
 SAME_AS_PICKING = 0
 OTHER = 1
 
@@ -142,7 +140,6 @@ class DynamoExtraction(DynamoProtocolBase):
         codeFilePath = self.writeMatlabCode()
         args = ' %s' % codeFilePath
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
-        # pwutils.cleanPattern('*.m')
 
     def invertContrastStep(self):
         import xmipp3
@@ -231,18 +228,10 @@ class DynamoExtraction(DynamoProtocolBase):
             methodsMsgs.append(msg)
         else:
             methodsMsgs.append("Set of Subtomograms not ready yet")
-        # if self.downFactor.get() != 1:
-        #     methodsMsgs.append("Subtomograms downsample by factor %d."
-        #                        % self.downFactor.get())
         return methodsMsgs
 
     def _summary(self):
         summary = ["Tomogram source: *%s*" % self.getEnumText("tomoSource")]
-        # if self.getOutputsSize() >= 1:
-        #     summary.append("Particle box size: *%s*" % self.boxSize.get())
-        #     summary.append("Subtomogram extracted: *%s*" % self.inputCoordinates.get().getSize())
-        # else:
-        #     summary.append("Output subtomograms not ready yet.")
         if self.doInvert:
             summary.append('*Contrast was inverted.*')
         return summary
