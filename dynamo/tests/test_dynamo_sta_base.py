@@ -25,16 +25,14 @@
 # **************************************************************************
 from dynamo.protocols import DynamoBinTomograms
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING, OTHER, DynamoExtraction
-from pyworkflow.tests import DataSet, setupTestProject
+from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr
 from tomo.protocols import ProtImportTomograms, ProtImportCoordinates3DFromScipion
 from tomo.protocols.protocol_import_coordinates_from_scipion import outputObjs
-from tomo.tests import EMD_10439, DataSetEmd10439
-from tomo.tests.test_base_coordinates_and_subtomos import TestUtilsAverageOfSubtomos, TestUtilsExtractSubtomos, \
-    TestUtilsExtractCoords
+from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 
 
-class TestDynamoStaBase(TestUtilsExtractSubtomos, TestUtilsExtractCoords, TestUtilsAverageOfSubtomos):
+class TestDynamoStaBase(TestBaseCentralizedLayer):
 
     @classmethod
     def setUpClass(cls):
@@ -79,7 +77,8 @@ class TestDynamoStaBase(TestUtilsExtractSubtomos, TestUtilsExtractCoords, TestUt
         return coordsImported
 
     @classmethod
-    def runExtractSubtomograms(cls, inCoords=None, tomoSource=SAME_AS_PICKING, tomograms=None, boxSize=None):
+    def runExtractSubtomograms(cls, inCoords=None, tomoSource=SAME_AS_PICKING, tomograms=None, boxSize=None,
+                               returnProtocol=False):
         print(magentaStr("\n==> Extracting the subtomograms:"))
         protLabel = 'Extraction - same as picking'
         argsDict = {'inputCoordinates': inCoords,
@@ -94,9 +93,12 @@ class TestDynamoStaBase(TestUtilsExtractSubtomos, TestUtilsExtractCoords, TestUt
         protTomoExtraction = cls.newProtocol(DynamoExtraction, **argsDict)
         protTomoExtraction.setObjLabel(protLabel)
         cls.launchProtocol(protTomoExtraction)
-        subtomosExtracted = getattr(protTomoExtraction, protTomoExtraction._possibleOutputs.subtomograms.name, None)
-        cls.assertIsNotNone(subtomosExtracted, "There was a problem with the subtomogram extraction")
-        return subtomosExtracted
+        if returnProtocol:
+            return protTomoExtraction
+        else:
+            subtomosExtracted = getattr(protTomoExtraction, protTomoExtraction._possibleOutputs.subtomograms.name, None)
+            cls.assertIsNotNone(subtomosExtracted, "There was a problem with the subtomogram extraction")
+            return subtomosExtracted
 
 
 

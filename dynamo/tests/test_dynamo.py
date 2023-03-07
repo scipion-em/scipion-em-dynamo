@@ -25,18 +25,24 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import glob
+from os.path import isfile
+
 import numpy as np
+
+from dynamo.protocols.protocol_base_dynamo import DynamoOutputs
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING, OTHER
 from dynamo.tests.test_dynamo_sta_base import TestDynamoStaBase
 from pyworkflow.object import String
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr
+from tomo.objects import SetOfSubTomograms
 from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
-from tomo.tests import DataSet
+from tomo.tests import DataSet, EMD_10439, DataSetEmd10439
 import tomo.constants as const
 from xmipp3.protocols import XmippProtCreateMask3D
-from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoBinTomograms
-
+from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoBinTomograms, \
+    DynamoCoordsToModel
 
 DYNAMOPARAMNAME = "dyn"
 MYPROJECT = "myproject"
@@ -45,6 +51,8 @@ MYPROJECT = "myproject"
 class TestDynamoSubTomogramsAlignment(TestDynamoStaBase):
     """ This class check if the protocol to import sub tomograms works
     properly."""
+
+    samplingRate = 5
 
     @classmethod
     def setUpClass(cls):
@@ -71,7 +79,7 @@ class TestDynamoSubTomogramsAlignment(TestDynamoStaBase):
     def _runPreviousProtocols(self):
         protImport = self.newProtocol(ProtImportSubTomograms,
                                       filesPath=self.setOfSubtomograms,
-                                      samplingRate=5)
+                                      samplingRate=self.samplingRate)
         self.launchProtocol(protImport)
         return protImport
 
@@ -271,7 +279,6 @@ class TestDynamoSubTomogramsAlignment(TestDynamoStaBase):
 
 
 class TestDynamoBinTomograms(TestDynamoStaBase):
-
     tomoFiles = None
     binningFactor = 2
     origSize = np.array([1024, 1024, 512])
@@ -294,50 +301,70 @@ class TestDynamoBinTomograms(TestDynamoStaBase):
         self.assertTrue(np.array_equal(np.array(binnedTomograms.getDimensions()), self.origSize / self.binningFactor))
 
 
-# class TestDynamoImportSubTomograms(BaseTest):
-#     """ This class check if the protocol to import subtomograms from Dynamo works
-#      properly."""
-#
-#     @classmethod
-#     def setUpClass(cls):
-#         setupTestProject(cls)
-#         cls.dataset = DataSet.getDataSet('tomo-em')
-#         cls.table = cls.dataset.getFile('initial.tbl')
-#         cls.path = cls.dataset.getPath()
-#         cls.subtomos = cls.dataset.getFile('basename.hdf')
-#
-#     def _runImportDynSubTomograms(self, tomos):
-#         protImport = self.newProtocol(DynamoImportSubtomos,
-#                                       filesPath=self.subtomos,
-#                                       samplingRate=1.35,
-#                                       tablePath=self.table,
-#                                       tomoSet=tomos)
-#         self.launchProtocol(protImport)
-#         return protImport
-#
-#     def _runImportTomograms(self):
-#         protImportTomogram = self.newProtocol(ProtImportTomograms,
-#                                               filesPath=super().tomogram,
-#                                               samplingRate=1.35)
-#         self.launchProtocol(protImportTomogram)
-#         return protImportTomogram
-#
-#     def test_import_dynamo_subtomograms(self):
-#         protImportTomogram = self._runImportTomograms()
-#         protImport = self._runImportDynSubTomograms(protImportTomogram.outputTomograms)
-#         output = getattr(protImport, 'outputSubTomograms', None)
-#         self.assertTrue(output.getSamplingRate() == 1.35)
-#         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
-#         self.assertTrue(output.getDim()[0] == 32)
-#         self.assertTrue(output.getDim()[1] == 32)
-#         self.assertTrue(output.getDim()[2] == 32)
-#         self.assertTrue(output.getFirstItem().getObjId() == 4)
-#         self.assertTrue(output.getFirstItem().getClassId() == 1)
-#         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
-#         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
-#         self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getX(const.SCIPION), -336.89, delta=1)
-#         self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getY(const.SCIPION), -377.65, delta=1)
-#         self.assertAlmostEqual(output.getFirstItem().getCoordinate3D().getZ(const.SCIPION), -140.26, delta=1)
+class TestDynamoImportSubTomograms(TestDynamoStaBase):
+    """ This class check if the protocol to import subtomograms from Dynamo works
+     properly."""
+
+    bin2SRate = None
+    bin2BoxSize = None
+    tomosBinned = None
+    extractProtocol = None
+    ds = None
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.ds = DataSet.getDataSet(EMD_10439)
+        cls.bin2BoxSize = DataSetEmd10439.bin2BoxSize.value
+        cls.unbinnedBoxSize = DataSetEmd10439.unbinnedBoxSize.value
+        cls.bin2SRate = DataSetEmd10439.bin2SRate.value
+        cls.nParticles = DataSetEmd10439.nParticles.value
+        cls.unbinnedSRate = DataSetEmd10439.unbinnedSRate.value
+        cls.runPreviousProtocols()
+
+    @classmethod
+    def runPreviousProtocols(cls):
+        # Import the tomogram
+        tomoImported = super().runImportTomograms(tomoFiles=cls.ds.getFile(DataSetEmd10439.tomoEmd10439.name),
+                                                      sRate=DataSetEmd10439.unbinnedSRate.value)
+        # Bin the tomogram to make it smaller
+        cls.tomosBinned = super().runBinTomograms(inTomos=tomoImported,
+                                                  binning=DataSetEmd10439.binFactor.value)
+        # Import the coordinates from the binned tomogram
+        coordsImported = super().runImport3dCoordsSqlite(
+            sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
+            inTomos=cls.tomosBinned,
+            boxSize=cls.bin2BoxSize)
+        cls.extractProtocol = super().runExtractSubtomograms(coordsImported,
+                                                             boxSize=cls.bin2BoxSize,
+                                                             returnProtocol=True)
+
+    @classmethod
+    def _runImportDynSubTomograms(cls, tomos=None) -> SetOfSubTomograms:
+        tblFile = cls.extractProtocol._getExtraPath('Crop1', 'crop.tbl')
+        protImportSubtomos = cls.newProtocol(DynamoImportSubtomos,
+                                             filesPath=tblFile,
+                                             tomoSet=tomos)
+        cls.launchProtocol(protImportSubtomos)
+        outSubtomos = getattr(protImportSubtomos, DynamoOutputs.subtomograms.name, None)
+        cls.assertIsNotNone(outSubtomos, 'There was a problem importing the subtomograms')
+        return outSubtomos
+
+    def test_import_without_associated_tomos(self):
+        outsubtomos = self._runImportDynSubTomograms()
+        super().checkSubtomograms(outsubtomos,
+                                  expectedSetSize=self.nParticles,
+                                  expectedSRate=self.bin2SRate,
+                                  expectedBoxSize=self.bin2BoxSize)
+
+    def test_import_with_associated_tomos(self):
+        outsubtomos = self._runImportDynSubTomograms(self.tomosBinned)
+        super().checkSubtomograms(outsubtomos,
+                                  expectedSetSize=self.nParticles,
+                                  expectedSRate=self.bin2SRate,
+                                  expectedBoxSize=self.bin2BoxSize,
+                                  tomograms=self.tomosBinned)
+
 
 # class TestDynamoCoordsToModel(TestDynamoBase):
 #     '''This class checks if the protocol to convert a SetOfCoordinates3D to a Dynamo
@@ -384,6 +411,6 @@ class TestDynamoBinTomograms(TestDynamoStaBase):
 #
 #         outputMeshes = getattr(protCoordsToModel, 'outputMeshes', None)
 #         self.assertTrue(outputMeshes)
-#         self.assertTrue(os.path.isfile(outputMeshes._dynCatalogue.get()))
+#         self.assertTrue(isfile(outputMeshes._dynCatalogue.get()))
 #
 #         return protCoordsToModel

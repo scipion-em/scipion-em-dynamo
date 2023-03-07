@@ -29,7 +29,6 @@ from dynamo import Plugin
 from dynamo.convert import writeDynTable, writeSetOfVolumes
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.emlib.image import ImageHandler
-from pwem.protocols import EMProtocol
 from pyworkflow.protocol import PointerParam, BooleanParam, IntParam, GE, FloatParam, EnumParam, LE
 from pyworkflow.utils import Message, makePath
 from tomo.objects import AverageSubTomogram

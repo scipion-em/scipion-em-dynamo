@@ -32,8 +32,8 @@ from dynamo.utils import getCatalogFile
 from pwem.objects import Transform
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam
 from pyworkflow.utils import removeExt
+from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
 from tomo.objects import SetOfSubTomograms, SubTomogram
-import tomo.constants as const
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
 from tomo.utils import scaleTrMatrixShifts
@@ -130,9 +130,9 @@ class DynamoExtraction(DynamoProtocolBase):
                 tomoFid.write(tomoPath + '\n')
                 for coord3DSet in self.inputCoordinates.get().iterCoordinates(tomo):
                     angles_coord = matrix2eulerAngles(coord3DSet.getMatrix())
-                    x = self.scaleFactor * coord3DSet.getX(const.BOTTOM_LEFT_CORNER)
-                    y = self.scaleFactor * coord3DSet.getY(const.BOTTOM_LEFT_CORNER)
-                    z = self.scaleFactor * coord3DSet.getZ(const.BOTTOM_LEFT_CORNER)
+                    x = self.scaleFactor * coord3DSet.getX(BOTTOM_LEFT_CORNER)
+                    y = self.scaleFactor * coord3DSet.getY(BOTTOM_LEFT_CORNER)
+                    z = self.scaleFactor * coord3DSet.getZ(BOTTOM_LEFT_CORNER)
                     outC.write("%.2f\t%.2f\t%.2f\t%i\n" % (x, y, z, idt + 1))
                     outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
 
@@ -172,7 +172,7 @@ class DynamoExtraction(DynamoProtocolBase):
                 subtomogram.setCoordinate3D(currentCoord)
                 trMatrix = copy.copy(currentCoord.getMatrix())
                 transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
-                subtomogram.setTransform(transform)
+                subtomogram.setTransform(transform, convention=TR_DYNAMO)
                 outSubtomos.append(subtomogram)
 
         if len(outSubtomos) == 0:

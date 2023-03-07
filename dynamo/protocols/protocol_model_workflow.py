@@ -27,9 +27,7 @@
 from os import remove
 from os.path import abspath
 from pwem.protocols import EMProtocol
-from pyworkflow import BETA
 from pyworkflow.protocol import params
-from tomo.objects import SetOfCoordinates3D
 from tomo.protocols import ProtTomoBase
 from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NAME, M_SURFACE_NAME, \
     M_ELLIPSOIDAL_VESICLE_NAME, M_GENERAL_WITH_BOXES_NAME, M_SURFACE_DES, \
