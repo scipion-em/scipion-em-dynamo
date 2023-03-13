@@ -46,7 +46,7 @@ OTHER = 1
 class DynamoExtraction(DynamoProtocolBase):
     """Extraction of subtomograms using Dynamo"""
 
-    _label = 'vectorial extraction'
+    _label = 'subtomogram extraction'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

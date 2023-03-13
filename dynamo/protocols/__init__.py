@@ -29,8 +29,8 @@ from .protocol_subtomo_MRA import DynamoSubTomoMRA
 from .protocol_extraction import DynamoExtraction
 from .protocol_boxing import DynamoBoxing
 from .protocol_import_subtomos import DynamoImportSubtomos
-from .protocol_subBoxing import DynamoSubBoxing
+# from .protocol_subBoxing import DynamoSubBoxing
 from .protocol_model_workflow import DynamoModelWorkflow
-from .protocol_import_tomograms import DynamoImportTomograms
+# from .protocol_import_tomograms import DynamoImportTomograms
 from .protocol_bin_tomograms import DynamoBinTomograms
-from .protocol_coords_to_model import DynamoCoordsToModel
+# from .protocol_coords_to_model import DynamoCoordsToModel

@@ -26,7 +26,7 @@
 # **************************************************************************
 from dynamo.protocols import DynamoProtAvgSubtomograms
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING
-from dynamo.tests.test_dynamo_sta_base import TestDynamoStaBase
+from dynamo.tests.test_dynamo_base import TestDynamoStaBase
 from pyworkflow.tests import DataSet
 from pyworkflow.utils import magentaStr
 from tomo.tests import EMD_10439, DataSetEmd10439

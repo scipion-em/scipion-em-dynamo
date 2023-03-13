@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es)
+# *              Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
@@ -24,12 +25,11 @@
 # *
 # **************************************************************************
 import glob
-from os.path import basename, isfile, dirname, join, normpath
+from os.path import basename, dirname, join, normpath
 import xmipp3
-
 from pyworkflow.object import Float
 from pyworkflow.protocol.params import PointerParam, FloatParam
-from pyworkflow.utils.path import createLink, removeBaseExt, makePath
+from pyworkflow.utils.path import createLink, makePath
 from pwem.emlib.image import ImageHandler
 from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import SubTomogram, SetOfSubTomograms, SetOfCoordinates3D
@@ -56,28 +56,16 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
         form.addParam('tomoSet', PointerParam,
                       pointerClass='SetOfTomograms',
                       allowsNull=True,
-                      label="Tomograms (optional)",
+                      label="Tomograms (opt.)",
                       help="If not provided, the subtomograms won't be referred to any tomogram. "
                            "If provided, the sampling rate value will be read from them.")
         form.addParam('samplingRate', FloatParam,
                       condition='not tomoSet',
                       allowsNull=True,
-                      label='Sampling rate (Å/px)')
+                      label='Sampling rate [Å/px] (opt.)')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        # JORGE
-        import os
-        fname = "/home/jjimenez/Desktop/test_JJ.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        import time
-        time.sleep(10)
-        # JORGE_END
         self._initialize()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.importSubTomogramsStep)
@@ -157,35 +145,6 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
         dynTableLine2Subtomo(line, subtomo, subtomoSet, tomo=tomo, coordSet=coordSet)
 
     # --------------------------- INFO functions ------------------------------
-    # def _hasOutput(self):
-    #     return self.hasAttribute(self._possibleOutputs.subtomograms.name)
-    #
-    # def _getSubTomMessage(self):
-    #     return "SubTomograms %s" % self.getObjectTag(self._possibleOutputs.subtomograms.name)
-    #
-    # def _summary(self):
-    #     summary = []
-    #     if self._hasOutput():
-    #         summary.append("%s imported from:\n%s" % (self._getSubTomMessage(), self.getPattern()))
-    #         if self.samplingRate.get():
-    #             summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
-    #                            self.samplingRate.get())
-    #     return summary
-    #
-    # def _methods(self):
-    #     methods = []
-    #     if self._hasOutput():
-    #         methods.append(" %s imported with a sampling rate *%0.2f*" %
-    #                        (self._getSubTomMessage(), self.samplingRate.get()))
-    #     return methods
-    #
-    # def _getVolumeFileName(self, fileName, extension=None):
-    #     if extension is not None:
-    #         baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s" % extension
-    #     else:
-    #         baseFileName = "import_" + str(basename(fileName)).split(":")[0]
-    #     return self._getExtraPath(baseFileName)
-
     def _validate(self):
         errors = []
         matchingFiles = self.getMatchFiles()
@@ -195,17 +154,6 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
                 errors.append(tblFilesNotFoundMsg)
         else:
             errors.append(tblFilesNotFoundMsg)
-
-    #     if isfile(self.tablePath.get()):
-    #         pass
-    #         # with open(self.tablePath.get(), 'r') as fhTable:
-    #         #     nLines = len(fhTable.readlines())
-    #         #     nFiles = len(self.getMatchFiles())
-    #         #     if nLines != nFiles:
-    #         #         errors.append("The number of lines contained in the introduced Dynamo table and the number "
-    #         #                       "of matching subtomogram files must be the equal:\n%i != %i" % (nLines, nFiles))
-    #     else:
-    #         errors.append("Could not find specified dynamo table file")
-    #     if not self.tomoSet.get() and not self.samplingRate.get():
-    #         errors.append('A set of tomograms or a sampling rate value must be provided.')
+        if not self.tomoSet.get() and not self.samplingRate.get():
+            errors.append('If tomograms are not provided, a sampling rate value is required.')
         return errors

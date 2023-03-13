@@ -27,6 +27,7 @@
 from os import remove
 from os.path import abspath
 from pwem.protocols import EMProtocol
+from pyworkflow import BETA
 from pyworkflow.protocol import params
 from tomo.protocols import ProtTomoBase
 from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NAME, M_SURFACE_NAME, \
@@ -62,6 +63,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     models created by the user to create the corresponding cropping meshes needed to extract the crop points"""
 
     _label = 'model workflow'
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

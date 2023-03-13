@@ -30,9 +30,10 @@ import pwem
 import pyworkflow.utils as pwutils
 from .constants import *
 
-__version__ = '3.1.14'
+__version__ = '3.1.15'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
+
 
 class Plugin(pwem.Plugin):
     _homeVar = DYNAMO_HOME
