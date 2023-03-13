@@ -256,36 +256,63 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            "grid.")
 
         form.addSection(label='Threshold')
-        form.addParam('separation', IntParam, label='Separation in tomogram', default=0,
+        form.addParam('separation', IntParam,
+                      label='Separation in tomogram',
+                      default=0,
                       help='When tuned to  positive number, it will check the relative positions (positions in the '
                            'tomogram+shifts) of all the particles in each tomogram separately. Whenever two particles '
                            'are closer together than "separation_in_tomogram", only the particle with the higher '
                            'correlation will stay.')
-        form.addParam('threshold', FloatParam, label='Threshold', default=0.2,
+        form.addParam('threshold', FloatParam,
+                      label='Threshold',
+                      default=0.2,
                       help='Different thresholding policies can be used in order to select which particles are averaged'
                            ' in view of their CC (cross correlation value) . The value of the thresholding parameter '
                            'defined here  will be interpreted differently depending on the "threshold_modus"')
-        form.addParam('thresholdMode', IntParam, label='Threshold modus', default=1,
-                      help='Possible values of the thresholding policy "threshold_modus": 0: no thesholding policy 1: '
-                           'THRESHOLD is an absolute threshold (only particles with CC above this value are selected).'
-                           ' 2: efective threshold = mean(CC) * THRESHOLD. 3: efective threshold = mean(CC) +std(CC)*'
-                           'THRESHOLD. 4: THRESHOLD is the total number of particle (ordered by CC ). 5: THRESHOLD '
-                           'ranges between 0 and 1  and sets the fraction of particles. * 11,21,31,34,41,51: select the'
-                           ' same particles as 1,2,3,4 or 5, BUT non selected particles will be excluded: - from '
-                           'averaging in the present iteration,and - ALSO from alignment in the next iteration (unlike '
-                           '1,2,3,4,5).')
-        form.addParam('threshold2', FloatParam, label='Second threshold', default=0.2, expertLevel=LEVEL_ADVANCED,
-                      help="Thresholding II is operated against the average produced by the particles that survived the"
-                           " first thresholding.")
-        form.addParam('thresholdMode2', IntParam, label='Second threshold modus', default=0, expertLevel=LEVEL_ADVANCED,
-                      help=" ")
-        form.addParam('ccmatrix', BooleanParam, label='Compute  cross-correlation matrix', default=False,
+        form.addParam('thresholdMode', IntParam,
+                      label='Threshold I mode',
+                      default=0,
+                      help='Different thresholding policies can be used to select particles according to their CC '
+                           'value. Thus value of the "threshold" parameter you input  (denoted as THRESHOLD below) '
+                           'will be interpreted differently depending on the "threshold_modus" defined here.\n\n'
+                           'Possible values of the thresholding policy "threshold_modus":\n'
+                           '\n\t* 0: no thesholding policy'
+                           '\n\t* 1: THRESHOLD is an absolute threshold (only particles with CC above this value are '
+                           'selected).'
+                           '\n\t* 2: efective threshold = mean(CC) * THRESHOLD.'
+                           '\n\t* 3: efective threshold = mean(CC) + std(CC) * THRESHOLD.'
+                           '\n\t* 4: THRESHOLD is the total number of particle (ordered by CC ).'
+                           '\n\t* 5: THRESHOLD ranges between 0 and 1  and sets the fraction of particles.'
+                           '\n\t* 11,21,31,34,41,51: select the same particles as 1,2,3,4 or 5, BUT non selected '
+                           'particles will be excluded:'
+                           '\n\t\t- from averaging in the present iteration, and'
+                           '\n\t\t- ALSO from alignment in the next iteration (unlike 1,2,3,4,5).')
+        form.addParam('threshold2', FloatParam,
+                      label='Second threshold',
+                      default=0.2,
+                      expertLevel=LEVEL_ADVANCED,
+                      help="Thresholding II is operated against the average produced by the particles that survived"
+                           "the first thresholding.")
+        form.addParam('thresholdMode2', IntParam,
+                      label='Threshold II mode',
+                      default=0,
+                      expertLevel=LEVEL_ADVANCED,
+                      help="Thresholding II is operated against the average produced by the particles that survived "
+                           "the first thresholding. It uses the same syntax as Threshold I")
+        form.addParam('ccmatrix', BooleanParam,
+                      label='Compute  cross-correlation matrix',
+                      default=False,
                       help="Computation of a Cross-Correlation matrix among the aligned particles.")
-        form.addParam('ccmatrixType', StringParam, label='Cross-correlation matrix type', default='align',
-                      condition="ccmatrix", expertLevel=LEVEL_ADVANCED,
-                      help="string with three characters, each position controling a different aspect: thresholding, "
-                           "symmetrization, compensation")
-        form.addParam('ccmatrixBatch', IntParam, label='Cross-correlation matrix batch', default=128,
+        # form.addParam('ccmatrixType', StringParam,
+        #               label='Cross-correlation matrix type',
+        #               default='align',
+        #               condition="ccmatrix",
+        #               expertLevel=LEVEL_ADVANCED,
+        #               help="string with three characters, each position controling a different aspect: thresholding, "
+        #                    "symmetrization, compensation")
+        form.addParam('ccmatrixBatch', IntParam,
+                      label='Cross-correlation matrix batch',
+                      default=128,
                       expertLevel=LEVEL_ADVANCED,
                       help="Number of particles to be kept in memory simultaneously during the computation of the "
                            "ccmatrix. The larger this number, the more efficient the algorithm performance, as more "
@@ -311,7 +338,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'change at each round. 4:  limits are understood from the estimation provided for the first '
                            'iteration')
 
-        form.addParallelSection(threads=4, mpi=1)
+        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
@@ -392,7 +419,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         command += self.get_dvput('thr2', self.threshold2)
         command += self.get_dvput('thr2m', self.thresholdMode2)
         command += self.get_dvput('ccms', int(self.ccmatrix.get()))
-        command += self.get_dvput('ccmt', self.ccmatrixType)
+        command += self.get_dvput('ccmt', 'align')
         command += self.get_dvput('batch', self.ccmatrixBatch)
         command += self.get_dvput('stm', self.separation)
         command += self.getRoundParams('low', self.low)
@@ -439,11 +466,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            (str(refFileNames).replace('[', '{').replace(']', '}'), TEMPLATESDIR_NAME)
                 content += self.get_dvput('table', INI_TABLE)
             else:
-                # The template will be a volume (validation method ensures it)
-                referenceName = 'template.mrc'
-                convertOrLinkVolume(template, self._getExtraPath(referenceName))
-                content += self.get_dvput('template', referenceName)
                 content += self.get_dvput('table', INI_TABLE)
+                if template:
+                    # The template will be a volume (validation method ensures it)
+                    referenceName = 'template.mrc'
+                    convertOrLinkVolume(template, self._getExtraPath(referenceName))
+                    content += self.get_dvput('template', referenceName)
+                    # content += self.get_dvput('table', INI_TABLE)
 
             # Masks management
             masks = [self.alignMask.get(), self.cmask.get(), self.fmask.get(), self.smask.get()]

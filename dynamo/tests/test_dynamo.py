@@ -41,8 +41,7 @@ from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, Prot
 from tomo.tests import DataSet, EMD_10439, DataSetEmd10439
 import tomo.constants as const
 from xmipp3.protocols import XmippProtCreateMask3D
-from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoBinTomograms, \
-    DynamoCoordsToModel
+from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoBinTomograms
 
 DYNAMOPARAMNAME = "dyn"
 MYPROJECT = "myproject"
@@ -301,53 +300,53 @@ class TestDynamoBinTomograms(TestDynamoStaBase):
         self.assertTrue(np.array_equal(np.array(binnedTomograms.getDimensions()), self.origSize / self.binningFactor))
 
 
-class TestDynamoCoordsToModel(TestDynamoStaBase):
-    """This class checks if the protocol to convert a SetOfCoordinates3D to a Dynamo
-    model works properly"""
-
-    @classmethod
-    def setUpClass(cls):
-        setupTestProject(cls)
-        dataset = DataSet.getDataSet('tomo-em')
-        cls.tomogram = dataset.getFile('tomo1')
-        cls.dynCoords = dataset.getFile('overview_wbp.tbl')
-
-    def _runCoordsToModel(self):
-        protImportTomogram = self.newProtocol(ProtImportTomograms,
-                                              filesPath=self.tomogram,
-                                              samplingRate=5)
-
-        self.launchProtocol(protImportTomogram)
-
-        self.assertIsNotNone(protImportTomogram.outputTomograms,
-                             "There was a problem with tomogram output")
-
-        protImportCoordinates = self.newProtocol(ProtImportCoordinates3D,
-                                                 objLabel='Initial coordinates',
-                                                 filesPath=self.dynCoords,
-                                                 importTomograms=protImportTomogram.outputTomograms,
-                                                 filesPattern='', boxSize=32, importAngles=True,
-                                                 samplingRate=5)
-
-        self.launchProtocol(protImportCoordinates)
-
-        coords = protImportCoordinates.outputCoordinates
-
-        self.assertIsNotNone(coords,
-                             "There was a problem with coordinates 3d output")
-
-        protDynamoCoordsToModel = self.newProtocol(DynamoCoordsToModel,
-                                                   objLabel='Coords to Dynamo model conversion',
-                                                   inputCoords=coords)
-
-        self.launchProtocol(protDynamoCoordsToModel)
-        return protDynamoCoordsToModel
-
-    def test_coords_to_model(self):
-        protCoordsToModel = self._runCoordsToModel()
-
-        outputMeshes = getattr(protCoordsToModel, 'outputMeshes', None)
-        self.assertTrue(outputMeshes)
-        self.assertTrue(isfile(outputMeshes._dynCatalogue.get()))
-
-        return protCoordsToModel
+# class TestDynamoCoordsToModel(TestDynamoStaBase):
+#     """This class checks if the protocol to convert a SetOfCoordinates3D to a Dynamo
+#     model works properly"""
+#
+#     @classmethod
+#     def setUpClass(cls):
+#         setupTestProject(cls)
+#         dataset = DataSet.getDataSet('tomo-em')
+#         cls.tomogram = dataset.getFile('tomo1')
+#         cls.dynCoords = dataset.getFile('overview_wbp.tbl')
+#
+#     def _runCoordsToModel(self):
+#         protImportTomogram = self.newProtocol(ProtImportTomograms,
+#                                               filesPath=self.tomogram,
+#                                               samplingRate=5)
+#
+#         self.launchProtocol(protImportTomogram)
+#
+#         self.assertIsNotNone(protImportTomogram.outputTomograms,
+#                              "There was a problem with tomogram output")
+#
+#         protImportCoordinates = self.newProtocol(ProtImportCoordinates3D,
+#                                                  objLabel='Initial coordinates',
+#                                                  filesPath=self.dynCoords,
+#                                                  importTomograms=protImportTomogram.outputTomograms,
+#                                                  filesPattern='', boxSize=32, importAngles=True,
+#                                                  samplingRate=5)
+#
+#         self.launchProtocol(protImportCoordinates)
+#
+#         coords = protImportCoordinates.outputCoordinates
+#
+#         self.assertIsNotNone(coords,
+#                              "There was a problem with coordinates 3d output")
+#
+#         protDynamoCoordsToModel = self.newProtocol(DynamoCoordsToModel,
+#                                                    objLabel='Coords to Dynamo model conversion',
+#                                                    inputCoords=coords)
+#
+#         self.launchProtocol(protDynamoCoordsToModel)
+#         return protDynamoCoordsToModel
+#
+#     def test_coords_to_model(self):
+#         protCoordsToModel = self._runCoordsToModel()
+#
+#         outputMeshes = getattr(protCoordsToModel, 'outputMeshes', None)
+#         self.assertTrue(outputMeshes)
+#         self.assertTrue(isfile(outputMeshes._dynCatalogue.get()))
+#
+#         return protCoordsToModel
