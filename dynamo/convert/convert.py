@@ -60,10 +60,10 @@ def convertOrLinkVolume(inVolume: Volume, outVolume: str):
 
 def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
     if name == 'id':  # write the ID of the object in the name
-        for volume in setOfVolumes:
+        for volume in setOfVolumes.iterSubtomos():
             convertOrLinkVolume(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
     if name == 'ix':  # write the INDEX of the object in the name
-        for ix, volume in enumerate(setOfVolumes):
+        for ix, volume in enumerate(setOfVolumes.iterSubtomos()):
             convertOrLinkVolume(volume, "%s%03d.mrc" % (outputFnRoot, int(ix + 1)))
 
 

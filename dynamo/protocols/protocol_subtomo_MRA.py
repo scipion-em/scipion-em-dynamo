@@ -26,7 +26,7 @@
 # *
 # **************************************************************************
 
-from os.path import join, abspath
+from os.path import join, abspath, dirname
 from pwem.objects.data import Volume, SetOfVolumes
 from pyworkflow import BETA
 from pyworkflow.object import Set, String
@@ -34,9 +34,9 @@ from pyworkflow.protocol import GPU_LIST, USE_GPU
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, LEVEL_ADVANCED, \
     NumericListParam, Form, FloatParam
 from pyworkflow.utils import Message
-from pyworkflow.utils.path import makePath
+from pyworkflow.utils.path import makePath, getExt, replaceBaseExt
 from dynamo import Plugin
-from dynamo.convert import convertOrLinkVolume, writeSetOfVolumes, writeDynTable, readDynTable
+from dynamo.convert import writeSetOfVolumes, writeDynTable, readDynTable
 from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 
@@ -63,6 +63,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)
+        self.fhTable = None
         self.masksDir = None
         self.doMra = None
 
@@ -82,12 +83,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       pointerClass="SetOfSubTomograms",
                       label='Set of subtomograms',
                       help="Set of subtomograms to align with dynamo")
-        form.addHidden('nref', IntParam,
-                       label='Number of references',  # If > 1 --> MRA
-                       default=1,
-                       help="Number of references for multi-reference alignment (MRA)")
         form.addParam('templateRef', PointerParam,
-                      pointerClass='Volume, SetOfVolumes',
+                      pointerClass='Volume, SubTomogram',
                       label="Template",
                       allowsNull=True,
                       help='The size of the template should be equal or smaller than the size of the particles. If you '
@@ -136,11 +133,11 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'The rotated and shifted template is compared to the data particle only inside this moving '
                            'region. See more details in '
                            'https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Alignment_mask.')
-        form.addParam('cmask', PointerParam,
-                      pointerClass='Volume, SetOfVolumes',
-                      label="Classification mask (opt)",
-                      allowsNull=True,
-                      condition='nref > 1')
+        # form.addParam('cmask', PointerParam,
+        #               pointerClass='Volume, SetOfVolumes',
+        #               label="Classification mask (opt)",
+        #               allowsNull=True,
+        #               condition='Only for multirreference')
         form.addParam('fmask', PointerParam,
                       pointerClass='Volume, SetOfVolumes',
                       label="Fourier mask on reference (opt)",
@@ -342,7 +339,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
-        self.doMra = self.nref.get() > 1
+        self.doMra = isinstance(self.templateRef.get(), SetOfVolumes)
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.alignStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -369,7 +366,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             finalParamName = dynamoParamName
             if index != 0:
                 finalParamName += '_r' + str(index + 1)
-            command += self.get_dvput(finalParamName, value, projectName=projectName) + '\n'
+            command += self.get_dvput(finalParamName, value, projectName=projectName)
         return command
 
     @staticmethod
@@ -400,6 +397,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             dim = String(dim)
 
         command = self.getRoundParams("dim", dim)
+        command += self.get_dvput("apix", self.inputVolumes.get().getSamplingRate())
         command += self.getRoundParams('sym', self.sym, caster=str)
         command += self.getRoundParams("ite", self.numberOfIters)
         command += self.get_dvput('mra', int(self.doMra))
@@ -426,14 +424,18 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         command += self.getRoundParams('high', self.high)
         command += self.get_dvput('lim', self.lim)
         command += self.get_dvput('limm', self.limm)
-        command += self.get_dvput('destination', 'standalone')
-        command += self.get_dvput('cores', self.numberOfThreads.get())
-        command += self.get_dvput('mwa', self.numberOfThreads.get())
+        command += self.get_dvput('mwa', self.numberOfThreads.get())  # Cores used to calculate the average in each iter
 
         if self.useGpu.get():
+            # Param 'cores' is used to specify the number of CPUs involved in the alignment. If GPU is used, Dynamo
+            # only works well setting it to 1.
+            command += self.get_dvput('cores', 1)
             command += self.get_dvput('destination', 'standalone_gpu')
             command += self.get_dvput('gpu_motor', 'spp')
             command += self.get_dvput('gpu_identifier_set', self.getGpuList())
+        else:
+            command += self.get_dvput('cores', self.numberOfThreads.get())
+            command += self.get_dvput('destination', 'standalone')
 
         return command
 
@@ -441,9 +443,11 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         dataDir = self._getExtraPath(DATADIR_NAME)
         self.masksDir = self._getExtraPath(MASKSDIR_NAME)
         makePath(*[dataDir, self.masksDir])
-        fnRoot = join(dataDir, "particle_")
         inputVols = self.inputVolumes.get()
-        writeSetOfVolumes(inputVols, fnRoot, 'id')
+        # Convert the input particles into .em if necessary
+        areInEmFormat = inputVols.getFirstItem().getFileName().endswith('.em')
+        dataDirName = join(dataDir, "particle_")
+        writeSetOfVolumes(inputVols, dataDirName, 'id')
 
         # Write the tbl file with the data read from the introduced particles
         fnTable = self._getExtraPath(INI_TABLE)
@@ -454,10 +458,11 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         # dvput('dynamoAlignmentProject', 'cr_r2', '360');  --> note "_r2" for round 2
         with open(self._getExtraPath(IMPORT_CMD_FILE), 'w') as fhCommands:
             content = "dcp.new('%s', 'data', '%s', 'gui', 0)\n" % (DYNAMO_ALIGNMENT_PROJECT, DATADIR_NAME)
+            if not areInEmFormat:
+                content += "dynamo_data_format('%s/particle_*.mrc', 'data', 'modus', 'convert', 'extension', '.em')\n"\
+                           % DATADIR_NAME
             template = self.templateRef.get()
-            nRef = self.nref.get()
-            doMRA = nRef > 1
-            if doMRA:
+            if self.doMra:
                 templatesDir = self._getExtraPath(TEMPLATESDIR_NAME)
                 makePath(templatesDir)
                 # Reference management
@@ -469,13 +474,16 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 content += self.get_dvput('table', INI_TABLE)
                 if template:
                     # The template will be a volume (validation method ensures it)
-                    referenceName = 'template.mrc'
-                    convertOrLinkVolume(template, self._getExtraPath(referenceName))
+                    referenceName = 'template.em'
+                    templateOrigFName = template.getFileName()
+                    if not templateOrigFName.endswith('.em'):
+                        content += "object = dynamo_read('%s')\n" % abspath(templateOrigFName)
+                        content += "dynamo_write(object, '%s')\n" % abspath(self._getExtraPath(referenceName))
+                    # convertOrLinkVolume(template, self._getExtraPath(referenceName))
                     content += self.get_dvput('template', referenceName)
-                    # content += self.get_dvput('table', INI_TABLE)
 
             # Masks management
-            masks = [self.alignMask.get(), self.cmask.get(), self.fmask.get(), self.smask.get()]
+            masks = [self.alignMask.get(), self.fmask.get(), self.smask.get()]  # self.cmask.get()
             for mask in masks:
                 content += self.prepareMask(mask)
 
@@ -512,23 +520,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         niters = sum(iters)
 
         if self.doMra:
-            outSubtomos = self._createSetOfSubTomograms()
-            inputSet = self.inputVolumes.get()
-            outSubtomos.copyInfo(inputSet)
-            self.fhTable = open(self._getExtraPath('%s/results/ite_%04d/averages/refined_table_ref_001_ite_%04d.tbl')
-                                % (DYNAMO_ALIGNMENT_PROJECT, niters, niters), 'r')
-            outSubtomos.copyItems(inputSet, updateItemCallback=self._updateItem)
-            self.fhTable.close()
-            averageSubTomogram = AverageSubTomogram()
-            averageSubTomogram.setFileName(
-                self._getExtraPath('%s/results/ite_%04d/averages/average_symmetrized_ref_001_ite_%04d.em')
-                % (DYNAMO_ALIGNMENT_PROJECT, niters, niters))
-            averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
-            self._defineOutputs(outputSubtomograms=outSubtomos)
-            self._defineSourceRelation(self.inputVolumes, outSubtomos)
-            self._defineOutputs(averageSubTomogram=averageSubTomogram)
-            self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
-        else:
             fhSurvivRefs = open(self._getExtraPath('%s/results/ite_%04d/currently_surviving_references_ite_%04d.txt')
                                 % (DYNAMO_ALIGNMENT_PROJECT, niters, niters), 'r')
             nline = next(fhSurvivRefs).rstrip()
@@ -560,6 +551,24 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 args2[name2] = averageSubTomogram
                 self._defineOutputs(**args2)
                 self._defineSourceRelation(inputSet, averageSubTomogram)
+        else:
+            averageSubTomogram = AverageSubTomogram()
+            outSubtomos = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
+            inputSet = self.inputVolumes.get()
+            outSubtomos.copyInfo(inputSet)
+            resTbl = join(self.getLastIterAvgsDir(), 'refined_table_ref_001_ite_%04d.tbl' % niters)
+            avgFile = join(self.getLastIterAvgsDir(), 'average_symmetrized_ref_001_ite_%04d.em' % niters)
+            # Open the final particles table, that will be used in the updateItemCallback
+            self.fhTable = open(resTbl, 'r')
+            outSubtomos.copyItems(inputSet, updateItemCallback=self._updateItem)
+            self.fhTable.close()
+            # Fill the resulting average object
+            averageSubTomogram.setFileName(avgFile)
+            averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
+            self._defineOutputs(outputSubtomograms=outSubtomos)
+            self._defineSourceRelation(self.inputVolumes, outSubtomos)
+            self._defineOutputs(averageSubTomogram=averageSubTomogram)
+            self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
 
     def closeSetsStep(self):
         for outputset in self._iterOutputsNew():
@@ -581,12 +590,19 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         else:
             return ''
 
+    def getLastIterResultsDir(self):
+        return self._getExtraPath('%s', 'results', 'ite_%04d') % \
+               (DYNAMO_ALIGNMENT_PROJECT, sum(self.numberOfIters.getListFromValues()))
+
+    def getLastIterAvgsDir(self):
+        return join(self.getLastIterResultsDir(), 'averages')
+
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
         validateMsgs = []
-        doMra = self.nref.get() > 1
+        doMra = isinstance(self.templateRef.get(), SetOfVolumes)
         ref = self.templateRef.get()
-        masks = [self.alignMask.get(), self.cmask.get(), self.fmask.get(), self.smask.get()]
+        masks = [self.alignMask.get(), self.fmask.get(), self.smask.get()]  # self.cmask.get()
         introducedMasks = any(masks)
         if doMra:
             # Check the introduced references

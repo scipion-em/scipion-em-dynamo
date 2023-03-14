@@ -98,7 +98,8 @@ class DynamoExtraction(DynamoProtocolBase):
         self._initialize()
         self._insertFunctionStep(self.writeSetOfCoordinates3D)
         self._insertFunctionStep(self.launchDynamoExtractStep)
-        self._insertFunctionStep(self.invertContrastStep)
+        if self.doInvert.get():
+            self._insertFunctionStep(self.invertContrastStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
@@ -156,11 +157,10 @@ class DynamoExtraction(DynamoProtocolBase):
         if self.getInputTomograms().getFirstItem().getAcquisition():
             outSubtomos.setAcquisition(self.getInputTomograms().getFirstItem().getAcquisition())
 
-        for ind in range(len(self.dynamoTomoIdDict.values())):
-            currentParticlesDir = join(self.cropDirName + str(ind + 1))
-            currentTomo = self.dynamoTomoIdDict[ind + 1]
+        for ind, currentTomo in self.dynamoTomoIdDict.items():
+            currentParticlesDir = join(self.cropDirName + str(ind))
             currentTomoFName = currentTomo.getFileName()
-            currentSubtomoFiles = glob.glob(join(currentParticlesDir, '*.mrc'))
+            currentSubtomoFiles = sorted(glob.glob(join(currentParticlesDir, '*.mrc')))
             currentCoords = [coord.clone() for coord in self.inputCoordinates.get().iterCoordinates(currentTomo)]
             for i, subtomoFile in enumerate(currentSubtomoFiles):
                 subtomogram = SubTomogram()
