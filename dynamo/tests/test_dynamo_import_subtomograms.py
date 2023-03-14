@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 from dynamo.protocols import DynamoImportSubtomos
-from dynamo.protocols.protocol_base_dynamo import DynamoOutputs
+from dynamo.protocols.protocol_import_subtomos import DynImportSubtomosOuts
 from dynamo.tests.test_dynamo_base import TestDynamoStaBase
 from pyworkflow.tests import DataSet
 from tomo.objects import SetOfSubTomograms
@@ -78,7 +78,7 @@ class TestDynamoImportSubTomograms(TestDynamoStaBase):
                                              tomoSet=tomos,
                                              samplingRate=sRate)
         cls.launchProtocol(protImportSubtomos)
-        outSubtomos = getattr(protImportSubtomos, DynamoOutputs.subtomograms.name, None)
+        outSubtomos = getattr(protImportSubtomos, DynImportSubtomosOuts.subtomograms.name, None)
         cls.assertIsNotNone(outSubtomos, 'There was a problem importing the subtomograms')
         return outSubtomos
 

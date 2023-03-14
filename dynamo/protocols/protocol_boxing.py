@@ -25,18 +25,26 @@
 # *
 # **************************************************************************
 import datetime
+from enum import Enum
 from os.path import abspath
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from dynamo.utils import createBoxingOutputObjects, getDynamoModels, getNewestModelModDate
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 import pyworkflow.utils as pwutils
+from pyworkflow import BETA
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import IntParam, BooleanParam
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
+from tomo.objects import SetOfCoordinates3D, SetOfMeshes
 from tomo.protocols import ProtTomoPicking
-from dynamo import VLL_FILE, CATALOG_BASENAME, Plugin
+from dynamo import VLL_FILE, CATALOG_BASENAME
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
+
+
+class DynPickingOuts(Enum):
+    coordinates = SetOfCoordinates3D
+    meshes = SetOfMeshes
 
 
 class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
@@ -49,6 +57,8 @@ class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
      saved in the catalogue and registered."""
 
     _label = 'vectorial picking'
+    _devStatus = BETA
+    _possibleOutputs = DynPickingOuts
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -25,6 +25,7 @@
 # *
 # **************************************************************************
 import glob
+from enum import Enum
 from os.path import basename, dirname, join, normpath
 import xmipp3
 from pyworkflow.object import Float
@@ -35,6 +36,11 @@ from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import SubTomogram, SetOfSubTomograms, SetOfCoordinates3D
 from .protocol_base_dynamo import DynamoProtocolBase
 from ..convert import dynTableLine2Subtomo
+
+
+class DynImportSubtomosOuts(Enum):
+    coordinates = SetOfCoordinates3D
+    subtomograms = SetOfSubTomograms
 
 
 class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):

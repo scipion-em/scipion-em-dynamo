@@ -23,26 +23,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from enum import Enum
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
-from pyworkflow.utils import getExt
-from tomo.objects import SetOfSubTomograms, SetOfTomograms, AverageSubTomogram, SetOfCoordinates3D, SetOfMeshes
 from tomo.protocols import ProtTomoBase
-
-
-class DynamoOutputs(Enum):
-    tomograms = SetOfTomograms
-    subtomograms = SetOfSubTomograms
-    average = AverageSubTomogram
-    coordinates = SetOfCoordinates3D
-    meshes = SetOfMeshes
 
 
 class DynamoProtocolBase(EMProtocol, ProtTomoBase):
 
     _devStatus = BETA
-    _possibleOutputs = DynamoOutputs
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -54,7 +42,3 @@ class DynamoProtocolBase(EMProtocol, ProtTomoBase):
         Dynamo convention"""
         return (2 ** (self.binning.get() - 1)) / 2 if forDynamo else self.binning.get()
 
-    def isCompatibleFileFormat(self):
-        """Compatible with MRC and em (MRC with that extension)"""
-        compatibleExts = ['.em', '.mrc']
-        return True if getExt(self.inputTomos.getFirstItem().getFileName()) not in compatibleExts else False

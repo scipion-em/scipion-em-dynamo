@@ -24,18 +24,24 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from enum import Enum
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.emlib.image import ImageHandler
 from pyworkflow.protocol import params, GT
-from pyworkflow.utils import removeBaseExt
+from pyworkflow.utils import removeBaseExt, getExt
 from tomo.objects import Tomogram, SetOfTomograms
 from dynamo import Plugin
+
+
+class DynamoBinOuts(Enum):
+    tomograms = SetOfTomograms
 
 
 class DynamoBinTomograms(DynamoProtocolBase):
     """Reduce the size of a SetOfTomograms by a binning factor"""
 
     _label = 'bin tomograms'
+    _possibleOutputs = DynamoBinOuts
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -59,7 +65,11 @@ class DynamoBinTomograms(DynamoProtocolBase):
                       expertLevel=params.LEVEL_ADVANCED,
                       label="Number of slices kept in memory",
                       help="Maximum number of Z slices that are kept simultaneously in the memory during the "
-                           "binning process. This parameter might be important for larger size tomograms.")
+                           "binning process. This parameter might be important for larger size tomograms, making "
+                           "possible to process them in vertical slabs of thickness = value introduced in the  "
+                           "current parameter. This procedure can be accelerated using the multiple threads to engage "
+                           "several cores in parallel. However, this will only make sense if the total memory occupied "
+                           "by all the slabs simultaneously in memory in a given time fits in the RAM of the machine.")
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -81,7 +91,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         self.inputTomos = self.inputTomos.get()
-        self.doConvertFiles = not super().isCompatibleFileFormat()
+        self.doConvertFiles = not self.isCompatibleFileFormat()
 
     @staticmethod
     def convertInputStep(origName, finalName):
@@ -98,7 +108,8 @@ class DynamoBinTomograms(DynamoProtocolBase):
         # p.addParamValue('maximumMegaBytes',[]);
         # p.addParamValue('showStatistics',false,'short','sst');
         # ______________________________________________________________________________________________
-        self.content += "dpktomo.tools.bin('%s', '%s', %i, 'ss', %i, 'mw', %i, 'sst', true)\n" % \
+        self.content += "dpktomo.tools.bin('%s', '%s', %i, 'slabSize', %i, 'matlabWorkers', %i, " \
+                        "'showStatistics', true)\n" % \
                         (origTomoName, finalTomoName, super().getBinningFactor(), self.zChunk.get(),
                          self.numberOfThreads.get())
 
@@ -120,7 +131,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
             tomo.setFileName(tomoName)
             outTomos.append(tomo)
 
-        self._defineOutputs(**{super()._possibleOutputs.tomograms.name: outTomos})
+        self._defineOutputs(**{DynamoBinOuts.tomograms.name: outTomos})
         self._defineSourceRelation(self.inputTomos, outTomos)
 
     # --------------------------- DEFINE utils functions ----------------------
@@ -129,6 +140,11 @@ class DynamoBinTomograms(DynamoProtocolBase):
 
     def getFinalTomoName(self, tomo):
         return self.getConvertedOutFileName(tomo.getFileName())
+
+    def isCompatibleFileFormat(self):
+        """Compatible with MRC and em (MRC with that extension)"""
+        compatibleExts = ['.em', '.mrc']
+        return True if getExt(self.inputTomos.getFirstItem().getFileName()) not in compatibleExts else False
 
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):

@@ -24,29 +24,31 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from enum import Enum
 from os.path import join
 from dynamo import Plugin
 from dynamo.convert import writeDynTable, writeSetOfVolumes
-from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.emlib.image import ImageHandler
+from pwem.protocols import EMProtocol
+from pyworkflow import BETA
 from pyworkflow.protocol import PointerParam, BooleanParam
 from pyworkflow.utils import Message, makePath
 from tomo.objects import AverageSubTomogram
+from tomo.protocols import ProtTomoBase
 
 
-# Values for enum param fcCompensateOpt
-PART_NUMBER = 0
-PART_FRACTION = 1
+class DynAvgOuts(Enum):
+    average = AverageSubTomogram
 
 
-class DynamoProtAvgSubtomograms(DynamoProtocolBase):
+class DynamoProtAvgSubtomograms(EMProtocol, ProtTomoBase):
+
     _label = 'Average subtomograms'
+    _devStatus = BETA
+    _possibleOutputs = DynAvgOuts
     tableName = 'initial.tbl'
     dataDirName = 'data'
     averageDirName = 'average'
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
 
     # --------------- DEFINE param functions ---------------
     def _defineParams(self, form):
@@ -103,7 +105,7 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
         avg = AverageSubTomogram()
         avg.setFileName(self.getOutputFile('mrc'))
         avg.setSamplingRate(inSubtomos.getSamplingRate())
-        self._defineOutputs(**{super()._possibleOutputs.average.name: avg})
+        self._defineOutputs(**{DynAvgOuts.average.name: avg})
         self._defineSourceRelation(inSubtomos, avg)
 
     # --------------------------- INFO functions ------------------------------

@@ -26,16 +26,19 @@
 # **************************************************************************
 import copy
 import glob
+from enum import Enum
 from os.path import abspath, join
-from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from dynamo.utils import getCatalogFile
 from pwem.objects import Transform
+from pwem.protocols import EMProtocol
+from pyworkflow import BETA
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam
 from pyworkflow.utils import removeExt
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
 from tomo.objects import SetOfSubTomograms, SubTomogram
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
+from tomo.protocols import ProtTomoBase
 from tomo.utils import scaleTrMatrixShifts
 
 # Tomogram type constants for particle extraction
@@ -43,10 +46,16 @@ SAME_AS_PICKING = 0
 OTHER = 1
 
 
-class DynamoExtraction(DynamoProtocolBase):
+class DynSubtomoExtractOuts(Enum):
+    subtomograms = SetOfSubTomograms
+
+
+class DynamoExtraction(EMProtocol, ProtTomoBase):
     """Extraction of subtomograms using Dynamo"""
 
     _label = 'subtomogram extraction'
+    _devStatus = BETA
+    _possibleOutputs = DynSubtomoExtractOuts
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -180,7 +189,7 @@ class DynamoExtraction(DynamoProtocolBase):
                   "folder. If it's the case, check that the tomograms from were the particles are desired to be " \
                   "extracted are the ones in which the picking was performed, or a binned version of them."
 
-        self._defineOutputs(**{super()._possibleOutputs.subtomograms.name: outSubtomos})
+        self._defineOutputs(**{self._possibleOutputs.subtomograms.name: outSubtomos})
         self._defineSourceRelation(self.inputCoordinates, outSubtomos)
 
     # --------------------------- DEFINE utils functions ----------------------

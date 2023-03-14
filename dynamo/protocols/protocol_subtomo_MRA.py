@@ -25,8 +25,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-from os.path import join, abspath, dirname
+from enum import Enum
+from os.path import join, abspath
 from pwem.objects.data import Volume, SetOfVolumes
 from pyworkflow import BETA
 from pyworkflow.object import Set, String
@@ -34,7 +34,7 @@ from pyworkflow.protocol import GPU_LIST, USE_GPU
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, LEVEL_ADVANCED, \
     NumericListParam, Form, FloatParam
 from pyworkflow.utils import Message
-from pyworkflow.utils.path import makePath, getExt, replaceBaseExt
+from pyworkflow.utils.path import makePath
 from dynamo import Plugin
 from dynamo.convert import writeSetOfVolumes, writeDynTable, readDynTable
 from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
@@ -51,11 +51,17 @@ MASKSDIR_NAME = "masks"
 TEMPLATESDIR_NAME = 'templates'
 
 
+class DynRefineOuts(Enum):
+    subtomograms = SetOfSubTomograms
+    average = AverageSubTomogram
+
+
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     """ This protocol will align subtomograms using Dynamo MRA Subtomogram Averaging"""
 
     _label = 'Subtomogram alignment'
     _devStatus = BETA
+    _possibleOutputs = DynRefineOuts
 
     @classmethod
     def getUrl(cls):
@@ -565,9 +571,11 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             # Fill the resulting average object
             averageSubTomogram.setFileName(avgFile)
             averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
-            self._defineOutputs(outputSubtomograms=outSubtomos)
+            # Define outputs and relations
+            outsDict = {self._possibleOutputs.subtomograms.name: outSubtomos,
+                        self._possibleOutputs.average.name: averageSubTomogram}
+            self._defineOutputs(**outsDict)
             self._defineSourceRelation(self.inputVolumes, outSubtomos)
-            self._defineOutputs(averageSubTomogram=averageSubTomogram)
             self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
 
     def closeSetsStep(self):

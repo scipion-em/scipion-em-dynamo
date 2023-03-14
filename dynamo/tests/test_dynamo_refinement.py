@@ -25,23 +25,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
-from os.path import isfile
-
-import numpy as np
-
-from dynamo.protocols.protocol_base_dynamo import DynamoOutputs
-from dynamo.protocols.protocol_extraction import SAME_AS_PICKING, OTHER
 from dynamo.tests.test_dynamo_base import TestDynamoStaBase
 from pyworkflow.object import String
-from pyworkflow.tests import BaseTest, setupTestProject
-from pyworkflow.utils import magentaStr
-from tomo.objects import SetOfSubTomograms
-from tomo.protocols import ProtImportSubTomograms, ProtImportCoordinates3D, ProtImportTomograms
-from tomo.tests import DataSet, EMD_10439, DataSetEmd10439
-import tomo.constants as const
+from pyworkflow.tests import setupTestProject
+from tomo.protocols import ProtImportSubTomograms
+from tomo.tests import DataSet
 from xmipp3.protocols import XmippProtCreateMask3D
-from dynamo.protocols import DynamoSubTomoMRA, DynamoExtraction, DynamoImportSubtomos, DynamoBinTomograms
+from dynamo.protocols import DynamoSubTomoMRA
 
 DYNAMOPARAMNAME = "dyn"
 MYPROJECT = "myproject"
@@ -275,29 +265,6 @@ class TestDynamoSubTomogramsAlignment(TestDynamoStaBase):
         self.assertTrue(outputSubtomograms)
         self.assertTrue(outputSubtomograms.getFirstItem().hasTransform())
         return dynamoAlignment
-
-
-class TestDynamoBinTomograms(TestDynamoStaBase):
-    tomoFiles = None
-    binningFactor = 2
-    origSize = np.array([1024, 1024, 512])
-    sRate = 5
-    bin2SRate = 10
-    importedTomos = None
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        ds = DataSet.getDataSet('tomo-em')
-        cls.tomoFiles = ds.getFile('tomo1')
-        cls.importedTomos = super().runImportTomograms(tomoFiles=cls.tomoFiles, sRate=cls.sRate)
-
-    def testBinTomograms(self):
-        binnedTomograms = super().runBinTomograms(self.importedTomos, binning=self.binningFactor)
-        # Check the results
-        self.assertSetSize(binnedTomograms, 1)
-        self.assertEqual(binnedTomograms.getSamplingRate(), self.bin2SRate)
-        self.assertTrue(np.array_equal(np.array(binnedTomograms.getDimensions()), self.origSize / self.binningFactor))
 
 
 # class TestDynamoCoordsToModel(TestDynamoStaBase):
