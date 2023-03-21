@@ -45,6 +45,8 @@ class TestSubtomoExtractionCombinedWithCoordExtraction(TestDynamoStaBase):
     bin2SRate = None
     nParticles = None
     unbinnedSRate = None
+    excludingBoxSize = 150
+    excludedParticles = [34, 35, 36, 37]
 
     @classmethod
     def setUpClass(cls):
@@ -72,6 +74,9 @@ class TestSubtomoExtractionCombinedWithCoordExtraction(TestDynamoStaBase):
             boxSize=cls.bin2BoxSize)
         cls.subtomosSameAsPicking = super().runExtractSubtomograms(cls.coordsImported,
                                                                    boxSize=cls.bin2BoxSize)
+        # Extraction with a very box size so some particles are removed as part of the box lay out of the tomo
+        cls.subtomosSameAsPicking = super().runExtractSubtomograms(cls.coordsImported,
+                                                                   boxSize=cls.excludingBoxSize)
         cls.subtomosAnotherTomo = super().runExtractSubtomograms(cls.coordsImported,
                                                                  tomoSource=OTHER,
                                                                  tomograms=cls.tomoImported,
@@ -90,6 +95,16 @@ class TestSubtomoExtractionCombinedWithCoordExtraction(TestDynamoStaBase):
         return coordsExtracted
 
     def test_extractParticlesSameAsPicking(self):
+        # The imported 3d coordinates were picked from the binned tomogram
+        super().checkExtractedSubtomos(self.coordsImported,
+                                       self.subtomosSameAsPicking,
+                                       expectedSetSize=self.nParticles - len(self.excludedParticles),
+                                       expectedSRate=self.bin2SRate,
+                                       expectedBoxSize=self.bin2BoxSize,
+                                       convention=TR_DYNAMO,
+                                       orientedParticles=True)  # Picked with PySeg
+
+    def test_extractParticlesWithSomeExcluded(self):
         # The imported 3d coordinates were picked from the binned tomogram
         super().checkExtractedSubtomos(self.coordsImported,
                                        self.subtomosSameAsPicking,

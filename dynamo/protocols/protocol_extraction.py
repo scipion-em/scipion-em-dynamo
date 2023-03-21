@@ -27,11 +27,12 @@
 import copy
 import glob
 from enum import Enum
-from os.path import abspath, join
+from os.path import abspath, join, dirname, basename
 from dynamo.utils import getCatalogFile
 from pwem.objects import Transform
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
+from pyworkflow.object import String
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam
 from pyworkflow.utils import removeExt
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
@@ -40,6 +41,9 @@ from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
 from tomo.protocols import ProtTomoBase
 from tomo.utils import scaleTrMatrixShifts
+
+
+CROP_DIR = 'Crop'
 
 # Tomogram type constants for particle extraction
 SAME_AS_PICKING = 0
@@ -59,12 +63,14 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.dynamoTomoIdDict = None
+        self.dynamoTomoIdDict = {}
         self.scaleFactor = None
         self.tomoTsIdDict = None
         self.coordsFileName = None
         self.anglesFileName = None
         self.cropDirName = None
+        self.coordList = []
+        self.removedCoordsIndices = String()
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -113,7 +119,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        self.cropDirName = self._getExtraPath('Crop')
+        self.cropDirName = self._getExtraPath(CROP_DIR)
         # Get the intersection between the tomograms and coordinates provided (this covers possible subsets made)
         inTomos = self.getInputTomograms()
         inCoords = self.inputCoordinates.get()
@@ -131,20 +137,35 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
     def writeSetOfCoordinates3D(self):
         # Write the VLL file, the coords file and the angles file as expected by Dynamo
         listTomoFile = self._getExtraPath(VLL_FILE)
-        self.dynamoTomoIdDict = {}
+        tomoDims = self.getInputTomograms().getDimensions()
+        removedCoordsIndices = []
         with open(self.coordsFileName, "w") as outC, open(self.anglesFileName, 'w') as outA, \
                 open(listTomoFile, 'w') as tomoFid:
             for idt, tomo in enumerate(self.tomoTsIdDict.values()):
-                self.dynamoTomoIdDict[idt + 1] = tomo
+                self.dynamoTomoIdDict[idt + 1] = tomo.getFileName()
                 tomoPath = abspath(tomo.getFileName())
                 tomoFid.write(tomoPath + '\n')
-                for coord3DSet in self.inputCoordinates.get().iterCoordinates(tomo):
-                    angles_coord = matrix2eulerAngles(coord3DSet.getMatrix())
-                    x = self.scaleFactor * coord3DSet.getX(BOTTOM_LEFT_CORNER)
-                    y = self.scaleFactor * coord3DSet.getY(BOTTOM_LEFT_CORNER)
-                    z = self.scaleFactor * coord3DSet.getZ(BOTTOM_LEFT_CORNER)
+                for coord in self.inputCoordinates.get().iterCoordinates(tomo):
+                    angles_coord = matrix2eulerAngles(coord.getMatrix())
+                    x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
+                    y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
+                    z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
+                    if self.isParticleOutOfTomo((x, y, z), tomoDims):
+                        removedCoordsIndices.append(coord.getObjId())
+                        continue
                     outC.write("%.2f\t%.2f\t%.2f\t%i\n" % (x, y, z, idt + 1))
                     outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
+                    # Add the coordinates of each in-tomo particle to a list that will be used in the CreateOutputStep
+                    # to avoid index mismatching by preventing the particles out of the tomograms to be sent to be
+                    # processed by Dynamo
+                    self.coordList.append(coord.clone())
+        if not self.coordList:
+            raise Exception("All the coordinates were removed (This is because the box associated to those "
+                            "coordinates partially or totally lay out of the corresponding tomogram. A good way to "
+                            "avoid this is to decreae the box size)")
+        if self.removedCoordsIndices:
+            self.removedCoordsIndices.set(" ".join(map(str, removedCoordsIndices)))
+            self._store(self.removedCoordsIndices)
 
     def launchDynamoExtractStep(self):
         codeFilePath = self.writeMatlabCode()
@@ -165,24 +186,18 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         outSubtomos._coordsPointer = self.inputCoordinates
         if self.getInputTomograms().getFirstItem().getAcquisition():
             outSubtomos.setAcquisition(self.getInputTomograms().getFirstItem().getAcquisition())
-
-        for ind, currentTomo in self.dynamoTomoIdDict.items():
-            currentParticlesDir = join(self.cropDirName + str(ind))
-            currentTomoFName = currentTomo.getFileName()
-            currentSubtomoFiles = sorted(glob.glob(join(currentParticlesDir, '*.mrc')))
-            currentCoords = [coord.clone() for coord in self.inputCoordinates.get().iterCoordinates(currentTomo)]
-            for i, subtomoFile in enumerate(currentSubtomoFiles):
-                subtomogram = SubTomogram()
-                transform = Transform()
-                currentCoord = currentCoords[i]
-                subtomogram.setSamplingRate(finalSRate)
-                subtomogram.setFileName(subtomoFile)
-                subtomogram.setVolName(currentTomoFName)
-                subtomogram.setCoordinate3D(currentCoord)
-                trMatrix = copy.copy(currentCoord.getMatrix())
-                transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
-                subtomogram.setTransform(transform, convention=TR_DYNAMO)
-                outSubtomos.append(subtomogram)
+        currentSubtomoFiles = sorted(glob.glob(self._getExtraPath('**', '*.mrc')))
+        for currentCoord, subtomoFile in zip(self.coordList, currentSubtomoFiles):
+            subtomogram = SubTomogram()
+            transform = Transform()
+            subtomogram.setSamplingRate(finalSRate)
+            subtomogram.setFileName(subtomoFile)
+            subtomogram.setVolName(self.getTomogramFileFromSubtomoFile(subtomoFile))
+            subtomogram.setCoordinate3D(currentCoord)
+            trMatrix = copy.copy(currentCoord.getMatrix())
+            transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
+            subtomogram.setTransform(transform, convention=TR_DYNAMO)
+            outSubtomos.append(subtomogram)
 
         if len(outSubtomos) == 0:
             raise "No particles were generated. Please check if Crop directories exist in this protocol's extra " \
@@ -223,6 +238,31 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
         return codeFilePath
 
+    def isParticleOutOfTomo(self, scaledXYZ: tuple, tomoDims: tuple) -> bool:
+        """Dynamo skips the particles whose box size or part of it is out of the tomogram. For example if a particle is
+        located 10 voxels from one of the tomogram edges and the box size introduced is 30 voxels (15 up and down, left
+        and right, from the coordinate) the part of the box corresponding to the 5 voxels out of the tomogram would
+        cut out of the tomogram and Dynamo would skip it. Coordinates are assumed to be at the same size scale as the
+        tomograms from which they are going to be extracted
+
+        :param scaledXYZ: a tuple containing the properly scaled x, y, and z coordinates of a coordinate.
+        :param tomoDims: a tuple with the width, height and thickness of the tomograms from which the particles will be
+        extracted."""
+        halfBoxSize = self.boxSize.get() / 2
+        coordX, coordY, coordZ = scaledXYZ[:]
+        tomoWidth, tomoHeight, tomoThickness = tomoDims[:]
+        outCheckList = [abs(coordX) + halfBoxSize > tomoWidth,
+                        abs(coordY) + halfBoxSize > tomoHeight,
+                        abs(coordZ) + halfBoxSize > tomoThickness]
+        return True if any(outCheckList) else False
+
+    def getTomogramFileFromSubtomoFile(self, subtomoFile):
+        """Dynamo generates, for each tomogram, a directory named CropN, where N is the number of the tomogram (stored
+         by Scipion as keys in self.dynamoTomoIdDict). This method gets N from the directory name in which the given
+         subtomogram filename is stored and uses it to get the tomgram value corresponding to that key from the
+         mentioned dictionary."""
+        return self.dynamoTomoIdDict[int(basename(dirname(subtomoFile)).replace(CROP_DIR, ''))]
+
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):
         methodsMsgs = []
@@ -240,7 +280,17 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         return methodsMsgs
 
     def _summary(self):
-        summary = ["Tomogram source: *%s*" % self.getEnumText("tomoSource")]
-        if self.doInvert:
-            summary.append('*Contrast was inverted.*')
+        summary = []
+        if self.isFinished():
+            inCoordsSize = self.inputCoordinates.get().getSize()
+            outCoordsSize = getattr(self, self._possibleOutputs.subtomograms.name).getSize()
+            summary.append("Tomogram source: *%s*" % self.getEnumText("tomoSource"))
+            if inCoordsSize > outCoordsSize:
+                summary.append('*%i coordinates were removed* (This is because the box associated to those '
+                               'coordinates partially or totally lay out of the corresponding tomogram. A good way to '
+                               'avoid this is to decreae the box size).\nRemoved coordinates ids: %s.' %
+                               (inCoordsSize - outCoordsSize, self.removedCoordsIndices.get()))
+
+            if self.doInvert:
+                summary.append('*Contrast was inverted.*')
         return summary
