@@ -39,6 +39,7 @@ class TestSubtomoExtractionCombinedWithCoordExtraction(TestDynamoStaBase):
     coordsImported = None
     tomosBinned = None
     subtomosSameAsPicking = None
+    subtomosSameAsPickingExcl = None
     subtomosAnotherTomo = None
     bin2BoxSize = None
     unbinnedBoxSize = None
@@ -75,7 +76,7 @@ class TestSubtomoExtractionCombinedWithCoordExtraction(TestDynamoStaBase):
         cls.subtomosSameAsPicking = super().runExtractSubtomograms(cls.coordsImported,
                                                                    boxSize=cls.bin2BoxSize)
         # Extraction with a very box size so some particles are removed as part of the box lay out of the tomo
-        cls.subtomosSameAsPicking = super().runExtractSubtomograms(cls.coordsImported,
+        cls.subtomosSameAsPickingExcl = super().runExtractSubtomograms(cls.coordsImported,
                                                                    boxSize=cls.excludingBoxSize)
         cls.subtomosAnotherTomo = super().runExtractSubtomograms(cls.coordsImported,
                                                                  tomoSource=OTHER,
@@ -98,7 +99,7 @@ class TestSubtomoExtractionCombinedWithCoordExtraction(TestDynamoStaBase):
         # The imported 3d coordinates were picked from the binned tomogram
         super().checkExtractedSubtomos(self.coordsImported,
                                        self.subtomosSameAsPicking,
-                                       expectedSetSize=self.nParticles - len(self.excludedParticles),
+                                       expectedSetSize=self.nParticles,
                                        expectedSRate=self.bin2SRate,
                                        expectedBoxSize=self.bin2BoxSize,
                                        convention=TR_DYNAMO,
@@ -107,10 +108,10 @@ class TestSubtomoExtractionCombinedWithCoordExtraction(TestDynamoStaBase):
     def test_extractParticlesWithSomeExcluded(self):
         # The imported 3d coordinates were picked from the binned tomogram
         super().checkExtractedSubtomos(self.coordsImported,
-                                       self.subtomosSameAsPicking,
-                                       expectedSetSize=self.nParticles,
+                                       self.subtomosSameAsPickingExcl,
+                                       expectedSetSize=self.nParticles - len(self.excludedParticles),
                                        expectedSRate=self.bin2SRate,
-                                       expectedBoxSize=self.bin2BoxSize,
+                                       expectedBoxSize=self.excludingBoxSize,
                                        convention=TR_DYNAMO,
                                        orientedParticles=True)  # Picked with PySeg
 
