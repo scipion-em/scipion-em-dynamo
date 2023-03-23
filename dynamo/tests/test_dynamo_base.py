@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from dynamo.protocols import DynamoBinTomograms
+from dynamo.protocols import DynamoBinTomograms, DynamoProtAvgSubtomograms
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING, OTHER, DynamoExtraction
 from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr
@@ -99,6 +99,15 @@ class TestDynamoStaBase(TestBaseCentralizedLayer):
             subtomosExtracted = getattr(protTomoExtraction, protTomoExtraction._possibleOutputs.subtomograms.name, None)
             cls.assertIsNotNone(subtomosExtracted, "There was a problem with the subtomogram extraction")
             return subtomosExtracted
+
+    @classmethod
+    def runAverageSubtomograms(cls, inSubtomos):
+        print(magentaStr("\n==> Averaging the subtomograms:"))
+        protAvgSubtomo = cls.newProtocol(DynamoProtAvgSubtomograms, inSubtomos=inSubtomos)
+        cls.launchProtocol(protAvgSubtomo)
+        avg = getattr(protAvgSubtomo, protAvgSubtomo._possibleOutputs.average.name, None)
+        cls.assertIsNotNone(avg, "There was a problem with the subtomogram averaging")
+        return avg
 
 
 

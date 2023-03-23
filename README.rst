@@ -1,6 +1,6 @@
-=======================
-Scipion - Dynamo plugin
-=======================
+=========================
+Scipion plugin for Dynamo
+=========================
 
 .. image:: https://img.shields.io/pypi/v/scipion-em-dynamo.svg
         :target: https://pypi.python.org/pypi/scipion-em-dynamo
@@ -60,7 +60,7 @@ The integrated protocols are:
 
 5. model workflow: apply a geometry model to a set of meshes, normally the result of the vectorial picking protocol.
 
-6. subtomogram alignment: it also allows multi-reference alignment.
+6. subtomogram alignment.
 
 =====
 Tests
@@ -70,13 +70,13 @@ The installation can be checked out running some tests. To list all of them, exe
 
 .. code-block::
 
-     scipion3 tests --show --grep dynamo
+     scipion3 tests --grep dynamo
 
 To run all of them, execute:
 
 .. code-block::
 
-     scipion3 tests --grep dynamo
+     scipion3 tests --grep dynamo --run
 
 To run a specific test, for example, the tests to check the protocol for averaging subtomograms (the following command
 can be copied from the test list displayed when listing the tests, as explained above):

@@ -24,11 +24,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from dynamo.protocols import DynamoProtAvgSubtomograms
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING
 from dynamo.tests.test_dynamo_base import TestDynamoStaBase
 from pyworkflow.tests import DataSet
-from pyworkflow.utils import magentaStr
 from tomo.tests import EMD_10439, DataSetEmd10439
 
 
@@ -65,15 +63,8 @@ class TestDynamoAverageSubtomograms(TestDynamoStaBase):
                                               tomoSource=SAME_AS_PICKING,
                                               boxSize=cls.bin2BoxSize)
 
-    @classmethod
-    def runAverageSubtomograms(cls):
-        print(magentaStr("\n==> Averaging the subtomograms:"))
-        protAvgSubtomo = cls.newProtocol(DynamoProtAvgSubtomograms, inSubtomos=cls.subtomosExtracted)
-        cls.launchProtocol(protAvgSubtomo)
-        return getattr(protAvgSubtomo, protAvgSubtomo._possibleOutputs.average.name, None)
-
     def test_average(self):
-        avg = self.runAverageSubtomograms()  # The imported coordinates correspond to a binned 2 tomogram
+        avg = super().runAverageSubtomograms(self.subtomosExtracted)  # The imported coords correspond to a bin 2 tomo
         super().checkAverage(avg,
                              expectedSRate=DataSetEmd10439.bin2SRate.value,
                              expectedBoxSize=self.bin2BoxSize,

@@ -48,6 +48,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
     The subtomograms files are generated in the same directory as the .tbl file, one for each tomogram."""
 
     _label = 'import subtomograms from tbl files'
+    _possibleOutputs = DynImportSubtomosOuts
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

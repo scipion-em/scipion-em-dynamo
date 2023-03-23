@@ -27,12 +27,13 @@
 # **************************************************************************
 from enum import Enum
 from os.path import join, abspath
-from pwem.objects.data import Volume, SetOfVolumes
+import numpy as np
+from pwem.objects.data import SetOfVolumes
 from pyworkflow import BETA
 from pyworkflow.object import Set, String
 from pyworkflow.protocol import GPU_LIST, USE_GPU
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, LEVEL_ADVANCED, \
-    NumericListParam, Form, FloatParam
+    NumericListParam, Form
 from pyworkflow.utils import Message
 from pyworkflow.utils.path import makePath
 from dynamo import Plugin
@@ -50,6 +51,19 @@ DATADIR_NAME = "data"
 MASKSDIR_NAME = "masks"
 TEMPLATESDIR_NAME = 'templates'
 
+# Particles for averaging thresholding modes
+NO_THRESHOLD = 0
+ABS_THRESHOLD = 1
+EFF_THRESHOLD_1 = 2
+EFF_THRESHOLD_2 = 3
+AVG_THRESHOLD_MODES = [NO_THRESHOLD, ABS_THRESHOLD, EFF_THRESHOLD_1, EFF_THRESHOLD_2]
+
+# Area search modes
+NO_LIMITS = 0
+CENTER_OF_THE_BOX = 1
+FROM_PREVIOUS_ESTIMATION = 2
+AREA_SEARCH_MODES = [NO_LIMITS, CENTER_OF_THE_BOX, FROM_PREVIOUS_ESTIMATION]
+
 
 class DynRefineOuts(Enum):
     subtomograms = SetOfSubTomograms
@@ -57,7 +71,7 @@ class DynRefineOuts(Enum):
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
-    """ This protocol will align subtomograms using Dynamo MRA Subtomogram Averaging"""
+    """This protocol will align subtomograms using Dynamo"""  # MRA Subtomogram Averaging"""
 
     _label = 'Subtomogram alignment'
     _devStatus = BETA
@@ -92,9 +106,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addParam('templateRef', PointerParam,
                       pointerClass='Volume, SubTomogram',
                       label="Template",
-                      allowsNull=True,
-                      help='The size of the template should be equal or smaller than the size of the particles. If you '
-                           'pass a single file in multi-reference modus (MRA), Dynamo will just made copies of it.')
+                      help='The size of the template should be equal or smaller than the size of the particles.')  # If you '
+        # 'pass a single file in multi-reference modus (MRA), Dynamo will just made copies of it.')
         form.addBooleanParam('useDynamoGui', 'Launch dynamo GUI',
                              default=False,
                              expertLevel=LEVEL_ADVANCED,
@@ -105,20 +118,21 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       label='Symmetry group (R)',
                       help="Specify the article's symmetry. Symmetrization is applied at the beginning of the round to "
                            "the input reference.")
-        form.addParam('numberOfIters',
-                      NumericListParam,
-                      label='Iterations', default=5,
+        form.addParam('numberOfIters', NumericListParam,
+                      label='Iterations (R)',
+                      default=5,
                       help="Number of iterations per round (R)")
         form.addParam('dim', NumericListParam,
                       label='Particle dimensions (R)',
                       default=DEFAULT_DIM,
-                      help="Leave 0 to use the size of your particle; If you put a lower value the particles will be "
-                           "downsampled for the particular round. This will speed up the process. E.g.: 64 128 128")
-        form.addParam('pca', BooleanParam,
-                      label='Perform PCA',
-                      default=False,
-                      help="If selected, principal component analysis (PCA) is carried out.")
-
+                      help="If only one round, leave 0 to use the size of your particle. If working with multiple "
+                           "rounds, the size of the particles for each round must be explicitly specified. This can be "
+                           "use, for example, to reduce the particles size for a particular round and increase the "
+                           "speed. E.g.: 64 128 128.")
+        # form.addParam('pca', BooleanParam,
+        #               label='Perform PCA',
+        #               default=False,
+        #               help="If selected, principal component analysis (PCA) is carried out.")
         # form.addSection(label='Initial density')
         # form.addParam('compensateMissingWedge', BooleanParam,
         #               label='Compensate for missing wedge',
@@ -129,7 +143,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
         form.addSection(label='Masks')
         form.addParam('alignMask', PointerParam,
-                      pointerClass='Volume, SetOfVolumes',
+                      pointerClass='Volume',  # SetOfVolumes',
                       label="Alignment mask (opt)",
                       allowsNull=True,
                       help='This is the MOST important mask from the different types that can be used by Dynamo. '
@@ -139,13 +153,14 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'The rotated and shifted template is compared to the data particle only inside this moving '
                            'region. See more details in '
                            'https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Alignment_mask.')
+        # TODO: only for MRA --> uncomment when it's offered again
         # form.addParam('cmask', PointerParam,
         #               pointerClass='Volume, SetOfVolumes',
         #               label="Classification mask (opt)",
         #               allowsNull=True,
         #               condition='Only for multirreference')
         form.addParam('fmask', PointerParam,
-                      pointerClass='Volume, SetOfVolumes',
+                      pointerClass='Volume',  # SetOfVolumes',
                       label="Fourier mask on reference (opt)",
                       allowsNull=True,
                       help='Used in very few special cases. The Fourier Mask that you define on a template during an '
@@ -154,7 +169,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'details in '
                            'https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Fourier_mask_on_template.')
         form.addParam('smask', PointerParam,
-                      pointerClass='Volume, SetOfVolumes',
+                      pointerClass='Volume',  # SetOfVolumes',
                       label="FSC mask (smoothing mask) (opt)",
                       allowsNull=True,
                       help='Used in the context of adaptive bandpass filtering. This procedure needs an automatic '
@@ -182,29 +197,29 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            "cone involves only two Euler angles (tdrot and tilt).\n\n"
                            "’cone_sampling’ is the step inside the cone defined by ´cone_range´, also in degrees. "
                            "The orientations are generated so as to provide an uniform coverage.")
-        form.addParam('cf', NumericListParam,
-                      label='Cone flip (R)',
-                      default=0,
-                      expertLevel=LEVEL_ADVANCED,
-                      help="Generates a mirrored scanning geometry: the 'cone' of directions is complemented with the "
-                           "diametrally oposed cone. This is useful when averaging elongated particles in the case in "
-                           "which the direction of each one is not certain, i.e., the initial table catches the overall"
-                           " orientation of each particle, but it is not certain on which end is the 'head' and which "
-                           "is the 'tail', so that the refinement should allow 'flippling' the particles (but still "
-                           "produce a scanning set of angles concentrated along the axis of the particle). 0:  No "
-                           "inversion of the cone (default!) 1:  The cone is inverted only for the coarsest level of "
-                           "the multigrid refinement 2:  The cone is inverted for all refinement levels")
-        form.addParam('ccp', IntParam,
-                      label='Cone check peak',
-                      default=0,
-                      expertLevel=LEVEL_ADVANCED,
-                      help="Controls peak quality inside the scanned directions. Useful when the particles are in close"
-                           " contact with some feature of high intensity. Ensures that only angles yielding a real peak"
-                           " will be considered. If the angle that yields the maximum of CC is in the boundary, the "
-                           "particle will get aligned with its original alignment parameters. Values: 0: normal "
-                           "behaviour (no peak quality control, default) any integer  : degrees that define the peak. A"
-                           " maximum occurring within this distance to the boundary of the defined cone will be "
-                           "discarded.")
+        # form.addParam('cf', NumericListParam,
+        #               label='Cone flip (R)',
+        #               default=0,
+        #               expertLevel=LEVEL_ADVANCED,
+        #               help="Generates a mirrored scanning geometry: the 'cone' of directions is complemented with the "
+        #                    "diametrally oposed cone. This is useful when averaging elongated particles in the case in "
+        #                    "which the direction of each one is not certain, i.e., the initial table catches the overall"
+        #                    " orientation of each particle, but it is not certain on which end is the 'head' and which "
+        #                    "is the 'tail', so that the refinement should allow 'flippling' the particles (but still "
+        #                    "produce a scanning set of angles concentrated along the axis of the particle). 0:  No "
+        #                    "inversion of the cone (default!) 1:  The cone is inverted only for the coarsest level of "
+        #                    "the multigrid refinement 2:  The cone is inverted for all refinement levels")
+        # form.addParam('ccp', IntParam,
+        #               label='Cone check peak',
+        #               default=0,
+        #               expertLevel=LEVEL_ADVANCED,
+        #               help="Controls peak quality inside the scanned directions. Useful when the particles are in close"
+        #                    " contact with some feature of high intensity. Ensures that only angles yielding a real peak"
+        #                    " will be considered. If the angle that yields the maximum of CC is in the boundary, the "
+        #                    "particle will get aligned with its original alignment parameters. Values: 0: normal "
+        #                    "behaviour (no peak quality control, default) any integer  : degrees that define the peak. A"
+        #                    " maximum occurring within this distance to the boundary of the defined cone will be "
+        #                    "discarded.")
         form.addParam('inplane_range', NumericListParam,
                       label='Inplane rotation range (R)',
                       default=360,
@@ -221,91 +236,90 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'the new orientation of its axis. This involves only the ‘narot’ angle.\n\n'
                            'The project parameter ‘inplane_range’ defines the angular interval to be scanned around '
                            'the old value of narot, and ‘inplane_sampling’ defines the interval.')
-        form.addParam('inplane_flip', NumericListParam,
-                      label='Inplane flip (R)',
-                      default=0,
-                      expertLevel=LEVEL_ADVANCED,
-                      help='Flips the set of inplane rotations. The set of inplane rotations to scan will be the '
-                           'original set plus the flipped orientations.This is useful when the particles have a '
-                           'directionality, but it is not very well defined. Values'
-                           '\n\t0  :  no flip.'
-                           '\n\t(default) 1  :  flips the coarsest level  in the multilevel grid   2  :  flips the '
-                           'full set (all levels).')
-        form.addParam('inplane_check_peak', IntParam,
-                      label='Inplane check peak',
-                      default=0,
-                      expertLevel=LEVEL_ADVANCED,
-                      help="Controls peak quality along the inplane rotation. Useful when the particles are in close "
-                           "contact with some feature of high intensity. Ensures that only angles yielding a real peak "
-                           "will be considered. If the angle that yields the maximum of CC is in the boundary, the "
-                           "particle will get aligned with its original alignment parameters. Values:"
-                           "\n\t0  : normal behaviour (no peak quality control, default)."
-                           "\n\tany integer  : degrees that define the peak. A maximum occurring within this distance "
-                           "to the boundary of the defined range for inplane rotations will be discarded.")
-        form.addParam('rf', IntParam,
+        # form.addParam('inplane_flip', NumericListParam,
+        #               label='Inplane flip (R)',
+        #               default=0,
+        #               expertLevel=LEVEL_ADVANCED,
+        #               help='Flips the set of inplane rotations. The set of inplane rotations to scan will be the '
+        #                    'original set plus the flipped orientations.This is useful when the particles have a '
+        #                    'directionality, but it is not very well defined. Values'
+        #                    '\n\t0  :  no flip.'
+        #                    '\n\t(default) 1  :  flips the coarsest level  in the multilevel grid   2  :  flips the '
+        #                    'full set (all levels).')
+        # form.addParam('inplane_check_peak', IntParam,
+        #               label='Inplane check peak',
+        #               default=0,
+        #               expertLevel=LEVEL_ADVANCED,
+        #               help="Controls peak quality along the inplane rotation. Useful when the particles are in close "
+        #                    "contact with some feature of high intensity. Ensures that only angles yielding a real peak "
+        #                    "will be considered. If the angle that yields the maximum of CC is in the boundary, the "
+        #                    "particle will get aligned with its original alignment parameters. Values:"
+        #                    "\n\t0  : normal behaviour (no peak quality control, default)."
+        #                    "\n\tany integer  : degrees that define the peak. A maximum occurring within this distance "
+        #                    "to the boundary of the defined range for inplane rotations will be discarded.")
+        form.addParam('rf', NumericListParam,
                       default=5,
-                      label='Refine iterations per particle',
+                      label='Refine iterations per particle (R)',
                       expertLevel=LEVEL_ADVANCED,
                       help="How many refinement iterations are carried out on each single particle. This refinement "
                            "when comparing rotations of the reference against the data, takes the best orientation and "
                            "looks again with a finer sampling. The sampling in the refined search will be half of the "
                            "sampling used in the original one.  The range of the refined search encompasses all the "
                            "orientations that neighobur the best orientation found in the original search.")
-        form.addParam('rff', IntParam,
-                      label='Refine factor',
+        form.addParam('rff', NumericListParam,
+                      label='Refine factor (R)',
                       default=2,
                       expertLevel=LEVEL_ADVANCED,
                       help="Controls the size of the angular neighborhood during the local refinement of the angular "
                            "grid.")
 
-        form.addSection(label='Threshold')
+        form.addSection(label='Thresholding')
         form.addParam('separation', IntParam,
-                      label='Separation in tomogram',
+                      label='Separation in tomogram [pix.] (R)',
                       default=0,
                       help='When tuned to  positive number, it will check the relative positions (positions in the '
                            'tomogram+shifts) of all the particles in each tomogram separately. Whenever two particles '
                            'are closer together than "separation_in_tomogram", only the particle with the higher '
                            'correlation will stay.')
-        form.addParam('threshold', FloatParam,
-                      label='Threshold',
+        form.addParam('thresholdMode', NumericListParam,
+                      default=NO_THRESHOLD,
+                      label='Threshold I mode (R)',
+                      help='Specify which particles contribute to the average at the end of each iteration. '
+                           'Different thresholding policies can be used to select particles according to their CC '
+                           'value. Thus value of the "threshold" parameter you input  (denoted as THRESHOLD below) '
+                           'will be interpreted differently depending on the "threshold_modus" defined here.\n\n'
+                           'Possible values of the thresholding policy "threshold_modus":\n'
+                           '\n\t* 0: no thresholding policy'
+                           '\n\t* 1: THRESHOLD is an absolute threshold (only particles with CC above this value are '
+                           'selected).'
+                           '\n\t* 2: effective threshold = mean(CC) * THRESHOLD.'
+                           '\n\t* 3: effective threshold = mean(CC) + std(CC) * THRESHOLD.')
+        # '\n\t* 4: THRESHOLD is the total number of particles (ordered by CC ).'
+        # '\n\t* 5: THRESHOLD ranges between 0 and 1  and sets the fraction of particles.'
+        # '\n\t* 11,21,31,34,41,51: select the same particles as 1,2,3,4 or 5, BUT non selected '
+        # 'particles will be excluded:'
+        # '\n\t\t- from averaging in the present iteration, and'
+        # '\n\t\t- ALSO from alignment in the next iteration (unlike 1,2,3,4,5).')
+        form.addParam('threshold', NumericListParam,
+                      label='Threshold I value (R)',
                       default=0.2,
                       help='Different thresholding policies can be used in order to select which particles are averaged'
                            ' in view of their CC (cross correlation value) . The value of the thresholding parameter '
                            'defined here  will be interpreted differently depending on the "threshold_modus"')
-        form.addParam('thresholdMode', IntParam,
-                      label='Threshold I mode',
-                      default=0,
-                      help='Different thresholding policies can be used to select particles according to their CC '
-                           'value. Thus value of the "threshold" parameter you input  (denoted as THRESHOLD below) '
-                           'will be interpreted differently depending on the "threshold_modus" defined here.\n\n'
-                           'Possible values of the thresholding policy "threshold_modus":\n'
-                           '\n\t* 0: no thesholding policy'
-                           '\n\t* 1: THRESHOLD is an absolute threshold (only particles with CC above this value are '
-                           'selected).'
-                           '\n\t* 2: efective threshold = mean(CC) * THRESHOLD.'
-                           '\n\t* 3: efective threshold = mean(CC) + std(CC) * THRESHOLD.'
-                           '\n\t* 4: THRESHOLD is the total number of particle (ordered by CC ).'
-                           '\n\t* 5: THRESHOLD ranges between 0 and 1  and sets the fraction of particles.'
-                           '\n\t* 11,21,31,34,41,51: select the same particles as 1,2,3,4 or 5, BUT non selected '
-                           'particles will be excluded:'
-                           '\n\t\t- from averaging in the present iteration, and'
-                           '\n\t\t- ALSO from alignment in the next iteration (unlike 1,2,3,4,5).')
-        form.addParam('threshold2', FloatParam,
-                      label='Second threshold',
-                      default=0.2,
-                      expertLevel=LEVEL_ADVANCED,
-                      help="Thresholding II is operated against the average produced by the particles that survived"
-                           "the first thresholding.")
-        form.addParam('thresholdMode2', IntParam,
-                      label='Threshold II mode',
-                      default=0,
-                      expertLevel=LEVEL_ADVANCED,
+        form.addParam('thresholdMode2', NumericListParam,
+                      default=NO_THRESHOLD,
+                      label='Threshold II mode (R)',
                       help="Thresholding II is operated against the average produced by the particles that survived "
                            "the first thresholding. It uses the same syntax as Threshold I")
-        form.addParam('ccmatrix', BooleanParam,
-                      label='Compute  cross-correlation matrix',
-                      default=False,
-                      help="Computation of a Cross-Correlation matrix among the aligned particles.")
+        form.addParam('threshold2', NumericListParam,
+                      label='Threshold II value (R)',
+                      default=0.2,
+                      help="Thresholding II is operated against the average produced by the particles that survived"
+                           "the first thresholding.")
+        # form.addParam('ccmatrix', BooleanParam,
+        #               label='Compute  cross-correlation matrix',
+        #               default=False,
+        #               help="Computation of a Cross-Correlation matrix among the aligned particles.")
         # form.addParam('ccmatrixType', StringParam,
         #               label='Cross-correlation matrix type',
         #               default='align',
@@ -316,41 +330,47 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addParam('ccmatrixBatch', IntParam,
                       label='Cross-correlation matrix batch',
                       default=128,
+                      condition='thresholdMode != %i' % NO_THRESHOLD,
                       expertLevel=LEVEL_ADVANCED,
                       help="Number of particles to be kept in memory simultaneously during the computation of the "
                            "ccmatrix. The larger this number, the more efficient the algorithm performance, as more "
                            "computations can be kept for reuse.However, trying to keep all the particles in memory can "
                            "lead to saturate it,blocking the CPU. Additionally, a small batch allows to divide the "
                            "matrix in more blocks. This might be useful in parallel computations.")
-        form.addParam('low', NumericListParam, label='Low frequency (R)', default=32,
-                      expertLevel=LEVEL_ADVANCED, help='Cut off frequency for low pass filtering')
-        form.addParam('high', NumericListParam, label='High frequency (R)', default=2,
-                      expertLevel=LEVEL_ADVANCED, help='Cut off frequency for high pass filtering')
-        form.addParam('lim', NumericListParam, label='Area search (R)', default='4 4 4', expertLevel=LEVEL_ADVANCED,
-                      help='Restricts the search area to an ellipsoid centered and oriented in the last found position.'
-                           ' The three parameters are the semiaxes of the ellipsoid. If a single parameter is '
-                           'introduced, the ellipsoid collapses into a sphere. If no restriction should be imposed, put'
-                           ' a zero on the "area search modus" parameter')
-        form.addParam('limm', IntParam, label='Area search modus', default=0, expertLevel=LEVEL_ADVANCED,
-                      help='States how exactly the shifts (area search) will be interpreted 0:  no limitations (can '
-                           'easily produce artifacts if the initial reference is bad) 1:  limits are understood from '
-                           'the center of the particle cube. 2:  limits are understood from the previous estimation on '
-                           'the particle position (i.e., the shifts available in the table) With this option, the '
-                           'origin of the shifts changes at every iteration. 3:  limits are understood from the '
-                           'estimation provided for the first iteration of the round. The origin of the shifts will '
-                           'change at each round. 4:  limits are understood from the estimation provided for the first '
-                           'iteration')
-
+        form.addParam('limm', NumericListParam,
+                      default=NO_LIMITS,
+                      label='Area search mode (R)',
+                      help='States how exactly the shifts (area search) will be interpreted:\n'
+                           '\n\t* 0:  no limitations (can easily produce artifacts if the initial reference is bad).'
+                           '\n\t* 1:  limits are understood from the center of the particle cube.'
+                           '\n\t* 2:  limits are understood from the previous estimation on the particle position '
+                           '(i.e., the shifts available) With this option, the origin of the shifts changes at every '
+                           'iteration.')
+        form.addParam('lim', NumericListParam,
+                      label='Area search (R)',
+                      condition='limm',
+                      default='4',
+                      # TODO: manage this properly or directly offer only the sphere
+                      help='Restricts the search area to an ellipsoid centered and oriented in the last found '
+                           'position. The three parameters are the semi-axes of the ellipsoid.')
+        form.addParam('low', NumericListParam,
+                      label='Low frequency (R)',
+                      default=32,
+                      help='Cut off frequency for low pass filtering')
+        form.addParam('high', NumericListParam,
+                      label='High frequency (R)',
+                      default=2,
+                      help='Cut off frequency for high pass filtering')
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
-        self.doMra = isinstance(self.templateRef.get(), SetOfVolumes)
+        # self.doMra = isinstance(self.templateRef.get(), SetOfVolumes)
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.alignStep)
         self._insertFunctionStep(self.createOutputStep)
-        if self.doMra:
-            self._insertFunctionStep(self.closeSetsStep)
+        # if self.doMra:
+        #     self._insertFunctionStep(self.closeSetsStep)
 
     # --------------------------- STEPS functions -------------------------------
 
@@ -406,32 +426,45 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         command += self.get_dvput("apix", self.inputVolumes.get().getSamplingRate())
         command += self.getRoundParams('sym', self.sym, caster=str)
         command += self.getRoundParams("ite", self.numberOfIters)
-        command += self.get_dvput('mra', int(self.doMra))
-        command += self.get_dvput('pcas', int(self.pca.get()))
+        # command += self.get_dvput('mra', int(self.doMra))
+        # command += self.get_dvput('pcas', int(self.pca.get()))
+        # --- Angular scanning ---
         command += self.getRoundParams("cr", self.cr)
         command += self.getRoundParams("cs", self.cs)
-        command += self.getRoundParams("cf", self.cf)
-        command += self.get_dvput('ccp', self.ccp)
-        command += self.get_dvput('rf', self.rf)
-        command += self.get_dvput('rff', self.rff)
+        # command += self.getRoundParams("cf", self.cf)
+        # command += self.get_dvput('ccp', self.ccp)
+        command += self.getRoundParams('rf', self.rf)
+        command += self.getRoundParams('rff', self.rff)
         command += self.getRoundParams("ir", self.inplane_range)
         command += self.getRoundParams("is", self.inplane_sampling)
-        command += self.getRoundParams("if", self.inplane_flip)
-        command += self.get_dvput('icp', self.inplane_check_peak)
-        command += self.get_dvput('thr', self.threshold)
-        command += self.get_dvput('thrm', self.thresholdMode)
-        command += self.get_dvput('thr2', self.threshold2)
-        command += self.get_dvput('thr2m', self.thresholdMode2)
-        command += self.get_dvput('ccms', int(self.ccmatrix.get()))
-        command += self.get_dvput('ccmt', 'align')
-        command += self.get_dvput('batch', self.ccmatrixBatch)
+        # command += self.getRoundParams("if", self.inplane_flip)
+        # command += self.get_dvput('icp', self.inplane_check_peak)
+        # --- Thresholding ---
         command += self.get_dvput('stm', self.separation)
+        if not self.anyValActiveInNumListParam(self.thresholdMode) \
+                and not self.anyValActiveInNumListParam(self.thresholdMode2) \
+                and not self.anyValActiveInNumListParam(self.limm):
+            # Don't compute the CC matrix
+            command += self.get_dvput('ccms', 0)
+        else:
+            # CC matrix stuff
+            command += self.get_dvput('ccms', 1)
+            command += self.get_dvput('ccmt', 'align')
+            command += self.get_dvput('batch', self.ccmatrixBatch)
+            # Thresholding stuff
+            command += self.getRoundParams('thrm', self.thresholdMode)
+            command += self.getRoundParams('thr', self.threshold, caster=float)
+            command += self.getRoundParams('thr2m', self.thresholdMode2)
+            command += self.getRoundParams('thr2', self.threshold2, caster=float)
+        # --- Area search ---
+        command += self.getRoundParams('limm', self.limm)
+        command += self.getRoundParams('lim', self.lim)
+        # --- Filtering ---
         command += self.getRoundParams('low', self.low)
         command += self.getRoundParams('high', self.high)
-        command += self.get_dvput('lim', self.lim)
-        command += self.get_dvput('limm', self.limm)
-        command += self.get_dvput('mwa', self.numberOfThreads.get())  # Cores used to calculate the average in each iter
 
+        # --- Processing software + hardware resources ---
+        command += self.get_dvput('mwa', self.numberOfThreads.get())  # Cores used to calculate the average in each iter
         if self.useGpu.get():
             # Param 'cores' is used to specify the number of CPUs involved in the alignment. If GPU is used, Dynamo
             # only works well setting it to 1.
@@ -465,7 +498,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         with open(self._getExtraPath(IMPORT_CMD_FILE), 'w') as fhCommands:
             content = "dcp.new('%s', 'data', '%s', 'gui', 0)\n" % (DYNAMO_ALIGNMENT_PROJECT, DATADIR_NAME)
             if not areInEmFormat:
-                content += "dynamo_data_format('%s/particle_*.mrc', 'data', 'modus', 'convert', 'extension', '.em')\n"\
+                content += "dynamo_data_format('%s/particle_*.mrc', 'data', 'modus', 'convert', 'extension', '.em')\n" \
                            % DATADIR_NAME
             template = self.templateRef.get()
             if self.doMra:
@@ -546,15 +579,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
 
                 name = 'outputSubtomogramsRef%s' % str(ref)
-                args = {}
-                args[name] = subtomoSet
+                args = {name: subtomoSet}
                 subtomoSet.setStreamState(Set.STREAM_OPEN)
                 self._defineOutputs(**args)
                 self._defineSourceRelation(inputSet, subtomoSet)
 
                 name2 = 'AverageRef%s' % str(ref)
-                args2 = {}
-                args2[name2] = averageSubTomogram
+                args2 = {name2: averageSubTomogram}
                 self._defineOutputs(**args2)
                 self._defineSourceRelation(inputSet, averageSubTomogram)
         else:
@@ -569,7 +600,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             outSubtomos.copyItems(inputSet, updateItemCallback=self._updateItem)
             self.fhTable.close()
             # Fill the resulting average object
-            averageSubTomogram.setFileName(avgFile)
+            averageSubTomogram.setFileName(self.convertToMrc(avgFile))
             averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
             # Define outputs and relations
             outsDict = {self._possibleOutputs.subtomograms.name: outSubtomos,
@@ -605,51 +636,79 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     def getLastIterAvgsDir(self):
         return join(self.getLastIterResultsDir(), 'averages')
 
+    def convertToMrc(self, inFileName):
+        import xmipp3
+        program = 'xmipp_image_convert'
+        outFName = inFileName.replace('.em', '.mrc')
+        args = '-i %s ' % inFileName
+        args += '-o %s ' % outFName
+        args += '-t vol'
+        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+        return outFName
+
+    def dimsOk(self, inVolume, checkLE=True):
+        """Method to check the size conditions from Dynamo:
+        - The size of the template should be lower or equal than the size of the particles.
+        - The size of the masks must be equal to the size of the template."""
+        refDims = self.templateRef.get().getDimensions()
+        testDims = inVolume.getDimensions()
+        if checkLE:
+            return testDims <= refDims
+        else:
+            return testDims == refDims
+
+    @staticmethod
+    def anyValActiveInNumListParam(iParam) -> bool:
+        """Checks if any of the values of a NumericListParam is greater than 0, which means to
+        be active at least in one of the rounds"""
+        return np.any(np.array(iParam.getListFromValues()) > 0)
+
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
         validateMsgs = []
-        doMra = isinstance(self.templateRef.get(), SetOfVolumes)
-        ref = self.templateRef.get()
+        # doMra = isinstance(self.templateRef.get(), SetOfVolumes)
+        # ref = self.templateRef.get()
+        subtomo = self.inputVolumes.get().getFirstItem()
         masks = [self.alignMask.get(), self.fmask.get(), self.smask.get()]  # self.cmask.get()
         introducedMasks = any(masks)
-        if doMra:
-            # Check the introduced references
-            if ref:
+        # if doMra:
+        #
+        #     def getVolumesSetSize(iVol):
+        #         return 1 if isinstance(iVol, Volume) else iVol.getSize()
+        #
+        #     refSize = getVolumesSetSize(ref)
+        #     masksSetSizes = [getVolumesSetSize(mask) for mask in masks if mask]
+        #     if introducedMasks:
+        #         if any(masksSetSizes) != refSize:
+        #             validateMsgs.append('All the optional introduced masks must be sets of volumes of the same '
+        #                                 'size as the set of references')
 
-                def getVolumesSetSize(iVol):
-                    return 1 if isinstance(iVol, Volume) else iVol.getSize()
-
-                refSize = getVolumesSetSize(ref)
-                masksSetSizes = [getVolumesSetSize(mask) for mask in masks if mask]
-                if introducedMasks:
-                    if any(masksSetSizes) != refSize:
-                        validateMsgs.append('All the optional introduced masks must be sets of volume of the same '
-                                            'size as the set of references')
+        # Check the reference
+        if not self.dimsOk(subtomo):
+            validateMsgs.append('The size of the template should be equal or smaller than the size of the particles.')
+        # Check the masks
+        if introducedMasks:
+            for mask in masks:
+                if not self.dimsOk(mask):
+                    validateMsgs.append('The introduced masks must be of the same size as the template.')
+                    break
+        # Check the dims values
+        dimValues = self.dim.getListFromValues()
+        if len(dimValues) > 1 and np.any(np.array(dimValues) == 0):
+            validateMsgs.append('If working with multiple rounds, the size of the particles for each round must be '
+                                'explicitly specified.')
+        # Check the thresholds modes values
+        th1Modes = self.thresholdMode.getListFromValues()
+        th2Modes = self.thresholdMode2.getListFromValues()
+        areaSearchValues = self.limm.getListFromValues()
+        for roundVal in th1Modes + th2Modes:
+            if roundVal not in AVG_THRESHOLD_MODES:
+                validateMsgs.append('Non-valid value detected for one of the *thresholds*. Please check the help to '
+                                    'see the admitted values.')
+                break
+        for roundVal in areaSearchValues:
+            if roundVal not in AREA_SEARCH_MODES:
+                validateMsgs.append('Non-valid value detected for the *area search mode*. Please check the help to see '
+                                    'the admitted values.')
+                break
         return validateMsgs
-
-    # def _summary(self):
-    #     summary = ["Input subtomograms: %d" % self.inputVolumes.get().getSize()]
-    #     if self.fmask.get() is not None:
-    #         if isinstance(self.fmask.get(), Volume) or isinstance(self.fmask.get(), SubTomogram):
-    #             summary.append("Input fmask: %s" % self.fmask.get())
-    #         else:
-    #             summary.append("Input fmasks: %d" % self.fmask.get().getSize())
-    #     else:
-    #         summary.append("Fmask(s) generated")
-    #     if self.mra.get() == True:
-    #         summary.append("Perform MRA with %s references" % self.nref.get())
-    #     else:
-    #         summary.append("No mra")
-    #     if self.generateTemplate.get():
-    #         summary.append("Template(s) generated")
-    #     else:
-    #         if isinstance(self.templateRef.get(), Volume) or isinstance(self.templateRef.get(), SubTomogram):
-    #             summary.append("Provided template: %s" % self.templateRef.get())
-    #         else:
-    #             summary.append("Provided templates: %d" % self.templateRef.get().getSize())
-    #     return summary
-    #
-    # def _methods(self):
-    #     methods = ['We aligned %d subtomograms from %s using Dynamo Subtomogram averaging.'
-    #                % (self.inputVolumes.get().getSize(), self.getObjectTag('inputVolumes'))]
-    #     return methods

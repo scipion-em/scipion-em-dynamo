@@ -85,15 +85,15 @@ class TestDynamoImportSubTomograms(TestDynamoStaBase):
     def test_import_without_associated_tomos(self):
         sRate = self.bin2SRate
         outsubtomos = self._runImportDynSubTomograms(sRate=sRate)
-        super().checkSubtomograms(outsubtomos,
-                                  expectedSetSize=self.nParticles,
-                                  expectedSRate=sRate,
-                                  expectedBoxSize=self.bin2BoxSize)
+        super().checkImportedSubtomograms(outsubtomos,
+                                          expectedSetSize=self.nParticles,
+                                          expectedSRate=sRate,
+                                          expectedBoxSize=self.bin2BoxSize)
 
     def test_import_with_associated_tomos(self):
         outsubtomos = self._runImportDynSubTomograms(tomos=self.tomosBinned)
-        super().checkSubtomograms(outsubtomos,
-                                  expectedSetSize=self.nParticles,
-                                  expectedSRate=self.bin2SRate,
-                                  expectedBoxSize=self.bin2BoxSize,
-                                  tomograms=self.tomosBinned)
+        super().checkImportedSubtomograms(outsubtomos,
+                                          expectedSetSize=self.nParticles,
+                                          expectedSRate=self.bin2SRate,
+                                          expectedBoxSize=self.bin2BoxSize,
+                                          tomograms=self.tomosBinned)
