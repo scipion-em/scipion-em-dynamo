@@ -51,18 +51,29 @@ DATADIR_NAME = "data"
 MASKSDIR_NAME = "masks"
 TEMPLATESDIR_NAME = 'templates'
 
+# Cone flip modes
+NO_INVERSION = 0
+INVERTED_COARSEST = 1
+INVERTED_ALL_REF_LEVELS = 2
+FLIP_MODES = [NO_INVERSION, INVERTED_COARSEST, INVERTED_ALL_REF_LEVELS]
+
 # Particles for averaging thresholding modes
 NO_THRESHOLD = 0
 ABS_THRESHOLD = 1
 EFF_THRESHOLD_1 = 2
 EFF_THRESHOLD_2 = 3
-AVG_THRESHOLD_MODES = [NO_THRESHOLD, ABS_THRESHOLD, EFF_THRESHOLD_1, EFF_THRESHOLD_2]
+TOTAL_NO_PARTICLES_BY_CC = 4
+FRACTION_NO_PARTICLES = 5
+AVG_THRESHOLD_MODES = [NO_THRESHOLD, ABS_THRESHOLD, EFF_THRESHOLD_1, EFF_THRESHOLD_2, TOTAL_NO_PARTICLES_BY_CC,
+                       FRACTION_NO_PARTICLES]
 
 # Area search modes
 NO_LIMITS = 0
 CENTER_OF_THE_BOX = 1
 FROM_PREVIOUS_ESTIMATION = 2
-AREA_SEARCH_MODES = [NO_LIMITS, CENTER_OF_THE_BOX, FROM_PREVIOUS_ESTIMATION]
+FROM_FIRST_ITER_ROUND = 3
+FROM_FIRST_ITER_PRJ = 4
+AREA_SEARCH_MODES = [NO_LIMITS, CENTER_OF_THE_BOX, FROM_PREVIOUS_ESTIMATION, FROM_FIRST_ITER_ROUND, FROM_FIRST_ITER_PRJ]
 
 
 class DynRefineOuts(Enum):
@@ -101,45 +112,33 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                        help="Add a list of GPU devices that can be used")
         form.addParam('inputVolumes', PointerParam,
                       pointerClass="SetOfSubTomograms",
+                      important=True,
                       label='Set of subtomograms',
                       help="Set of subtomograms to align with dynamo")
         form.addParam('templateRef', PointerParam,
                       pointerClass='Volume, SubTomogram',
+                      important=True,
                       label="Template",
                       help='The size of the template should be equal or smaller than the size of the particles.')  # If you '
         # 'pass a single file in multi-reference modus (MRA), Dynamo will just made copies of it.')
+        form.addParam('numberOfIters', NumericListParam,
+                      label='Iterations (R)',
+                      important=True,
+                      default=5,
+                      help="Number of iterations per round (R). Used to identify the number of rounds desired to be "
+                           "carried out.")
+        form.addParam('dim', NumericListParam,
+                      label='Particle dimensions (R)',
+                      default=DEFAULT_DIM,
+                      help="If only one round, leave 0 to use the size of your particle. If working with multiple "
+                           "rounds, the size of the particles for each round must be explicitly specified. This can "
+                           "be use, for example, to reduce the particles size for a particular round and increase the "
+                           "speed. E.g.: 64 128 128.")
         form.addBooleanParam('useDynamoGui', 'Launch dynamo GUI',
                              default=False,
                              expertLevel=LEVEL_ADVANCED,
                              help="Launches Dynamo's alignment project GUI. Do not 'Run' the project,"
                                   " Scipion will do it for you.")
-        form.addParam('sym', StringParam,
-                      default='c1',
-                      label='Symmetry group (R)',
-                      help="Specify the article's symmetry. Symmetrization is applied at the beginning of the round to "
-                           "the input reference.")
-        form.addParam('numberOfIters', NumericListParam,
-                      label='Iterations (R)',
-                      default=5,
-                      help="Number of iterations per round (R)")
-        form.addParam('dim', NumericListParam,
-                      label='Particle dimensions (R)',
-                      default=DEFAULT_DIM,
-                      help="If only one round, leave 0 to use the size of your particle. If working with multiple "
-                           "rounds, the size of the particles for each round must be explicitly specified. This can be "
-                           "use, for example, to reduce the particles size for a particular round and increase the "
-                           "speed. E.g.: 64 128 128.")
-        # form.addParam('pca', BooleanParam,
-        #               label='Perform PCA',
-        #               default=False,
-        #               help="If selected, principal component analysis (PCA) is carried out.")
-        # form.addSection(label='Initial density')
-        # form.addParam('compensateMissingWedge', BooleanParam,
-        #               label='Compensate for missing wedge',
-        #               default=False,
-        #               condition="refMode == %i" % MODE_GEN_REF,
-        #               help="If 'Yes' is selected, this operation will be performed using the method "
-        #                    "dynamo_table_randomize_azimuth.")
 
         form.addSection(label='Masks')
         form.addParam('alignMask', PointerParam,
@@ -161,7 +160,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #               condition='Only for multirreference')
         form.addParam('fmask', PointerParam,
                       pointerClass='Volume',  # SetOfVolumes',
-                      label="Fourier mask on reference (opt)",
+                      label="Fourier mask on template (opt)",
                       allowsNull=True,
                       help='Used in very few special cases. The Fourier Mask that you define on a template during an '
                            'alignment project describes the Fourier content of the template, not the one of the data '
@@ -170,7 +169,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Fourier_mask_on_template.')
         form.addParam('smask', PointerParam,
                       pointerClass='Volume',  # SetOfVolumes',
-                      label="FSC mask (smoothing mask) (opt)",
+                      label="Fourier Shell Correlation mask (opt)",
                       allowsNull=True,
                       help='Used in the context of adaptive bandpass filtering. This procedure needs an automatic '
                            'evaluation of the attained resolution at each iteration step. This is performed through '
@@ -178,9 +177,9 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'the odd/even computation. See more details in '
                            'https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Smoothing_mask')
 
-        form.addSection(label='Angular refinement')
+        form.addSection(label='Angular scanning')
         form.addParam('cr', NumericListParam,
-                      label='Cone range (R)',
+                      label='Cone aperture (R)',
                       default=360,
                       help="The ‘cone_’ parameters define a set of orientations that will be sampled around a "
                            "previously determined old orientation. Here we speak of orientations of the vertical axis "
@@ -197,31 +196,22 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            "cone involves only two Euler angles (tdrot and tilt).\n\n"
                            "’cone_sampling’ is the step inside the cone defined by ´cone_range´, also in degrees. "
                            "The orientations are generated so as to provide an uniform coverage.")
-        # form.addParam('cf', NumericListParam,
-        #               label='Cone flip (R)',
-        #               default=0,
-        #               expertLevel=LEVEL_ADVANCED,
-        #               help="Generates a mirrored scanning geometry: the 'cone' of directions is complemented with the "
-        #                    "diametrally oposed cone. This is useful when averaging elongated particles in the case in "
-        #                    "which the direction of each one is not certain, i.e., the initial table catches the overall"
-        #                    " orientation of each particle, but it is not certain on which end is the 'head' and which "
-        #                    "is the 'tail', so that the refinement should allow 'flippling' the particles (but still "
-        #                    "produce a scanning set of angles concentrated along the axis of the particle). 0:  No "
-        #                    "inversion of the cone (default!) 1:  The cone is inverted only for the coarsest level of "
-        #                    "the multigrid refinement 2:  The cone is inverted for all refinement levels")
-        # form.addParam('ccp', IntParam,
-        #               label='Cone check peak',
-        #               default=0,
-        #               expertLevel=LEVEL_ADVANCED,
-        #               help="Controls peak quality inside the scanned directions. Useful when the particles are in close"
-        #                    " contact with some feature of high intensity. Ensures that only angles yielding a real peak"
-        #                    " will be considered. If the angle that yields the maximum of CC is in the boundary, the "
-        #                    "particle will get aligned with its original alignment parameters. Values: 0: normal "
-        #                    "behaviour (no peak quality control, default) any integer  : degrees that define the peak. A"
-        #                    " maximum occurring within this distance to the boundary of the defined cone will be "
-        #                    "discarded.")
+        form.addParam('cf', NumericListParam,
+                      label='Cone flip (R)',
+                      default=0,
+                      expertLevel=LEVEL_ADVANCED,
+                      help='Generates a mirrored scanning geometry: the "cone" of directions is complemented with the '
+                           'diametrally oposed cone.\n'
+                           'This is useful when averaging elongated particles in the case in which the direction of '
+                           'each one is not certain, i.e., the initial table catches the overall orientation of each '
+                           'particle, but it is not certain on which end is the "head" and which is the "tail", so '
+                           'that the refinement should allow "flippling" the particles (but still produce a scanning '
+                           'set of angles concentrated along the axis of the particle). Values:\n'
+                           '\n\t* 0:  No inversion of the cone (default!)'
+                           '\n\t* 1:  The cone is inverted only for the coarsest level of the multigrid refinement'
+                           '\n\t* 2:  The cone is inverted for all refinement levels')
         form.addParam('inplane_range', NumericListParam,
-                      label='Inplane rotation range (R)',
+                      label='Azimuth rotation range (R)',
                       default=360,
                       help='The ‘inplane_’ parameters complete the set of scanned Euler triplets. After each of the '
                            'axis reorentations defined by the ‘cone_’ parameters, the template will be rotated about '
@@ -229,38 +219,33 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            '‘inplane_range’ defines the angular interval to be scanned around the old value of narot.')
         form.addParam('inplane_sampling',
                       NumericListParam,
-                      label='Inplane rotation sampling (R)',
+                      label='Azimuth rotation sampling (R)',
                       default=45,
                       help='The ‘inplane_’ parameters complete the set of scanned Euler triplets. After each of the '
                            'axis reorentations defined by the ‘cone_’ parameters, the template will be rotated about '
                            'the new orientation of its axis. This involves only the ‘narot’ angle.\n\n'
                            'The project parameter ‘inplane_range’ defines the angular interval to be scanned around '
                            'the old value of narot, and ‘inplane_sampling’ defines the interval.')
-        # form.addParam('inplane_flip', NumericListParam,
-        #               label='Inplane flip (R)',
-        #               default=0,
-        #               expertLevel=LEVEL_ADVANCED,
-        #               help='Flips the set of inplane rotations. The set of inplane rotations to scan will be the '
-        #                    'original set plus the flipped orientations.This is useful when the particles have a '
-        #                    'directionality, but it is not very well defined. Values'
-        #                    '\n\t0  :  no flip.'
-        #                    '\n\t(default) 1  :  flips the coarsest level  in the multilevel grid   2  :  flips the '
-        #                    'full set (all levels).')
-        # form.addParam('inplane_check_peak', IntParam,
-        #               label='Inplane check peak',
-        #               default=0,
-        #               expertLevel=LEVEL_ADVANCED,
-        #               help="Controls peak quality along the inplane rotation. Useful when the particles are in close "
-        #                    "contact with some feature of high intensity. Ensures that only angles yielding a real peak "
-        #                    "will be considered. If the angle that yields the maximum of CC is in the boundary, the "
-        #                    "particle will get aligned with its original alignment parameters. Values:"
-        #                    "\n\t0  : normal behaviour (no peak quality control, default)."
-        #                    "\n\tany integer  : degrees that define the peak. A maximum occurring within this distance "
-        #                    "to the boundary of the defined range for inplane rotations will be discarded.")
+        form.addParam('inplane_flip', NumericListParam,
+                      label='Azimuth flip (R)',
+                      default=0,
+                      expertLevel=LEVEL_ADVANCED,
+                      help='Flips the set of inplane rotations.\n'
+                           'The set of inplane rotations to scan will be the original set plus the flipped '
+                           'orientations.\n'
+                           'This is useful when the particles have a directionality, but it is not very well defined. '
+                           'For instance, if you have decorations on a microtubule, you might expect that most of them '
+                           'will have similar orientations along the direction of the tube. However, this direction '
+                           'might not be obvious: if you have particles coming from two different tubes, reducing the '
+                           'span of azimuthal rotations to a narrow set along the estimated direction of the tube '
+                           'might be dangerous, as the particles from the two tubes might be oriented in different '
+                           'directions.Values:\n'
+                           '\n\t* 0  :  no flip (default).'
+                           '\n\t* 1  :  flips the coarsest level  in the multilevel grid.'
+                           '\n\t* 2  :  flips the full set (all levels).')
         form.addParam('rf', NumericListParam,
                       default=5,
                       label='Refine iterations per particle (R)',
-                      expertLevel=LEVEL_ADVANCED,
                       help="How many refinement iterations are carried out on each single particle. This refinement "
                            "when comparing rotations of the reference against the data, takes the best orientation and "
                            "looks again with a finer sampling. The sampling in the refined search will be half of the "
@@ -269,11 +254,34 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         form.addParam('rff', NumericListParam,
                       label='Refine factor (R)',
                       default=2,
-                      expertLevel=LEVEL_ADVANCED,
                       help="Controls the size of the angular neighborhood during the local refinement of the angular "
                            "grid.")
 
-        form.addSection(label='Thresholding')
+        form.addSection('Shift limits')
+        form.addParam('lim', NumericListParam,
+                      label='Shift limits (R)',
+                      default='4',
+                      help='Restricts the search area to an sphere of the given radius centered and oriented in the '
+                           'last found position (Ellipsoid will be implemented soon).')
+        # TODO: manage this properly or directly offer only the sphere
+        # 'Restricts the search area to an ellipsoid centered and oriented in the last found '
+        #      'position. The three parameters are the semi-axes of the ellipsoid.')
+        form.addParam('limm', NumericListParam,
+                      default=NO_LIMITS,
+                      label='Shift limiting way (R)',
+                      help='States how exactly the shifts (area search) will be interpreted:\n'
+                           '\n\t* 0:  no limitations (can easily produce artifacts if the initial reference is bad).'
+                           '\n\t* 1:  limits are understood from the center of the particle cube.'
+                           '\n\t* 2:  limits are understood from the previous estimation on the particle position '
+                           '(i.e., the shifts available) With this option, the origin of the shifts changes at every '
+                           'iteration.'
+                           '\n\t* 3:  limis are understood from the estimation provided for the first iteration of the '
+                           'round. The origin of the shifts will change at each round.'
+                           '\n\t* 4:  limis are understood from the estimation provided for the first iteration of the '
+                           'project. The origin of the shifts is thus defined for the full project, and stays static '
+                           'all during the full computation.\n\n'
+                           'Note that options 3 and 4 are useful to avoid particles gradually shifting away from '
+                           'the initially user-entered locations.')
         form.addParam('separation', IntParam,
                       label='Separation in tomogram [pix.] (R)',
                       default=0,
@@ -281,9 +289,17 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            'tomogram+shifts) of all the particles in each tomogram separately. Whenever two particles '
                            'are closer together than "separation_in_tomogram", only the particle with the higher '
                            'correlation will stay.')
+
+        form.addSection(label='Thresholding')
+        form.addParam('threshold', NumericListParam,
+                      label='Threshold parameter (R)',
+                      default=0.2,
+                      help='Different thresholding policies can be used in order to select which particles are averaged'
+                           ' in view of their CC (cross correlation value) . The value of the thresholding parameter '
+                           'defined here  will be interpreted differently depending on the "threshold_modus"')
         form.addParam('thresholdMode', NumericListParam,
                       default=NO_THRESHOLD,
-                      label='Threshold I mode (R)',
+                      label='Threshold modus (R)',
                       help='Specify which particles contribute to the average at the end of each iteration. '
                            'Different thresholding policies can be used to select particles according to their CC '
                            'value. Thus value of the "threshold" parameter you input  (denoted as THRESHOLD below) '
@@ -293,29 +309,75 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            '\n\t* 1: THRESHOLD is an absolute threshold (only particles with CC above this value are '
                            'selected).'
                            '\n\t* 2: effective threshold = mean(CC) * THRESHOLD.'
-                           '\n\t* 3: effective threshold = mean(CC) + std(CC) * THRESHOLD.')
-        # '\n\t* 4: THRESHOLD is the total number of particles (ordered by CC ).'
-        # '\n\t* 5: THRESHOLD ranges between 0 and 1  and sets the fraction of particles.'
+                           '\n\t* 3: effective threshold = mean(CC) + std(CC) * THRESHOLD.'
+                           '\n\t* 4: THRESHOLD is the total number of particles (ordered by CC ).'
+                           '\n\t* 5: THRESHOLD ranges between 0 and 1  and sets the fraction of particles.')
         # '\n\t* 11,21,31,34,41,51: select the same particles as 1,2,3,4 or 5, BUT non selected '
         # 'particles will be excluded:'
         # '\n\t\t- from averaging in the present iteration, and'
         # '\n\t\t- ALSO from alignment in the next iteration (unlike 1,2,3,4,5).')
-        form.addParam('threshold', NumericListParam,
-                      label='Threshold I value (R)',
-                      default=0.2,
-                      help='Different thresholding policies can be used in order to select which particles are averaged'
-                           ' in view of their CC (cross correlation value) . The value of the thresholding parameter '
-                           'defined here  will be interpreted differently depending on the "threshold_modus"')
-        form.addParam('thresholdMode2', NumericListParam,
-                      default=NO_THRESHOLD,
-                      label='Threshold II mode (R)',
-                      help="Thresholding II is operated against the average produced by the particles that survived "
-                           "the first thresholding. It uses the same syntax as Threshold I")
         form.addParam('threshold2', NumericListParam,
-                      label='Threshold II value (R)',
+                      label='Second threshold parameter (R)',
                       default=0.2,
+                      expertLevel=LEVEL_ADVANCED,
                       help="Thresholding II is operated against the average produced by the particles that survived"
                            "the first thresholding.")
+        form.addParam('thresholdMode2', NumericListParam,
+                      default=NO_THRESHOLD,
+                      label='Second threshold modus (R)',
+                      expertLevel=LEVEL_ADVANCED,
+                      help="Thresholding II is operated against the average produced by the particles that survived "
+                           "the first thresholding. It uses the same syntax as Threshold I")
+
+        form.addSection(label='Cross correlation')
+        form.addParam('high', NumericListParam,
+                      label='High pass (R)',
+                      default=2,
+                      help='Cut off frequency for high pass filtering. The units are pixels in the Fourier space of '
+                           'the particle (if your template is smaller than the data, the bandpass parameters will be '
+                           'rescaled). The bandpass works with a soft mask, allowing a smoothing window of two pixels '
+                           'around the cut frequency.')
+        form.addParam('low', NumericListParam,
+                      label='Low frequency (R)',
+                      default=32,
+                      help='Cut off frequency for low pass filtering. The units are pixels in the Fourier space of the '
+                           'particle (if your template is smaller than the data, the bandpass parameters will be '
+                           'rescaled). The bandpass works with a soft mask, allowing a smothing window of two pixels '
+                           'around the cut frequency.')
+        form.addParam('sym', StringParam,
+                      default='c1',
+                      label='Symmetry group (R)',
+                      help="Symmetrization is applied at the beginning of the round to the input reference. It is also "
+                           "used during the computation of the [eo_fsc] or the iteration.\n"
+                           "First chars in string indicate thetype of symmetry operator:\n"
+                           "\n\t* 'c'  rotational symmetry around z."
+                           "\n\t* 'h'  helical symmetry around z  (parameters: dpsi; dz)."
+                           "\n\t* 'ico'  icosahedral symmetry."
+                           "\n\t* 'cbo' for cuboctahedral symmetry.\n"
+                           "The rest of the string contains the respective parameters. Examples: 'c1', 'h60,5' ,"
+                           "'h[60,5]','h[-60,5]'")
+        form.addParam('ccmatrixBatch', IntParam,
+                      label='Cross-correlation matrix batch',
+                      default=128,
+                      expertLevel=LEVEL_ADVANCED,
+                      help="Number of particles to be kept in memory simultaneously during the computation of the "
+                           "ccmatrix. The larger this number, the more efficient the algorithm performance, as more "
+                           "computations can be kept for reuse.However, trying to keep all the particles in memory can "
+                           "lead to saturate it,blocking the CPU. Additionally, a small batch allows to divide the "
+                           "matrix in more blocks. This might be useful in parallel computations.")
+        form.addParallelSection(threads=4, mpi=0)
+
+        # form.addParam('pca', BooleanParam,
+        #               label='Perform PCA',
+        #               default=False,
+        #               help="If selected, principal component analysis (PCA) is carried out.")
+        # form.addSection(label='Initial density')
+        # form.addParam('compensateMissingWedge', BooleanParam,
+        #               label='Compensate for missing wedge',
+        #               default=False,
+        #               condition="refMode == %i" % MODE_GEN_REF,
+        #               help="If 'Yes' is selected, this operation will be performed using the method "
+        #                    "dynamo_table_randomize_azimuth.")
         # form.addParam('ccmatrix', BooleanParam,
         #               label='Compute  cross-correlation matrix',
         #               default=False,
@@ -327,41 +389,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #               expertLevel=LEVEL_ADVANCED,
         #               help="string with three characters, each position controling a different aspect: thresholding, "
         #                    "symmetrization, compensation")
-        form.addParam('ccmatrixBatch', IntParam,
-                      label='Cross-correlation matrix batch',
-                      default=128,
-                      condition='thresholdMode != %i' % NO_THRESHOLD,
-                      expertLevel=LEVEL_ADVANCED,
-                      help="Number of particles to be kept in memory simultaneously during the computation of the "
-                           "ccmatrix. The larger this number, the more efficient the algorithm performance, as more "
-                           "computations can be kept for reuse.However, trying to keep all the particles in memory can "
-                           "lead to saturate it,blocking the CPU. Additionally, a small batch allows to divide the "
-                           "matrix in more blocks. This might be useful in parallel computations.")
-        form.addParam('limm', NumericListParam,
-                      default=NO_LIMITS,
-                      label='Area search mode (R)',
-                      help='States how exactly the shifts (area search) will be interpreted:\n'
-                           '\n\t* 0:  no limitations (can easily produce artifacts if the initial reference is bad).'
-                           '\n\t* 1:  limits are understood from the center of the particle cube.'
-                           '\n\t* 2:  limits are understood from the previous estimation on the particle position '
-                           '(i.e., the shifts available) With this option, the origin of the shifts changes at every '
-                           'iteration.')
-        form.addParam('lim', NumericListParam,
-                      label='Area search (R)',
-                      condition='limm',
-                      default='4',
-                      # TODO: manage this properly or directly offer only the sphere
-                      help='Restricts the search area to an ellipsoid centered and oriented in the last found '
-                           'position. The three parameters are the semi-axes of the ellipsoid.')
-        form.addParam('low', NumericListParam,
-                      label='Low frequency (R)',
-                      default=32,
-                      help='Cut off frequency for low pass filtering')
-        form.addParam('high', NumericListParam,
-                      label='High frequency (R)',
-                      default=2,
-                      help='Cut off frequency for high pass filtering')
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
@@ -431,13 +458,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         # --- Angular scanning ---
         command += self.getRoundParams("cr", self.cr)
         command += self.getRoundParams("cs", self.cs)
-        # command += self.getRoundParams("cf", self.cf)
+        command += self.getRoundParams("cf", self.cf)
         # command += self.get_dvput('ccp', self.ccp)
         command += self.getRoundParams('rf', self.rf)
         command += self.getRoundParams('rff', self.rff)
         command += self.getRoundParams("ir", self.inplane_range)
         command += self.getRoundParams("is", self.inplane_sampling)
-        # command += self.getRoundParams("if", self.inplane_flip)
+        command += self.getRoundParams("if", self.inplane_flip)
         # command += self.get_dvput('icp', self.inplane_check_peak)
         # --- Thresholding ---
         command += self.get_dvput('stm', self.separation)
@@ -697,6 +724,14 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         if len(dimValues) > 1 and np.any(np.array(dimValues) == 0):
             validateMsgs.append('If working with multiple rounds, the size of the particles for each round must be '
                                 'explicitly specified.')
+        # Check the flip modes
+        coneFlipModes = self.cf.getListFromValues()
+        aziFlipModes = self.inplane_flip.getListFromValues()
+        for roundVal in coneFlipModes + aziFlipModes:
+            if roundVal not in FLIP_MODES:
+                validateMsgs.append('Non-valid value detected for one of the *cone flip*. Please check the help to '
+                                    'see the admitted values.')
+
         # Check the thresholds modes values
         th1Modes = self.thresholdMode.getListFromValues()
         th2Modes = self.thresholdMode2.getListFromValues()
