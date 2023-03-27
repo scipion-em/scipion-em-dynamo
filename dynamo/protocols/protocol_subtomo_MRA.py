@@ -553,22 +553,25 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         But, if there are more than one rounds, the specific size considered for the particles at that round must be
         specified. This method manages this scenario to avoid the user be forced to introduce the dimensions everytime.
         """
-        if nRounds > 1:
+        if nRounds == 1:
+            if self.dim.get() != DEFAULT_DIM:
+                return self.dim.get()
+            else:
+                dim, _, _ = self.inputVolumes.get().getDimensions()
+                return dim
+        else:
             dimVals = self.dim.getListFromValues()
             nDims = len(dimVals)
-            if nRounds > nDims:
+            if nRounds == nDims:
+                return self.dim.get()
+            elif nRounds > nDims:
                 inParticleSize, _, _ = self.inputVolumes.get().getDimensions()
                 dimPattern = str(inParticleSize) + ' '
                 if nDims == 1 and dimVals[0] == 0:
                     return dimPattern * nRounds
                 else:
                     return self.dim.get() + ' ' + dimPattern * (nRounds - nDims)
-        else:
-            if self.dim.get() != DEFAULT_DIM:
-                return self.dim.get()
-            else:
-                dim, _, _ = self.inputVolumes.get().getDimensions()
-                return dim
+
 
     def getRoundParams(self, dynamoParamName, param: String, projectName=DYNAMO_ALIGNMENT_PROJECT, caster=int):
         """ Returns the dynamo command for any of the params that can be specified in the rounds.
