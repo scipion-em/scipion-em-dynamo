@@ -94,6 +94,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)
+        self.dimRounds = String()
         self.fhTable = None
         self.masksDir = None
         self.doMra = None
@@ -131,8 +132,9 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       label='Particle dimensions (R)',
                       default=DEFAULT_DIM,
                       help="If only one round, leave 0 to use the size of your particle. If working with multiple "
-                           "rounds, the size of the particles for each round must be explicitly specified. This can "
-                           "be use, for example, to reduce the particles size for a particular round and increase the "
+                           "rounds, the size of the particles for each round is expected to be explicitly specified. "
+                           "If not, the size of the input particles will be used for all the rounds. This option can "
+                           "be used, for example, to reduce the particles size for a particular round and increase the "
                            "speed. E.g.: 64 128 128.")
         form.addBooleanParam('useDynamoGui', 'Launch dynamo GUI',
                              default=False,
@@ -392,7 +394,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
-        # self.doMra = isinstance(self.templateRef.get(), SetOfVolumes)
+        self.initialize()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.alignStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -400,110 +402,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #     self._insertFunctionStep(self.closeSetsStep)
 
     # --------------------------- STEPS functions -------------------------------
-
-    def getRoundParams(self, dynamoParamName, param: String, projectName=DYNAMO_ALIGNMENT_PROJECT, caster=int):
-        """ Returns the dynamo command for any of the params that can be specified in the rounds.
-        See --> https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Starters_guide#Alignment_projects
-
-        :param dynamoParamName: Dynamo's parameter name
-        :param param: Scipion's param containing the values for the rounds
-        :param projectName: Optional, defaults to DYNAMO_ALIGNMENT_PROJECT. Name of the dynamo alignment project
-
-        :return the dvput commands as a string
-        """
-
-        # Get the values as list
-        values = param.getListFromValues(caster=caster)
-        command = ""
-        for index, value in enumerate(values):
-            finalParamName = dynamoParamName
-            if index != 0:
-                finalParamName += '_r' + str(index + 1)
-            command += self.get_dvput(finalParamName, value, projectName=projectName)
-        return command
-
-    @staticmethod
-    def get_dvput(paramName, value, projectName=DYNAMO_ALIGNMENT_PROJECT):
-        """From Dynamo: Changes parameters of a project residing in disk.
-        INPUT:
-            project  : an existing project
-            option   :  a string defining what to do with the modified project:
-                       'disk','d'    :  save modified project
-                       'unfold','u'  :  unfold modified project
-                       'cd'          :  save only if passes check
-                       'cu'          :  unfold only if passes check
-
-            parameter/value couples:
-                'inround' : integer that identifies a round. Restricts all the subsequent round parameter modifications
-                            to one round.
-                You can input any series of  parameter/value couples where the parameter is a legal Dynamo project
-                parameters (type dynamo_vpr_help for a complete list).
-        """
-        return "dvput('%s', 'disk', '%s', '%s')\n" % (projectName, paramName, value)
-
-    def get_computing_command(self):
-        """ Returns the dynamo commands related to the angular search, threashold, GPu, ..."""
-        if self.dim.get() != DEFAULT_DIM:
-            dim = self.dim
-        else:
-            dim, _, _ = self.inputVolumes.get().getDimensions()
-            dim = String(dim)
-
-        command = self.getRoundParams("dim", dim)
-        command += self.get_dvput("apix", self.inputVolumes.get().getSamplingRate())
-        command += self.getRoundParams('sym', self.sym, caster=str)
-        command += self.getRoundParams("ite", self.numberOfIters)
-        # command += self.get_dvput('mra', int(self.doMra))
-        # command += self.get_dvput('pcas', int(self.pca.get()))
-        # --- Angular scanning ---
-        command += self.getRoundParams("cr", self.cr)
-        command += self.getRoundParams("cs", self.cs)
-        command += self.getRoundParams("cf", self.cf)
-        # command += self.get_dvput('ccp', self.ccp)
-        command += self.getRoundParams('rf', self.rf)
-        command += self.getRoundParams('rff', self.rff)
-        command += self.getRoundParams("ir", self.inplane_range)
-        command += self.getRoundParams("is", self.inplane_sampling)
-        command += self.getRoundParams("if", self.inplane_flip)
-        # command += self.get_dvput('icp', self.inplane_check_peak)
-        # --- Thresholding ---
-        command += self.get_dvput('stm', self.separation)
-        if not self.anyValActiveInNumListParam(self.thresholdMode) \
-                and not self.anyValActiveInNumListParam(self.thresholdMode2) \
-                and not self.anyValActiveInNumListParam(self.limm):
-            # Don't compute the CC matrix
-            command += self.get_dvput('ccms', 0)
-        else:
-            # CC matrix stuff
-            command += self.get_dvput('ccms', 1)
-            command += self.get_dvput('ccmt', 'align')
-            command += self.get_dvput('batch', self.ccmatrixBatch)
-            # Thresholding stuff
-            command += self.getRoundParams('thrm', self.thresholdMode)
-            command += self.getRoundParams('thr', self.threshold, caster=float)
-            command += self.getRoundParams('thr2m', self.thresholdMode2)
-            command += self.getRoundParams('thr2', self.threshold2, caster=float)
-        # --- Area search ---
-        command += self.getRoundParams('limm', self.limm)
-        command += self.getRoundParams('lim', self.lim)
-        # --- Filtering ---
-        command += self.getRoundParams('low', self.low)
-        command += self.getRoundParams('high', self.high)
-
-        # --- Processing software + hardware resources ---
-        command += self.get_dvput('mwa', self.numberOfThreads.get())  # Cores used to calculate the average in each iter
-        if self.useGpu.get():
-            # Param 'cores' is used to specify the number of CPUs involved in the alignment. If GPU is used, Dynamo
-            # only works well setting it to 1.
-            command += self.get_dvput('cores', 1)
-            command += self.get_dvput('destination', 'standalone_gpu')
-            command += self.get_dvput('gpu_motor', 'spp')
-            command += self.get_dvput('gpu_identifier_set', self.getGpuList())
-        else:
-            command += self.get_dvput('cores', self.numberOfThreads.get())
-            command += self.get_dvput('destination', 'standalone')
-
-        return command
+    def initialize(self):
+        # self.doMra = isinstance(self.templateRef.get(), SetOfVolumes)
+        nRounds = len(self.numberOfIters.getListFromValues())
+        self.dimRounds.set(self.getDimRounds(nRounds))
 
     def convertInputStep(self):
         dataDir = self._getExtraPath(DATADIR_NAME)
@@ -579,7 +481,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             self.showDynamoGUI()
 
         # This way shows output more or less on the fly.
-        self.runJob("./%s.exe" % DYNAMO_ALIGNMENT_PROJECT, [], env=Plugin.getEnviron(), cwd=self._getExtraPath())
+        self.runJob("./%s.exe" % DYNAMO_ALIGNMENT_PROJECT, [], env=Plugin.getEnviron(gpuId=self.getGpuList()[0]),
+                    cwd=self._getExtraPath())
 
     def createOutputStep(self):
         iters = self.numberOfIters.getListFromValues()
@@ -643,6 +546,127 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         self._store()
 
     # --------------------------- UTILS functions --------------------------------
+    def getDimRounds(self, nRounds):
+        """The number of rounds will be determined the same as Dynamo, which is through the number of elements
+        introduced in label 'Iterations'. The parameter 'Particle dimensions' present a specific behavior: if one round,
+        a zero value will indicate that the size of the particles is the same as the size of the input subtomogrmas.
+        But, if there are more than one rounds, the specific size considered for the particles at that round must be
+        specified. This method manages this scenario to avoid the user be forced to introduce the dimensions everytime.
+        """
+        if nRounds > 1:
+            dimVals = self.dim.getListFromValues()
+            nDims = len(dimVals)
+            if nRounds > nDims:
+                inParticleSize, _, _ = self.inputVolumes.get().getDimensions()
+                dimPattern = str(inParticleSize) + ' '
+                if nDims == 1 and dimVals[0] == 0:
+                    return dimPattern * nRounds
+                else:
+                    return self.dim.get() + ' ' + dimPattern * (nRounds - nDims)
+        else:
+            if self.dim.get() != DEFAULT_DIM:
+                return self.dim.get()
+            else:
+                dim, _, _ = self.inputVolumes.get().getDimensions()
+                return dim
+
+    def getRoundParams(self, dynamoParamName, param: String, projectName=DYNAMO_ALIGNMENT_PROJECT, caster=int):
+        """ Returns the dynamo command for any of the params that can be specified in the rounds.
+        See --> https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Starters_guide#Alignment_projects
+
+        :param dynamoParamName: Dynamo's parameter name
+        :param param: Scipion's param containing the values for the rounds
+        :param projectName: Optional, defaults to DYNAMO_ALIGNMENT_PROJECT. Name of the dynamo alignment project
+
+        :return the dvput commands as a string
+        """
+        # Get the values as list
+        values = param.getListFromValues(caster=caster)
+        command = ""
+        for index, value in enumerate(values):
+            finalParamName = dynamoParamName
+            if index != 0:
+                finalParamName += '_r' + str(index + 1)
+            command += self.get_dvput(finalParamName, value, projectName=projectName)
+        return command
+
+    @staticmethod
+    def get_dvput(paramName, value, projectName=DYNAMO_ALIGNMENT_PROJECT):
+        """From Dynamo: Changes parameters of a project residing in disk.
+        INPUT:
+            project  : an existing project
+            option   :  a string defining what to do with the modified project:
+                       'disk','d'    :  save modified project
+                       'unfold','u'  :  unfold modified project
+                       'cd'          :  save only if passes check
+                       'cu'          :  unfold only if passes check
+
+            parameter/value couples:
+                'inround' : integer that identifies a round. Restricts all the subsequent round parameter modifications
+                            to one round.
+                You can input any series of  parameter/value couples where the parameter is a legal Dynamo project
+                parameters (type dynamo_vpr_help for a complete list).
+        """
+        return "dvput('%s', 'disk', '%s', '%s')\n" % (projectName, paramName, value)
+
+    def get_computing_command(self):
+        """ Returns the dynamo commands related to the angular search, threashold, GPu, ..."""
+        command = self.getRoundParams("dim", self.dimRounds)
+        command += self.get_dvput("apix", self.inputVolumes.get().getSamplingRate())
+        command += self.getRoundParams('sym', self.sym, caster=str)
+        command += self.getRoundParams("ite", self.numberOfIters)
+        # command += self.get_dvput('mra', int(self.doMra))
+        # command += self.get_dvput('pcas', int(self.pca.get()))
+        # --- Angular scanning ---
+        command += self.getRoundParams("cr", self.cr)
+        command += self.getRoundParams("cs", self.cs)
+        command += self.getRoundParams("cf", self.cf)
+        # command += self.get_dvput('ccp', self.ccp)
+        command += self.getRoundParams('rf', self.rf)
+        command += self.getRoundParams('rff', self.rff)
+        command += self.getRoundParams("ir", self.inplane_range)
+        command += self.getRoundParams("is", self.inplane_sampling)
+        command += self.getRoundParams("if", self.inplane_flip)
+        # command += self.get_dvput('icp', self.inplane_check_peak)
+        # --- Thresholding ---
+        command += self.get_dvput('stm', self.separation)
+        if not self.anyValActiveInNumListParam(self.thresholdMode) \
+                and not self.anyValActiveInNumListParam(self.thresholdMode2) \
+                and not self.anyValActiveInNumListParam(self.limm):
+            # Don't compute the CC matrix
+            command += self.get_dvput('ccms', 0)
+        else:
+            # CC matrix stuff
+            command += self.get_dvput('ccms', 1)
+            command += self.get_dvput('ccmt', 'align')
+            command += self.get_dvput('batch', self.ccmatrixBatch)
+            # Thresholding stuff
+            command += self.getRoundParams('thrm', self.thresholdMode)
+            command += self.getRoundParams('thr', self.threshold, caster=float)
+            command += self.getRoundParams('thr2m', self.thresholdMode2)
+            command += self.getRoundParams('thr2', self.threshold2, caster=float)
+        # --- Area search ---
+        command += self.getRoundParams('limm', self.limm)
+        command += self.getRoundParams('lim', self.lim)
+        # --- Filtering ---
+        command += self.getRoundParams('low', self.low)
+        command += self.getRoundParams('high', self.high)
+
+        # --- Processing software + hardware resources ---
+        command += self.get_dvput('mwa', self.numberOfThreads.get())  # Cores used to calculate the average in each iter
+        if self.useGpu.get():
+            # Param 'cores' is used to specify the number of CPUs involved in the alignment. If GPU is used, Dynamo
+            # only works well setting it to 1.
+            command += self.get_dvput('cores', 1)  # Not working with more than 1 CPU when using GPU
+            command += self.get_dvput('destination', 'standalone_gpu')
+            command += self.get_dvput('gpu_motor', 'spp')
+            # command += self.get_dvput('gpu_identifier_set', self.getGpuList()[0])
+        else:
+            command += self.get_dvput('cores', self.numberOfThreads.get())
+            command += self.get_dvput('destination', 'standalone')
+
+        return command
+
     def _updateItem(self, item, row):
         readDynTable(self, item)
 
@@ -673,7 +697,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
         return outFName
 
-    def dimsOk(self, inVolume, checkLE=True):
+    def sizesOk(self, inVolume, checkLE=True):
         """Method to check the size conditions from Dynamo:
         - The size of the template should be lower or equal than the size of the particles.
         - The size of the masks must be equal to the size of the template."""
@@ -711,19 +735,21 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #                                 'size as the set of references')
 
         # Check the reference
-        if not self.dimsOk(subtomo):
+        if not self.sizesOk(subtomo):
             validateMsgs.append('The size of the template should be equal or smaller than the size of the particles.')
         # Check the masks
         if introducedMasks:
             for mask in masks:
-                if not self.dimsOk(mask):
+                if not self.sizesOk(mask):
                     validateMsgs.append('The introduced masks must be of the same size as the template.')
                     break
         # Check the dims values
         dimValues = self.dim.getListFromValues()
-        if len(dimValues) > 1 and np.any(np.array(dimValues) == 0):
-            validateMsgs.append('If working with multiple rounds, the size of the particles for each round must be '
-                                'explicitly specified.')
+        nDims = len(dimValues)
+        nIters = len(self.numberOfIters.getListFromValues())
+        if nIters > 1 and nDims > 1 and np.any(np.array(dimValues) == 0):
+            validateMsgs.append('If working with multiple rounds, the *particle dimensions* for each round must be '
+                                'greater than 0.')
         # Check the flip modes
         coneFlipModes = self.cf.getListFromValues()
         aziFlipModes = self.inplane_flip.getListFromValues()

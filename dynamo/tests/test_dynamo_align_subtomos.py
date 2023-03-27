@@ -77,7 +77,7 @@ class TestDynamoAlignSubtomograms(TestDynamoStaBase):
 
     @classmethod
     def runAlignSubtomos(cls, nIters='3', dims='0', thMode=str(NO_THRESHOLD),
-                         areaSearchMode=str(FROM_PREVIOUS_ESTIMATION)):
+                         areaSearchMode=str(FROM_PREVIOUS_ESTIMATION), protLabel=None):
         protAlign = cls.newProtocol(DynamoSubTomoMRA,
                                     inputVolumes=cls.subtomosExtracted,
                                     templateRef=cls.avg,
@@ -86,14 +86,16 @@ class TestDynamoAlignSubtomograms(TestDynamoStaBase):
                                     thresholdMode=thMode,
                                     limm=areaSearchMode,
                                     useGpu=True)
+        if protLabel:
+            protAlign.setObjLabel(protLabel)
         cls.launchProtocol(protAlign)
         subtomos = getattr(protAlign, protAlign._possibleOutputs.subtomograms.name, None)
         avg = getattr(protAlign, protAlign._possibleOutputs.average.name, None)
         return subtomos, avg
 
     def test_alignSubtomos_oneRound(self):
-        print(magentaStr("\n==> aligning the subtomograms, one round:"))
-        subtomos, avg = self.runAlignSubtomos()
+        print(magentaStr("\n==> aligning the subtomograms, 1 round:"))
+        subtomos, avg = self.runAlignSubtomos(protLabel='Subtomo align, 1 round')
         # Check the average
         super().checkAverage(avg,
                              expectedSRate=self.bin2SRate,
@@ -108,8 +110,25 @@ class TestDynamoAlignSubtomograms(TestDynamoStaBase):
                                          orientedParticles=True)  # Picked with PySeg
 
     def test_alignSubtomos_twoRounds(self):
-        print(magentaStr("\n==> aligning the subtomograms, two rounds:"))
-        subtomos, avg = self.runAlignSubtomos(nIters='2 2')
+        print(magentaStr("\n==> aligning the subtomograms, 2 rounds:"))
+        subtomos, avg = self.runAlignSubtomos(nIters='2 2', dims='0', protLabel='Subtomo align, 2 rounds, dim=0')
+        # Check the average
+        super().checkAverage(avg,
+                             expectedSRate=self.bin2SRate,
+                             expectedBoxSize=self.bin2BoxSize,
+                             hasHalves=False)  # Dynamo average protocol doesn't generate halves
+        # Check the subtomograms
+        super().checkRefinedSubtomograms(self.subtomosExtracted, subtomos,
+                                         expectedSetSize=self.nParticles,
+                                         expectedBoxSize=self.bin2BoxSize,
+                                         expectedSRate=self.bin2SRate,
+                                         convention=TR_DYNAMO,
+                                         orientedParticles=True)  # Picked with PySeg
+
+    def test_alignSubtomos_threeRounds(self):
+        print(magentaStr("\n==> aligning the subtomograms, 3 rounds:"))
+        subtomos, avg = self.runAlignSubtomos(nIters='1 1 1', dims='22 44',
+                                              protLabel='Subtomo align, 2 rounds, dimSize=2')
         # Check the average
         super().checkAverage(avg,
                              expectedSRate=self.bin2SRate,

@@ -46,7 +46,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(DYNAMO_HOME, 'dynamo-{}'.format(DEFAULT_VERSION))
 
     @classmethod
-    def getEnviron(cls):
+    def getEnviron(cls, gpuId=0):
         """ Create the needed environment for Dynamo programs. """
         environ = pwutils.Environ(os.environ)
         dyn_home = cls.getHome()
@@ -60,7 +60,8 @@ class Plugin(pwem.Plugin):
         environ.update({
             'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
             'LD_LIBRARY_PATH': ":".join(paths),
-            'DYNAMO_ROOT': dyn_home
+            'DYNAMO_ROOT': dyn_home,
+            'CUDA_VISIBLE_DEVICES': str(gpuId)
         }, position=pwutils.Environ.BEGIN)
         return environ
 
@@ -69,11 +70,11 @@ class Plugin(pwem.Plugin):
         return join(cls.getHome(), 'matlab', 'bin', DYNAMO_PROGRAM)
 
     @classmethod
-    def runDynamo(cls, protocol, args, cwd=None):
+    def runDynamo(cls, protocol, args, cwd=None, gpuId=0):
         """ Run Dynamo command from a given protocol. """
         # args will be the .doc file which contains the MATLAB code
         program = cls.getDynamoProgram()
-        protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+        protocol.runJob(program, args, env=cls.getEnviron(gpuId=gpuId), cwd=cwd)
 
     @classmethod
     def defineBinaries(cls, env):
