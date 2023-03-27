@@ -572,7 +572,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 else:
                     return self.dim.get() + ' ' + dimPattern * (nRounds - nDims)
 
-
     def getRoundParams(self, dynamoParamName, param: String, projectName=DYNAMO_ALIGNMENT_PROJECT, caster=int):
         """ Returns the dynamo command for any of the params that can be specified in the rounds.
         See --> https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Starters_guide#Alignment_projects
