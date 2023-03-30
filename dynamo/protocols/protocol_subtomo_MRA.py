@@ -25,6 +25,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import os
 from enum import Enum
 from os.path import join, abspath
 import numpy as np
@@ -484,9 +485,19 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         self.runJob("./%s.exe" % DYNAMO_ALIGNMENT_PROJECT, [], env=Plugin.getEnviron(gpuId=self.getGpuList()[0]),
                     cwd=self._getExtraPath())
 
-    def createOutputStep(self):
+        resultsDir = self.getLastIterResultsDir()
+        if not os.path.exists(resultsDir):
+            raise RuntimeError("Results folder (%s) no generated. "
+                               "Probably there has been an error while running the alignment in Dynamo. "
+                               "Please, see run.stdout log for more details." % resultsDir)
+
+    def getTotalIterations(self):
         iters = self.numberOfIters.getListFromValues()
-        niters = sum(iters)
+        return sum(iters)
+
+    def createOutputStep(self):
+
+        niters = self.getTotalIterations()
 
         if self.doMra:
             fhSurvivRefs = open(self._getExtraPath('%s/results/ite_%04d/currently_surviving_references_ite_%04d.txt')
@@ -684,7 +695,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def getLastIterResultsDir(self):
         return self._getExtraPath('%s', 'results', 'ite_%04d') % \
-               (DYNAMO_ALIGNMENT_PROJECT, sum(self.numberOfIters.getListFromValues()))
+               (DYNAMO_ALIGNMENT_PROJECT, self.getTotalIterations())
 
     def getLastIterAvgsDir(self):
         return join(self.getLastIterResultsDir(), 'averages')
