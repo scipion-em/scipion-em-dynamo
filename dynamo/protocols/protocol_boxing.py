@@ -27,26 +27,27 @@
 import datetime
 from enum import Enum
 from os.path import abspath
-from dynamo.utils import getCatalogFile, createBoxingOutputObjects, getDynamoModels, getNewestModelModDate
+from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
+from dynamo.utils import createBoxingOutputObjects, getDynamoModels, getNewestModelModDate
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 import pyworkflow.utils as pwutils
 from pyworkflow import BETA
 from pyworkflow.protocol import LEVEL_ADVANCED
-from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
+from pyworkflow.protocol.params import IntParam, BooleanParam
 from pyworkflow.utils.properties import Message
 from pyworkflow.gui.dialog import askYesNo
-from tomo.objects import SetOfMeshes, SetOfCoordinates3D
+from tomo.objects import SetOfCoordinates3D, SetOfMeshes
 from tomo.protocols import ProtTomoPicking
-from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME
+from dynamo import VLL_FILE, CATALOG_BASENAME
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 
 
-class OutputsBoxing(Enum):
+class DynPickingOuts(Enum):
     coordinates = SetOfCoordinates3D
     meshes = SetOfMeshes
 
 
-class DynamoBoxing(ProtTomoPicking):
+class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
     """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will
      be direclty loaded with all the models previously saved in the disk (if any).
      This picking will save the "user points" defined in a set of models and generate a set of meshes with them. In case
@@ -57,7 +58,7 @@ class DynamoBoxing(ProtTomoPicking):
 
     _label = 'vectorial picking'
     _devStatus = BETA
-    _possibleOutputs = OutputsBoxing
+    _possibleOutputs = DynPickingOuts
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

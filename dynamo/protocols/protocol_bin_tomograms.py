@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:    David Herreros Calero (dherreros@cnb.csic.es)
+# *             Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
@@ -23,68 +24,68 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
 from enum import Enum
-from os.path import join
-
+from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.emlib.image import ImageHandler
-from pyworkflow import BETA
-from pyworkflow.protocol import params, STEPS_PARALLEL
-import pyworkflow.utils as pwutils
-
-from pwem.protocols import EMProtocol
-from pyworkflow.utils import getExt, makePath, removeBaseExt
-
-from tomo.protocols import ProtTomoBase
+from pyworkflow.protocol import params, GT
+from pyworkflow.utils import removeBaseExt, getExt
 from tomo.objects import Tomogram, SetOfTomograms
-
 from dynamo import Plugin
 
 
-class DynBinTomosOutputs(Enum):
+class DynamoBinOuts(Enum):
     tomograms = SetOfTomograms
 
 
-class DynamoBinTomograms(EMProtocol, ProtTomoBase):
+class DynamoBinTomograms(DynamoProtocolBase):
     """Reduce the size of a SetOfTomograms by a binning factor"""
 
     _label = 'bin tomograms'
-    _devStatus = BETA
-    _possibleOutputs = DynBinTomosOutputs
-    inTomosDir = 'inTomograms'
+    _possibleOutputs = DynamoBinOuts
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self.content = ''
+        self.finalTomoNamesDict = {}
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputTomos', params.PointerParam, pointerClass='SetOfTomograms',
-                      label="Input Tomograms", important=True,
-                      help="Select the input tomograms to be resized.")
-        form.addParam('binning', params.IntParam, default=2,
+        form.addParam('inputTomos', params.PointerParam,
+                      pointerClass='SetOfTomograms',
+                      label="Input Tomograms",
+                      important=True)
+        form.addParam('binning', params.IntParam,
+                      default=2,
+                      validators=[GT(0)],
                       label="Binning Factor",
-                      help="Binning Factor to be applied to the Tomograms. A Binning Factor of 1 will decrease the "
-                           "size of the Tomograms by 2, a Binning Factor of 2 by 4...")
-        form.addParam('zChunk', params.IntParam, default=300, expertLevel=params.LEVEL_ADVANCED,
+                      help="A Binning Factor of 1 means that no binning will be carried out.")
+        form.addParam('zChunk', params.IntParam,
+                      default=300,
+                      expertLevel=params.LEVEL_ADVANCED,
                       label="Number of slices kept in memory",
                       help="Maximum number of Z slices that are kept simultaneously in the memory during the "
-                           "binning process. This parameter might be important for larger size tomograms.")
-        form.addParallelSection(threads=4, mpi=1)
+                           "binning process. This parameter might be important for larger size tomograms, making "
+                           "possible to process them in vertical slabs of thickness = value introduced in the  "
+                           "current parameter. This procedure can be accelerated using the multiple threads to engage "
+                           "several cores in parallel. However, this will only make sense if the total memory occupied "
+                           "by all the slabs simultaneously in memory in a given time fits in the RAM of the machine.")
+        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._initialize()
-        if self.doConvertFiles:
-            makePath(self.getInTomosDir())
-            for tomo in self.inputTomos:
-                fName = tomo.getFileName()
-                self._insertFunctionStep(self.convertInputStep, fName)
-                self._insertFunctionStep(self.binTomosStep, fName, tomo.getObjId())
-        else:
-            for tomo in self.inputTomos:
-                self._insertFunctionStep(self.binTomosStep, tomo.getFileName(), tomo.getObjId())
-
+        for tomo in self.inputTomos:
+            origTomoName = tomo.getFileName()
+            finalTomoName = self.getFinalTomoName(tomo)
+            self.finalTomoNamesDict[finalTomoName] = tomo
+            if self.doConvertFiles:
+                self._insertFunctionStep(self.convertInputStep, origTomoName, finalTomoName)
+            # Generate one unique file with all the tomograms to be binned
+            self._insertFunctionStep(self.createMCodeStep, origTomoName, finalTomoName)
+        # That way, we can carry out the binning of all the tomograms provided with only one call to MATLAB, improving
+        # the efficiency, as this call is very slow
+        self._insertFunctionStep(self.binTomosStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
@@ -92,69 +93,62 @@ class DynamoBinTomograms(EMProtocol, ProtTomoBase):
         self.inputTomos = self.inputTomos.get()
         self.doConvertFiles = not self.isCompatibleFileFormat()
 
-    def convertInputStep(self, inFileName):
+    @staticmethod
+    def convertInputStep(origName, finalName):
         ih = ImageHandler()
-        ih.convert(inFileName, self.getConvertedOutFileName(inFileName))
+        ih.convert(origName, finalName)
 
-    def binTomosStep(self, tomoName, tomoId):
-        if self.doConvertFiles:
-            tomoName = self.getConvertedOutFileName(tomoName)
-        commandsFile = self.writeMatlabFile(os.path.abspath(tomoName), tomoId)
-        args = ' %s' % commandsFile
+    def createMCodeStep(self, origTomoName, finalTomoName):
+        # FROM DYNAMO:
+        # ______________________________________________________________________________________________
+        # bin(fileIn,fileOut,binFactor,varargin)
+        # Create a Volume template object
+        # p.addParamValue('slabSize',[],'short','ss');
+        # p.addParamValue('matlabWorkers',0,'short','mw');
+        # p.addParamValue('maximumMegaBytes',[]);
+        # p.addParamValue('showStatistics',false,'short','sst');
+        # ______________________________________________________________________________________________
+        self.content += "dpktomo.tools.bin('%s', '%s', %i, 'slabSize', %i, 'matlabWorkers', %i, " \
+                        "'showStatistics', true)\n" % \
+                        (origTomoName, finalTomoName, super().getBinningFactor(), self.zChunk.get(),
+                         self.numberOfThreads.get())
+
+    def binTomosStep(self):
+        mFile = self._getExtraPath('binTomograms.m')
+        with open(mFile, 'w') as codeFile:
+            codeFile.write(self.content)
+        args = ' %s' % mFile
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def createOutputStep(self):
-        # Create a Volume template object
-        binning = self.binning.get()
-        sr = self.inputTomos.getSamplingRate() * 2 ** binning
-        tomo = Tomogram()
-        tomo.setSamplingRate(sr)
-        binned_tomos = self._createSetOfTomograms()
-        binned_tomos.setSamplingRate(sr)
+        sr = self.inputTomos.getSamplingRate() * super().getBinningFactor(forDynamo=False)  # Not for, but from
+        outTomos = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
+        outTomos.setSamplingRate(sr)
+        for tomoName, inTomo in self.finalTomoNamesDict.items():
+            tomo = Tomogram()
+            tomo.copyInfo(inTomo)
+            tomo.setSamplingRate(sr)
+            tomo.setFileName(tomoName)
+            outTomos.append(tomo)
 
-        for inTomo in self.inputTomos:
-            inTomo_file = inTomo.getFileName()
-            binned_scipion_name = pwutils.removeBaseExt(inTomo_file) + '_binned{}'.format(binning) + \
-                                  pwutils.getExt(inTomo_file)
-            binned_scipion_path = self._getExtraPath(binned_scipion_name)
-            tomo.cleanObjId()
-            tomo.setLocation(binned_scipion_path)
-            tomo.setOrigin(inTomo.getOrigin())
-            tomo.setAcquisition(inTomo.getAcquisition())
-            binned_tomos.append(tomo)
-
-        self._defineOutputs(**{DynBinTomosOutputs.tomograms.name: binned_tomos})
-        self._defineSourceRelation(self.inputTomos, binned_tomos)
+        self._defineOutputs(**{DynamoBinOuts.tomograms.name: outTomos})
+        self._defineSourceRelation(self.inputTomos, outTomos)
 
     # --------------------------- DEFINE utils functions ----------------------
-    def writeMatlabFile(self, tomoPath, tomoId):
-        codeFilePath = self._getExtraPath('bin_Tomo_%d.m' % tomoId)
-        binned_scipion_name = pwutils.removeBaseExt(tomoPath) + '_binned{}'.format(self.binning.get()) + \
-                              pwutils.getExt(tomoPath)
-        binned_scipion_path = os.path.abspath(self._getExtraPath(binned_scipion_name))
-        content = "dpktomo.tools.bin('%s','%s',%d,'ss',%d)\n" \
-                  "exit\n" % (tomoPath, binned_scipion_path, self.binning.get(), self.zChunk.get())
-        codeFid = open(codeFilePath, 'w')
-        codeFid.write(content)
-        codeFid.close()
-        return codeFilePath
+    def getConvertedOutFileName(self, inFileName):
+        return self._getExtraPath(removeBaseExt(inFileName) + '.mrc')
+
+    def getFinalTomoName(self, tomo):
+        return self.getConvertedOutFileName(tomo.getFileName())
 
     def isCompatibleFileFormat(self):
-        """Compatible with MRC and em"""
+        """Compatible with MRC and em (MRC with that extension)"""
         compatibleExts = ['.em', '.mrc']
         return True if getExt(self.inputTomos.getFirstItem().getFileName()) not in compatibleExts else False
 
-    def getInTomosDir(self, *pathList):
-        return self._getExtraPath(self.inTomosDir, *pathList)
-
-    def getConvertedOutFileName(self, inFileName):
-        outBaseName = removeBaseExt(inFileName)
-        return self.getInTomosDir(outBaseName + '.mrc')
-
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):
-        methodsMsgs = []
-        methodsMsgs.append("*Binning Factor*: %s" % self.binning.get())
+        methodsMsgs = ["*Binning Factor*: %s" % self.binning.get()]
         return methodsMsgs
 
     def _summary(self):

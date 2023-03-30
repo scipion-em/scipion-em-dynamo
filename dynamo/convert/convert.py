@@ -60,10 +60,10 @@ def convertOrLinkVolume(inVolume: Volume, outVolume: str):
 
 def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
     if name == 'id':  # write the ID of the object in the name
-        for volume in setOfVolumes:
+        for volume in setOfVolumes.iterSubtomos():
             convertOrLinkVolume(volume, "%s%03d.mrc" % (outputFnRoot, volume.getObjId()))
     if name == 'ix':  # write the INDEX of the object in the name
-        for ix, volume in enumerate(setOfVolumes):
+        for ix, volume in enumerate(setOfVolumes.iterSubtomos()):
             convertOrLinkVolume(volume, "%s%03d.mrc" % (outputFnRoot, int(ix + 1)))
 
 
@@ -124,7 +124,7 @@ def readDynTable(self, item, tomoSet=None):
     item.setVolId(volId)
     classId = nline.split()[21]
     item.setClassId(classId)
-    if tomoSet != None:
+    if tomoSet:
         tomo = tomoSet[volId] if tomoSet.getSize() > 1 \
             else tomoSet.getFirstItem()
         tomoOrigin = tomo.getOrigin()
@@ -140,6 +140,47 @@ def readDynTable(self, item, tomoSet=None):
         coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
         coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
         item.setCoordinate3D(coordinate3d)
+
+
+def dynTableLine2Subtomo(nline, subtomo, subtomoSet, tomo=None, coordSet=None):
+    nline = nline.rstrip()
+    subtomo.setObjId(int(nline.split()[0]))
+    shiftx = nline.split()[3]
+    shifty = nline.split()[4]
+    shiftz = nline.split()[5]
+    tdrot = nline.split()[6]
+    tilt = nline.split()[7]
+    narot = nline.split()[8]
+    A = eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz)
+    transform = Transform()
+    transform.setMatrix(A)
+    subtomo.setTransform(transform)
+    angleMin = nline.split()[13]
+    angleMax = nline.split()[14]
+    acquisition = TomoAcquisition()
+    acquisition.setAngleMin(angleMin)
+    acquisition.setAngleMax(angleMax)
+    subtomo.setAcquisition(acquisition)
+    volId = int(nline.split()[19])
+    subtomo.setVolId(volId)
+    classId = nline.split()[21]
+    subtomo.setClassId(classId)
+    if tomo:
+        tomoOrigin = tomo.getOrigin()
+        subtomo.setVolName(tomo.getFileName())
+        subtomo.setOrigin(tomoOrigin)
+        coordinate3d = Coordinate3D()
+        coordinate3d.setVolId(tomo.getObjId())
+        coordinate3d.setVolume(tomo)
+        x = nline.split()[23]
+        y = nline.split()[24]
+        z = nline.split()[25]
+        coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+        subtomo.setCoordinate3D(coordinate3d)
+        coordSet.append(coordinate3d)
+    subtomoSet.append(subtomo)
 
 
 def readDynCoord(tableFile, coord3DSet, tomo):

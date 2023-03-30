@@ -1,3 +1,10 @@
+V3.1.15
+  - Protocol for importing subtomograms from Dynamo's .tbl files improved.
+  - Binning factor interpretation is now the same as in IMOD (followed by Scipion).
+  - Protocol for subtomograms alignment simplified.
+  * For developers:
+    - Tests expanded and re-factorized using the test centralization layer.
+    - Protocols for tomograms importing and subtomograms subboxing disabled (to be reviewed).
 V3.1.14
   - Hotfix
 V3.1.13
