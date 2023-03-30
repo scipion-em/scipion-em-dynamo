@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es)
+# * Authors:    Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
@@ -24,13 +23,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from .protocol_average_subtomograms import DynamoProtAvgSubtomograms
-from .protocol_subtomo_MRA import DynamoSubTomoMRA
-from .protocol_extraction import DynamoExtraction
-from .protocol_boxing import DynamoBoxing
-from .protocol_import_subtomos import DynamoImportSubtomos
-# from .protocol_subBoxing import DynamoSubBoxing
-from .protocol_model_workflow import DynamoModelWorkflow
-# from .protocol_import_tomograms import DynamoImportTomograms
-from .protocol_bin_tomograms import DynamoBinTomograms
-# from .protocol_coords_to_model import DynamoCoordsToModel
+from pwem.protocols import EMProtocol
+from pyworkflow import BETA
+from tomo.protocols import ProtTomoBase
+
+
+class DynamoProtocolBase(EMProtocol, ProtTomoBase):
+
+    _devStatus = BETA
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def getBinningFactor(self, forDynamo=True):
+        """From Dynamo: a binning Factor of 1 will decrease the size of the Tomograms by 2,
+        a Binning Factor of 2 by 4... So Dynamo interprets the binning factor as 2**binFactor, while IMOD
+        interprets it literally. Thus, this method will convert the binning introduced by the user in the
+        Dynamo convention"""
+        return (2 ** (self.binning.get() - 1)) / 2 if forDynamo else self.binning.get()
+

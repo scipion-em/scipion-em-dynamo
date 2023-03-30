@@ -27,7 +27,6 @@
 from enum import Enum
 from os import remove
 from os.path import abspath
-
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol import params
@@ -61,7 +60,7 @@ dynModelsDict = {
 }
 
 
-class OutputsModelWf(Enum):
+class DynModelWfOuts(Enum):
     coordinates = SetOfCoordinates3D
 
 
@@ -71,7 +70,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     _label = 'model workflow'
     _devStatus = BETA
-    _possibleOutputs = OutputsModelWf
+    _possibleOutputs = DynModelWfOuts
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

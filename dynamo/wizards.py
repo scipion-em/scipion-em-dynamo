@@ -23,9 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+from dynamo.protocols.protocol_extraction import OTHER
 from pwem.wizards import EmWizard
-
 from dynamo.protocols import DynamoExtraction, DynamoModelWorkflow
 
 
@@ -38,23 +37,30 @@ class DynamoExtractionWizard(EmWizard):
     _targets = [(DynamoExtraction, ['boxSize'])]
 
     def show(self, form):
+        binFactor = 1
         DynamoExtractProt = form.protocol
         inputCoordinates = DynamoExtractProt.inputCoordinates.get()
+        tomoSource = DynamoExtractProt.tomoSource.get()
         if not inputCoordinates:
             print('You must specify input coordinates')
             return
 
-        aux = inputCoordinates.getBoxSize()
-        if not aux % 2 == 0:
-            aux += 1
-        boxSize = aux
+        boxSize = inputCoordinates.getBoxSize()
         if not boxSize:
             print('These coordinates do not have box size. Please, enter box size manually.')
             return
 
-        if DynamoExtractProt.downFactor.get() != 1:
-            boxSize = float(boxSize/DynamoExtractProt.downFactor.get())
+        if tomoSource == OTHER:
+            inTomos = DynamoExtractProt.inputTomograms.get()
+            if not inTomos:
+                print('The tomograms for the subtomogram extraction must be specified if the selected '
+                      'tomogram source is "Other"')
+                return
+            coordsSRate = inputCoordinates.getSamplingRate()
+            tomosSRate = inTomos.getSamplingRate()
+            binFactor = coordsSRate / tomosSRate
 
+        boxSize = round(boxSize * binFactor)
         form.setVar('boxSize', boxSize)
 
 

@@ -30,22 +30,23 @@ import pwem
 import pyworkflow.utils as pwutils
 from .constants import *
 
-__version__ = '3.1.14'
+__version__ = '3.1.15'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
+
 
 class Plugin(pwem.Plugin):
     _homeVar = DYNAMO_HOME
     _pathVars = [DYNAMO_HOME]
-    _url = "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Main_Page"
+    _url = "https://github.com/scipion-em/scipion-em-dynamo"
     # _supportedVersions =
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(DYNAMO_HOME, 'dynamo-{}'.format(DYNAMO_VERSION))
+        cls._defineEmVar(DYNAMO_HOME, 'dynamo-{}'.format(DEFAULT_VERSION))
 
     @classmethod
-    def getEnviron(cls):
+    def getEnviron(cls, gpuId=0):
         """ Create the needed environment for Dynamo programs. """
         environ = pwutils.Environ(os.environ)
         dyn_home = cls.getHome()
@@ -59,7 +60,8 @@ class Plugin(pwem.Plugin):
         environ.update({
             'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
             'LD_LIBRARY_PATH': ":".join(paths),
-            'DYNAMO_ROOT': dyn_home
+            'DYNAMO_ROOT': dyn_home,
+            'CUDA_VISIBLE_DEVICES': str(gpuId)
         }, position=pwutils.Environ.BEGIN)
         return environ
 
@@ -68,11 +70,11 @@ class Plugin(pwem.Plugin):
         return join(cls.getHome(), 'matlab', 'bin', DYNAMO_PROGRAM)
 
     @classmethod
-    def runDynamo(cls, protocol, args, cwd=None):
+    def runDynamo(cls, protocol, args, cwd=None, gpuId=0):
         """ Run Dynamo command from a given protocol. """
         # args will be the .doc file which contains the MATLAB code
         program = cls.getDynamoProgram()
-        protocol.runJob(program, args, env=cls.getEnviron(), cwd=cwd)
+        protocol.runJob(program, args, env=cls.getEnviron(gpuId=gpuId), cwd=cwd)
 
     @classmethod
     def defineBinaries(cls, env):
@@ -106,7 +108,7 @@ class Plugin(pwem.Plugin):
             useGpu = False
 
         SW_EM = env.getEmFolder()
-        dyn_folder = 'dynamo-%s' % DYNAMO_VERSION
+        dyn_folder = 'dynamo-%s' % DEFAULT_VERSION
 
         compile_cuda = "echo ' > %s' && " % preMsgs
         if useGpu:
@@ -129,3 +131,21 @@ class Plugin(pwem.Plugin):
                        createBuildDir = True,
                        commands=commands)
 
+    @classmethod
+    def checkDynamoVersion(cls):
+        """Admitted versions must be higher or equal than version 1.1.532. The version number is extracted
+        from the home variable, splitting by '-' and removing a possible 'v' for version. Finally the points are
+        removed and the final numeric string is cast to an integer."""
+        # Check the installed binary version
+        dynamoVer = cls.getHome().split('-')[-1].replace('v', '')
+        if int(dynamoVer.replace('.', '')) < MINIMUM_VERSION_NUM:
+            raise Exception('*The Dynamo version read by Scipion in variable DYNAMO_HOME (currently --> %s) is older '
+                            'than the oldest version admited --> %s.\n\nPlease, update the variable value to a valid '
+                            'version if you have already installed a more recent version of Dynamo that suits or if '
+                            'not, consider to reinstall the plugin to the latest version.*' %
+                            (dynamoVer, DYNAMO_VERSION_1_1_532))
+
+    @classmethod
+    def validateInstallation(cls):
+        super().validateInstallation()
+        cls.checkDynamoVersion()

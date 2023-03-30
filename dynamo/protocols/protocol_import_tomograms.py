@@ -33,6 +33,7 @@ from pwem.objects import Transform
 from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import Tomogram
 from tomo.protocols.protocol_base import ProtTomoImportAcquisition
+from .. import Plugin
 
 from ..convert import readDynCatalogue
 

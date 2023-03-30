@@ -28,12 +28,12 @@ with open('requirements.txt') as f:
 setup(
     name='scipion-em-dynamo',  # Required
     version=__version__,  # Required
-    description='Scipion plugin for dynamo.',  # Required
+    description='Plugin to use DYNAMO within the Scipion framework',  # Required
     long_description=long_description,  # Optional
     url='https://github.com/scipion-em/scipion-em-dynamo',  # Optional
-    author='I2PC',  # Optional
+    author='I2PC, Scipion Team',  # Optional
     author_email='scipion@cnb.csic.es',  # Optional
-    keywords='scipion cryoem imageprocessing scipion-3.0',  # Optional
+    keywords='scipion-3.0 electron-microscopy cryo-em structural-biology image-processing',  # Optional
     packages=find_packages(),
     install_requires=[requirements],
     entry_points={
@@ -41,5 +41,22 @@ setup(
     },
     package_data={  # Optional
        'dynamo': ['icon.png', 'protocols.conf'],
-    }
+    },
+    classifiers=[  # Optional
+                      # How mature is this project? Common values are
+                      #   3 - Alpha
+                      #   4 - Beta
+                      #   5 - Production/Stable
+                      'Development Status :: 4 - Beta',
+
+                      # Indicate who your project is intended for
+                      #   'Intended Audience :: Users',
+
+                      # Pick your license as you wish
+                      'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
+
+                      # Specify the Python versions you support here. In particular, ensure
+                      # that you indicate whether you support Python 2, Python 3 or both.
+                      'Programming Language :: Python :: 3'
+                  ],
 )

@@ -42,7 +42,7 @@ from dynamo import Plugin, VLL_FILE, CATALOG_FILENAME
 
 
 class DynamoCoordsToModel(EMProtocol, ProtTomoBase):
-    """Convert a SetOfCoordinates3D to a SetOfMeshes formatted to be appropiate to work with Dynamo
+    """Convert a SetOfCoordinates3D to a SetOfMeshes formatted to be appropriate to work with Dynamo
     protocols"""
 
     _label = 'coords to model'

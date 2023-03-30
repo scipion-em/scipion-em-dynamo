@@ -24,3 +24,19 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from enum import Enum
+
+from pyworkflow.tests import DataSet
+
+DYNAMO_TEST_DATASET = 'Dynamo'
+
+
+class DataSetDynamo(Enum):
+    meshesFromBoxingProtSqlite = 'meshes.sqlite'
+    projectCatalog = 'project.ctlg'
+    listOfTomosFile = 'tomograms.vll'
+    vol1ModelsDir = 'volume_1/models'
+    vol2ModelsDir = 'volume_2/models'
+
+
+DataSet(name=DYNAMO_TEST_DATASET, folder=DYNAMO_TEST_DATASET, files={el.name: el.value for el in DataSetDynamo})
