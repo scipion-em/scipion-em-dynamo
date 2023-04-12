@@ -129,7 +129,8 @@ class Plugin(pwem.Plugin):
         env.addPackage('dynamo', version='1.1.532',
                        tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
                        createBuildDir = True,
-                       commands=commands)
+                       commands=commands,
+                       default=True)
 
     @classmethod
     def checkDynamoVersion(cls):
