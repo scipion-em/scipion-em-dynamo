@@ -27,10 +27,11 @@ import os.path
 from os.path import join
 import subprocess
 import pwem
+import pyworkflow
 import pyworkflow.utils as pwutils
 from .constants import *
 
-__version__ = '3.1.16'
+__version__ = '3.1.17'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -129,23 +130,27 @@ class Plugin(pwem.Plugin):
         env.addPackage('dynamo', version='1.1.532',
                        tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
                        createBuildDir = True,
-                       commands=commands)
+                       commands=commands,
+                       default=True)
 
     @classmethod
     def checkDynamoVersion(cls):
         """Admitted versions must be higher or equal than version 1.1.532. The version number is extracted
         from the home variable, splitting by '-' and removing a possible 'v' for version. Finally the points are
         removed and the final numeric string is cast to an integer."""
+        msg = []
         # Check the installed binary version
         dynamoVer = cls.getHome().split('-')[-1].replace('v', '')
         if int(dynamoVer.replace('.', '')) < MINIMUM_VERSION_NUM:
-            raise Exception('*The Dynamo version read by Scipion in variable DYNAMO_HOME (currently --> %s) is older '
-                            'than the oldest version admited --> %s.\n\nPlease, update the variable value to a valid '
-                            'version if you have already installed a more recent version of Dynamo that suits or if '
-                            'not, consider to reinstall the plugin to the latest version.*' %
-                            (dynamoVer, DYNAMO_VERSION_1_1_532))
+           msg = ['The Dynamo version pointed by variable %s '
+                  '(%s) is not supported --> %s.\n\n'
+                  'Please, update the variable value or comment it in %s' %
+                  (DYNAMO_HOME, dynamoVer, DYNAMO_VERSION_1_1_532,
+                   pyworkflow.Config.SCIPION_CONFIG)]
+        return msg
 
     @classmethod
     def validateInstallation(cls):
-        super().validateInstallation()
-        cls.checkDynamoVersion()
+        msg = super().validateInstallation()
+        msg += cls.checkDynamoVersion()
+        return msg
