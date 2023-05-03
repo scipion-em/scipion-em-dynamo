@@ -26,11 +26,11 @@
 # **************************************************************************
 from enum import Enum
 from os import remove
-from os.path import abspath
+from os.path import abspath, exists
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol import params
-from tomo.objects import SetOfCoordinates3D
+from tomo.objects import SetOfCoordinates3D, SetOfMeshes
 from tomo.protocols import ProtTomoBase
 from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NAME, M_SURFACE_NAME, \
     M_ELLIPSOIDAL_VESICLE_NAME, M_GENERAL_WITH_BOXES_NAME, M_SURFACE_DES, \
@@ -59,9 +59,16 @@ dynModelsDict = {
     MB_GENERAL_BOXES: M_GENERAL,
 }
 
+# Keys for the failed models
+TOMO_ID = 'tomoId'
+MODEL_NAME = 'modelName'
+MODEL_FILE = 'modelFile'
+FAILED_MODEL_KEYS = [TOMO_ID, MODEL_NAME, MODEL_FILE]
+
 
 class DynModelWfOuts(Enum):
     coordinates = SetOfCoordinates3D
+    failedMeshes = SetOfMeshes
 
 
 class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
@@ -74,6 +81,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.failedList = []
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -126,22 +134,48 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     def applyWorkflowStep(self, tomoId, modelName, modelFile):
         commandsFile = self.writeMatlabFile(tomoId, modelName, modelFile)
         args = ' %s' % commandsFile
-        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+        try:
+            self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+        except:
+            self.failedList.append(dict(zip(FAILED_MODEL_KEYS, [tomoId, modelName, modelFile])))
 
     def createOutputStep(self):
-        precedentsPointer = self.inputMeshes.get()._precedentsPointer
-        precedents = precedentsPointer.get()
-        tomoList = [tomo.clone() for tomo in precedents]
-        tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in tomoList}
-        croppedFile = getCroppedFile(self._getTmpPath())
-        outCoords = createSetOfOutputCoords(self._getPath(), self._getExtraPath(), precedentsPointer, boxSize=self.boxSize.get())
-        dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
-        # Remove previous file to avoid data repetition because of the append mode
-        remove(croppedFile)
+        croppedFile = getCroppedFile(self._getTmpPath())  # All the calculated mesh points will be in this file
+        inputMeshes = self.inputMeshes.get()
+        outCoords = None
+        failedMeshes = None
+        outputsDict = {}
+        if exists(croppedFile):  # If all the models failed in the model workflow
+            precedentsPointer = inputMeshes._precedentsPointer
+            precedents = precedentsPointer.get()
+            tomoList = [tomo.clone() for tomo in precedents]
+            tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in tomoList}
+            outCoords = createSetOfOutputCoords(self._getPath(), self._getExtraPath(), precedentsPointer, boxSize=self.boxSize.get())
+            dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
+            # Remove previous file to avoid data repetition because of the append mode
+            remove(croppedFile)
+            outputsDict[self._possibleOutputs.coordinates.name] = outCoords
+
+        # Create a set with the failed meshes if there are any, so the user can correct them
+        if self.failedList:
+            failedMeshes = SetOfMeshes.create(self._getPath(), template='failedMeshes%s.sqlite')
+            failedMeshes.copyInfo(inputMeshes)
+            failedMeshes._dynCatalogue = inputMeshes._dynCatalogue
+            for d in self.failedList:
+                whereCond = "_tomoId=='%s' AND _dynModelName='%s' AND _dynModelFile=='%s'" % \
+                            (d[TOMO_ID], d[MODEL_NAME], d[MODEL_FILE])
+                for clickedPoint in inputMeshes.iterItems(where=whereCond):
+                    failedMeshes.append(clickedPoint)
+            outputsDict[self._possibleOutputs.failedMeshes.name] = failedMeshes
+
         # Define outputs and relations
-        self._defineOutputs(**{self._possibleOutputs.coordinates.name: outCoords})
-        self._defineSourceRelation(self.inputMeshes, outCoords)
-        self._updateOutputSet(self._possibleOutputs.coordinates.name, outCoords, state=outCoords.STREAM_CLOSED)
+        self._defineOutputs(**outputsDict)
+        if outCoords:
+            self._defineSourceRelation(self.inputMeshes, outCoords)
+            self._updateOutputSet(self._possibleOutputs.coordinates.name, outCoords, state=outCoords.STREAM_CLOSED)
+        if failedMeshes:
+            self._defineSourceRelation(self.inputMeshes, failedMeshes)
+            self._updateOutputSet(self._possibleOutputs.failedMeshes.name, failedMeshes, state=failedMeshes.STREAM_CLOSED)
 
     # --------------------------- DEFINE utils functions ----------------------
     def writeMatlabFile(self, tomoId, modelName, modelFile):
@@ -220,7 +254,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     @staticmethod
     def _getModelType(modelName):
         # Map the Dynamo model names into the protocol encoding model values
-        return dynModelsDict[modelName]
+        return dynModelsDict[modelName.split('_')[0]]  # If more than one model of the same type, they're stored as modelName_num
 
     def getMeshResultFile(self, tomoId):
         return abspath(self._getExtraPath('%s.txt' % tomoId))

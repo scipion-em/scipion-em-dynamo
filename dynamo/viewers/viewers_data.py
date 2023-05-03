@@ -100,7 +100,7 @@ class DynamoDataViewer(pwviewer.Viewer):
                 # it and we have to ask if the changes should be saved
                 if dynamoDialogCallingTime < getNewestModelModDate(modelList):
                     import tkinter as tk
-                    from dynamo.protocols.protocol_boxing import OutputsBoxing
+                    from dynamo.protocols.protocol_boxing import DynPickingOuts
 
                     frame = tk.Frame()
                     # Because the coordinates are written as general models, they'll have cropped points and angles defined
@@ -113,6 +113,6 @@ class DynamoDataViewer(pwviewer.Viewer):
                         _, outCoords = createBoxingOutputObjects(self.protocol, precedentsPointer,
                                                                  boxSize=outputCoords.getBoxSize(),
                                                                  savePicked=False)
-                        self.protocol._defineOutputs(**{OutputsBoxing.coordinates.name: outputCoords})
+                        self.protocol._defineOutputs(**{DynPickingOuts.coordinates.name: outputCoords})
                         self.protocol._defineSourceRelation(precedentsPointer, outCoords)
             return views
