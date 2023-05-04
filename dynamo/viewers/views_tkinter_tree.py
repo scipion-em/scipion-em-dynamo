@@ -24,8 +24,10 @@
 # *
 # **************************************************************************
 import threading
-from os.path import abspath, join
-from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, MB_GENERAL
+from os.path import abspath, join, exists
+from shutil import rmtree
+
+from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, MB_GENERAL, PROJECT_DIR, PRJ_FROM_VIEWER
 from dynamo.utils import getCurrentTomoCountFile, getDynamoModels, getCatalogFile
 from pyworkflow.gui.dialog import ToolbarListDialog
 from pyworkflow.utils import makePath
@@ -70,6 +72,7 @@ class DynamoTomoDialog(ToolbarListDialog):
         catalogueWithExt = getCatalogFile(extraPath)
         listTomosFile = join(extraPath, VLL_FILE)
         if self.calledFromViewer and not self._isADynamoProj(extraPath):
+            makePath(join(extraPath, PROJECT_DIR, PRJ_FROM_VIEWER))
             makePath(catalogue)  # Needed for a correct catalog creation
             # Dynamo fails if trying to create a catalog that already exists, so the previous one is deleted
             contents = "if exist('%s', 'file') == 2\n" % catalogueWithExt
@@ -88,7 +91,12 @@ class DynamoTomoDialog(ToolbarListDialog):
                         "'models')\n" % catalogue
             contents += "[~,tomoName,~] = fileparts(tomoPath)\n"
             contents += "coordFile = fullfile('%s', [tomoName, '.txt'])\n" % extraPath  # Get current coordinates file
-            contents += "if not(isfile(coordFile))\n"
+            contents += "if exist(coordFile, 'file') == 2\n"
+            contents += "s = dir(coordFile)\n"  # Check if the coordinates files is empty
+            contents += "if s.bytes == 0\n"
+            contents += "continue\n"
+            contents += "end\n"
+            contents += "else\n"
             contents += "continue\n"
             contents += "end\n"
             contents += "coordsMatrix = readmatrix(coordFile,'Delimiter',',')\n"  # Read it
@@ -156,6 +164,16 @@ class DynamoTomoDialog(ToolbarListDialog):
 
     @staticmethod
     def _isADynamoProj(fpath):
-        """Search recursively for Dynamo model files (omd) in a given directory (usually extra)"""
+        """Check the if a given path contains a valid Dynamo project:
+            - Case 1: if the project was created by a previous use of the viewer, it will contain a file named
+            prjFromViewer.txt. In that case, the project will be removed, as it may contain models corresponding to
+            the coordinates of the valid model workflows instead of the failed meshes to be fixed, for example.
+            - Case 2: Search recursively for Dynamo model files (omd) in a given directory (usually extra), to
+            distinguish the usage of the viewer to visualize coordinates obtained with other plugins than Dynamo."""
+        prjDir = join(fpath, PROJECT_DIR)
+        prjFromViewer = join(prjDir, PRJ_FROM_VIEWER)
+        if exists(prjFromViewer):
+            rmtree(prjDir)
+            return False
         modelFiles = getDynamoModels(fpath)
         return True if modelFiles else False

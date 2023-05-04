@@ -35,9 +35,11 @@ MINIMUM_VERSION_NUM = int(DYNAMO_VERSION_1_1_532.replace('.', ''))
 DYNAMO_SHIPPED_MCR = 'dynamo_activate_linux_shipped_MCR.sh'
 
 # Dynamo files
+PROJECT_DIR = 'project'
 CATALOG_BASENAME = 'project'
 CATALOG_FILENAME = '%s.ctlg' % CATALOG_BASENAME
 VLL_FILE = 'tomograms.vll'
+PRJ_FROM_VIEWER = 'prjFromViewer.txt'
 
 # Test files created to pass data between Scipion and Dynamo
 SUFFIX_COUNT = '_count'

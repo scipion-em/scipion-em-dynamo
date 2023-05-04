@@ -67,8 +67,11 @@ FAILED_MODEL_KEYS = [TOMO_ID, MODEL_NAME, MODEL_FILE]
 
 
 class DynModelWfOuts(Enum):
-    coordinates = SetOfCoordinates3D
-    failedMeshes = SetOfMeshes
+    # Instantiation needed in case the of multiple outputs of the same type (overridden if not)
+    coordinates = SetOfCoordinates3D()
+    coordinatesFixed = SetOfCoordinates3D()
+    failedMeshes = SetOfMeshes()
+    failedMeshesExpanded = SetOfMeshes()
 
 
 class DynamoModelWorkflow(EMProtocol, ProtTomoBase):

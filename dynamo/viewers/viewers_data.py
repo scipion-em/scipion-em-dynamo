@@ -25,6 +25,8 @@
 # *
 # **************************************************************************
 import datetime
+import glob
+from os import remove
 from os.path import join, abspath, exists
 from dynamo.utils import createBoxingOutputObjects, getNewestModelModDate, getDynamoModels
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
@@ -77,6 +79,9 @@ class DynamoDataViewer(pwviewer.Viewer):
                         coordCounter += 1
                 nCoordsDict[tomoId] = coordCounter
 
+            # Remove the possible particle count files from previous executions that may cause incorrect values in the
+            # tomo provider
+            [remove(partFile) for partFile in glob.glob(join(path, '*_count.txt'))]
             tomoProvider = DynamoTomogramProvider(tomoList, path, nParticlesDict=nCoordsDict)
             listTomosFile = join(path, VLL_FILE)
 
@@ -101,6 +106,8 @@ class DynamoDataViewer(pwviewer.Viewer):
                 if dynamoDialogCallingTime < getNewestModelModDate(modelList):
                     import tkinter as tk
                     from dynamo.protocols.protocol_boxing import DynPickingOuts
+                    from dynamo.protocols.protocol_model_workflow import DynModelWfOuts
+                    from dynamo.protocols import DynamoBoxing
 
                     frame = tk.Frame()
                     # Because the coordinates are written as general models, they'll have cropped points and angles defined
@@ -110,9 +117,36 @@ class DynamoDataViewer(pwviewer.Viewer):
                         tmpPath = self.protocol._getTmpPath()
                         if not exists(tmpPath):  # Some files will be created there, and it may not exist
                             makePath(tmpPath)
-                        _, outCoords = createBoxingOutputObjects(self.protocol, precedentsPointer,
-                                                                 boxSize=outputCoords.getBoxSize(),
-                                                                 savePicked=False)
-                        self.protocol._defineOutputs(**{DynPickingOuts.coordinates.name: outputCoords})
-                        self.protocol._defineSourceRelation(precedentsPointer, outCoords)
+                        outMeshes, outCoords = createBoxingOutputObjects(self.protocol, precedentsPointer,
+                                                                         boxSize=outputCoords.getBoxSize(),
+                                                                         savePicked=False)
+                        # Preserve previous outputs and generate new ones if necessary. The possible outputs are
+                        # different depending on if the viewer was called from the boxing protocol or from the model
+                        # workflow protocol results
+                        coordsName = DynPickingOuts.coordinates.name
+                        prevCoords = getattr(self.protocol, coordsName, None)
+                        if isinstance(self.protocol, DynamoBoxing):
+                            meshesName = DynPickingOuts.meshes.name
+                            prevMeshes = getattr(self.protocol, meshesName, None)
+                            prevOutputs = [prevCoords, prevMeshes]
+                            prevOutputNames = [coordsName, meshesName]
+                        else:  # Model workflow outputs
+                            failedMeshesName = DynModelWfOuts.failedMeshes.name
+                            prevFailedMeshes = getattr(self.protocol, failedMeshesName, None)
+                            prevOutputs = [prevCoords, prevFailedMeshes]
+                            prevOutputNames = [coordsName, failedMeshesName]
+
+                        outputsDict = {}
+                        if outCoords:
+                            outputsDict[DynModelWfOuts.coordinatesFixed.name] = outCoords
+                        if outMeshes:
+                            outputsDict[DynModelWfOuts.failedMeshesExpanded.name] = outMeshes
+                        for key, val in zip(prevOutputNames, prevOutputs):
+                            if val:
+                                outputsDict[key] = val
+
+                        self.protocol._defineOutputs(**outputsDict)
+                        for key, val in outputsDict.items():
+                            if val:
+                                self.protocol._defineSourceRelation(precedentsPointer, val)
             return views
