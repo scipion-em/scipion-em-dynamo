@@ -40,7 +40,6 @@ from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NA
     MODELS_NOT_PROCESSED_IN_MW, MODELS_ALLOWED_IN_MW_NAMES, M_VESICLE_NAME
 from ..utils import genMCode4ReadAndSaveData, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getCroppedFile
 
-
 # Model types mapping
 MODEL_CHOICES = [M_ELLIPSOIDAL_VESICLE_NAME, M_SURFACE_NAME, M_GENERAL_NAME]
 
@@ -69,9 +68,9 @@ FAILED_MODEL_KEYS = [TOMO_ID, MODEL_NAME, MODEL_FILE]
 class DynModelWfOuts(Enum):
     # Instantiation needed in case the of multiple outputs of the same type (overridden if not)
     coordinates = SetOfCoordinates3D()
-    coordinatesFixed = SetOfCoordinates3D()
+    fixedCoordinates = SetOfCoordinates3D()
     failedMeshes = SetOfMeshes()
-    failedMeshesExpanded = SetOfMeshes()
+    fixedMeshes = SetOfMeshes()
 
 
 class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
@@ -153,7 +152,8 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
             precedents = precedentsPointer.get()
             tomoList = [tomo.clone() for tomo in precedents]
             tomoFileDict = {abspath(tomo.getFileName()): tomo for tomo in tomoList}
-            outCoords = createSetOfOutputCoords(self._getPath(), self._getExtraPath(), precedentsPointer, boxSize=self.boxSize.get())
+            outCoords = createSetOfOutputCoords(self._getPath(), self._getExtraPath(), precedentsPointer,
+                                                boxSize=self.boxSize.get())
             dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
             # Remove previous file to avoid data repetition because of the append mode
             remove(croppedFile)
@@ -178,7 +178,8 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
             self._updateOutputSet(self._possibleOutputs.coordinates.name, outCoords, state=outCoords.STREAM_CLOSED)
         if failedMeshes:
             self._defineSourceRelation(self.inputMeshes, failedMeshes)
-            self._updateOutputSet(self._possibleOutputs.failedMeshes.name, failedMeshes, state=failedMeshes.STREAM_CLOSED)
+            self._updateOutputSet(self._possibleOutputs.failedMeshes.name, failedMeshes,
+                                  state=failedMeshes.STREAM_CLOSED)
 
     # --------------------------- DEFINE utils functions ----------------------
     def writeMatlabFile(self, tomoId, modelName, modelFile):
@@ -186,35 +187,42 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         codeFilePath = self._getExtraPath('modelWf_%s_%s.m' % (tomoId, modelName))
         modelType = self._getModelType(modelName)
         if modelType == M_VESICLE:
-            content = self.genVesicleCmdFileContents(modelName)
+            content = self.genVesicleCmdFileContents()
         elif modelType == M_SURFACE:
             content = self.genSCmdFileContents()
         elif modelType == M_GENERAL:
             # Change its type to surface model and process it
             content = self.genGen2SurfCmdFileContents()
-        content = genMCode4ReadAndSaveData(self._getTmpPath(), modelFile, savePicked=False, saveCropped=True, modelWfCode=content)
+        content = genMCode4ReadAndSaveData(self._getTmpPath(), modelFile, savePicked=False, saveCropped=True,
+                                           modelWfCode=content)
         with open(codeFilePath, 'w') as codeFid:
             codeFid.write(content)
         return codeFilePath
 
-    def genVesicleCmdFileContents(self, modelName):
-        # Let Dynamo approximate the geometry based on the points annotated in the boxing protocol
-        contentMWf = "m.approximateGeometryFromPoints()\n"
-        # Mesh creation steps (some of which are specific for each sub-model of type vesicle)
-        contentMWf += "m.mesh_parameter = %i\n" % self.meshParameter.get()
+    def _genCommonModelWfSteps(self):
+        """See
+        https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Example_of_membrane_model_workflow_through_the_command_line"""
+        contentMWf = "m.mesh_parameter = %i\n" % self.meshParameter.get()
         contentMWf += "m.crop_mesh_parameter = %i\n" % self.cropping.get()
         contentMWf += "m.mesh_maximum_triangles = %i\n" % self.maxTr.get()
-        if modelName == MB_ELLIPSOIDAL:
-            contentMWf += "m.createMesh()\n"
+        contentMWf += "m.controlUpdate()\n"
+        contentMWf += "m.createMesh()\n"
+        contentMWf += "m.refineMesh()\n"
+        contentMWf += "m.createCropMesh()\n"
+        contentMWf += "m.refineCropMesh()\n"
         contentMWf += "m.updateCrop()\n"
         contentMWf += "m.grepTable()\n"
-        # Format and write the output data in a text file that will be read in the step create output
+        return contentMWf
+
+    def genVesicleCmdFileContents(self):
+        # Let Dynamo approximate the geometry based on the points annotated in the boxing protocol
+        contentMWf = "m.approximateGeometryFromPoints()\n"
+        contentMWf += self._genCommonModelWfSteps()
         return contentMWf
 
     def genSCmdFileContents(self):
-        # Mesh creation steps
-        contentMWf = self._genSurfaceModelMeshSteps()
-        # Format and write the output data in a text file that will be read in the step create output
+        contentMWf = "m.subdivision_iterations=%i\n" % self.subDivision.get()
+        contentMWf += self._genCommonModelWfSteps()
         return contentMWf
 
     def genGen2SurfCmdFileContents(self):
@@ -231,7 +239,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         contentMWf += "m.group_labels = groupLabels\n"
         contentMWf += "m.last_group_label = i\n"
         # Mesh creation steps
-        contentMWf += self._genSurfaceModelMeshSteps()
+        contentMWf += self.genSCmdFileContents()
         # Format and write the output data in a text file that will be read in the step create output
         return contentMWf
 
@@ -257,24 +265,11 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     @staticmethod
     def _getModelType(modelName):
         # Map the Dynamo model names into the protocol encoding model values
-        return dynModelsDict[modelName.split('_')[0]]  # If more than one model of the same type, they're stored as modelName_num
+        return dynModelsDict[
+            modelName.split('_')[0]]  # If more than one model of the same type, they're stored as modelName_num
 
     def getMeshResultFile(self, tomoId):
         return abspath(self._getExtraPath('%s.txt' % tomoId))
-
-    def _genSurfaceModelMeshSteps(self):
-        # Mesh creation steps
-        content = "m.mesh_parameter=%i\n" % self.meshParameter.get()
-        content += "m.crop_mesh_parameter=%i\n" % self.cropping.get()
-        content += "m.mesh_maximum_triangles=%i\n" % self.maxTr.get()
-        content += "m.subdivision_iterations=%i\n" % self.subDivision.get()
-        content += "m.createMesh()\n"
-        content += "m.refineMesh()\n"
-        content += "m.createCropMesh()\n"
-        content += "m.refineCropMesh()\n"
-        content += "m.updateCrop()\n"
-        content += "m.grepTable()\n"
-        return content
 
     # --------------------------- DEFINE INFO functions ----------------------
     def _summary(self):

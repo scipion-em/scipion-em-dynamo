@@ -131,16 +131,16 @@ class DynamoDataViewer(pwviewer.Viewer):
                             prevOutputs = [prevCoords, prevMeshes]
                             prevOutputNames = [coordsName, meshesName]
                         else:  # Model workflow outputs
-                            failedMeshesName = DynModelWfOuts.failedMeshes.name
-                            prevFailedMeshes = getattr(self.protocol, failedMeshesName, None)
-                            prevOutputs = [prevCoords, prevFailedMeshes]
-                            prevOutputNames = [coordsName, failedMeshesName]
+                            # failedMeshesName = DynModelWfOuts.failedMeshes.name
+                            # prevFailedMeshes = getattr(self.protocol, failedMeshesName, None)
+                            prevOutputs = [prevCoords]
+                            prevOutputNames = [coordsName]
 
                         outputsDict = {}
                         if outCoords:
-                            outputsDict[DynModelWfOuts.coordinatesFixed.name] = outCoords
+                            outputsDict[DynModelWfOuts.fixedCoordinates.name] = outCoords
                         if outMeshes:
-                            outputsDict[DynModelWfOuts.failedMeshesExpanded.name] = outMeshes
+                            outputsDict[DynModelWfOuts.fixedMeshes.name] = outMeshes
                         for key, val in zip(prevOutputNames, prevOutputs):
                             if val:
                                 outputsDict[key] = val
