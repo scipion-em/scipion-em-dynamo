@@ -99,13 +99,29 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "else\n"
             contents += "continue\n"
             contents += "end\n"
-            contents += "coordsMatrix = readmatrix(coordFile,'Delimiter',',')\n"  # Read it
+
+            contents += "data = cellfun(@(x) regexp(x,',','Split'), importdata(coordFile), 'un', 0)\n"
+            contents += "data = vertcat(data{:})\n"
+            contents += "coordsMatrix = cell2mat(cellfun(@(x) str2double(x), data(:, 1:4), 'un', 0))\n"
+            contents += "modelTypeList = data(:, 5)\n"
             contents += "idm_vec = unique(coordsMatrix(:,4))'\n"  # Get the groupIds
+
+            # contents += "fidc = fopen(coordFile)\n"
+            # contents += "data = textscan(fidc, '%d,%d,%d,%i,%s')\n"
+            # contents += "fclose(fidc)\n"
+            # contents += "coordMatrix = cell2mat(data[:, 1:3])\n"
+            # contents += "idm_vec = cell2mat(data[:, 4])\n"
+            # contents += "modelTypeList = data[:, 5]\n"
+
+            # contents += "coordsMatrix = readmatrix(coordFile,'Delimiter',',')\n"  # Read it
+            # contents += "idm_vec = unique(coordsMatrix(:,4))'\n"  # Get the groupIds
+
             contents += "for idm=1:length(idm_vec)\n"
-            contents += "model_name = ['%s_',num2str(idm)]\n" % MB_GENERAL
+            contents += "model_type = modelTypeList{idm}\n"
+            contents += "model_name = [model_type, '_', num2str(idm)]\n"
             contents += "coords = coordsMatrix(coordsMatrix(:,4)==idm_vec(idm),:)\n"  # Use them for logical indexing of the coords
             contents += "modelFilePath = fullfile(currentTomoModelsDir, [model_name, '.omd'])\n"
-            contents += "model=dmodels.general()\n"  # Create a general model for each groupId in each tomogram
+            contents += "model=eval(['dmodels.', model_type, '()'])\n"  # Create a model of the same type as registered for each groupId in each tomogram
             contents += "model.file = modelFilePath\n"
             contents += "model.name = model_name\n"
             contents += "model.cvolume = cvolume\n"

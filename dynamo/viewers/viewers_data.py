@@ -38,7 +38,20 @@ from pyworkflow.utils.properties import Message
 from tomo.constants import BOTTOM_LEFT_CORNER
 from tomo.objects import SetOfCoordinates3D, SetOfMeshes
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
-from dynamo import VLL_FILE
+from dynamo import VLL_FILE, MB_BY_LEVELS, MB_ELLIPSOIDAL, MB_VESICLE, MB_ELLIPSOIDAL_MARKED, MB_GENERAL, \
+    MB_GENERAL_BOXES
+
+# Dynamo model names mapping
+DYN_GEN_MODEL_OBJ_NAME = 'general'
+DYN_EV_MODEL_OBJ_NAME = 'ellipsoidalVesicle'
+dynModelsDict = {
+    MB_BY_LEVELS: 'membraneByLevels',
+    MB_VESICLE: 'vesicle',
+    MB_ELLIPSOIDAL: DYN_EV_MODEL_OBJ_NAME,
+    MB_ELLIPSOIDAL_MARKED: DYN_EV_MODEL_OBJ_NAME,
+    MB_GENERAL: DYN_GEN_MODEL_OBJ_NAME,
+    MB_GENERAL_BOXES: DYN_GEN_MODEL_OBJ_NAME,
+}
 
 
 class DynamoDataViewer(pwviewer.Viewer):
@@ -74,8 +87,9 @@ class DynamoDataViewer(pwviewer.Viewer):
                 with open(join(path, removeBaseExt(tomo.getFileName()) + '.txt'), 'w') as fid:
                     for coord in outputCoords.iterCoordinates(tomo):
                         coords = list(coord.getPosition(BOTTOM_LEFT_CORNER))
+                        modelType = self._getModelType(coord._dynModelName.get())
                         # angles = list(matrix2eulerAngles(coord.getMatrix()))[:3]  # Keep the angles, not the shifts (Dynamo boxing GUI is not expecting them at this point)
-                        fid.write(",".join(map(str, coords + [coord.getGroupId()])) + "\n")
+                        fid.write(",".join(map(str, coords + [coord.getGroupId(), modelType])) + "\n")
                         coordCounter += 1
                 nCoordsDict[tomoId] = coordCounter
 
@@ -150,3 +164,10 @@ class DynamoDataViewer(pwviewer.Viewer):
                             if val:
                                 self.protocol._defineSourceRelation(precedentsPointer, val)
             return views
+
+    @staticmethod
+    def _getModelType(modelName):
+        """Map the Dynamo model names into the protocol encoding model value"""
+        # If more than one model of the same type, they're stored as modelName_num
+        return dynModelsDict.get(modelName.split('_')[0], DYN_GEN_MODEL_OBJ_NAME)
+
