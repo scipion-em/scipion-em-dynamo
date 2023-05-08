@@ -73,7 +73,7 @@ class DynamoDataViewer(pwviewer.Viewer):
         views = []
         path = self.protocol._getExtraPath()
 
-        if isinstance(obj, SetOfCoordinates3D) or isinstance(obj, SetOfMeshes):
+        if isinstance(obj, SetOfCoordinates3D):  # SetofMeshes will also be True as it inherits from SetOfCoordinates3D
             outputCoords = obj
             precedentsPointer = outputCoords._precedentsPointer
             precedents = outputCoords.getPrecedents()
