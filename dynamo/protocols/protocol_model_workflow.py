@@ -161,7 +161,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
         # Create a set with the failed meshes if there are any, so the user can correct them
         if self.failedList:
-            failedMeshes = SetOfMeshes.create(self._getPath(), template='failedMeshes%s.sqlite')
+            failedMeshes = SetOfMeshes.create(self._getPath(), template='meshes%s.sqlite', suffix='failed')
             failedMeshes.copyInfo(inputMeshes)
             failedMeshes._dynCatalogue = inputMeshes._dynCatalogue
             for d in self.failedList:
@@ -207,9 +207,9 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
         contentMWf += "m.mesh_maximum_triangles = %i\n" % self.maxTr.get()
         contentMWf += "m.controlUpdate()\n"
         contentMWf += "m.createMesh()\n"
-        contentMWf += "m.refineMesh()\n"
+        # contentMWf += "m.refineMesh()\n"
         contentMWf += "m.createCropMesh()\n"
-        contentMWf += "m.refineCropMesh()\n"
+        # contentMWf += "m.refineCropMesh()\n"
         contentMWf += "m.updateCrop()\n"
         contentMWf += "m.grepTable()\n"
         return contentMWf
@@ -265,8 +265,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     @staticmethod
     def _getModelType(modelName):
         # Map the Dynamo model names into the protocol encoding model values
-        return dynModelsDict[
-            modelName.split('_')[0]]  # If more than one model of the same type, they're stored as modelName_num
+        return dynModelsDict[modelName.split('_')[0]]  # If more than one model of the same type, they're stored as modelName_num
 
     def getMeshResultFile(self, tomoId):
         return abspath(self._getExtraPath('%s.txt' % tomoId))

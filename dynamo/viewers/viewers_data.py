@@ -60,6 +60,7 @@ class DynamoDataViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [SetOfMeshes, SetOfCoordinates3D]
+    _name = 'Dynamo'
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -110,7 +111,8 @@ class DynamoDataViewer(pwviewer.Viewer):
             dynamoDialogCallingTime = datetime.datetime.now()
             self.dlg = DynamoTomoDialog(self._tkRoot, path,
                                         provider=tomoProvider,
-                                        calledFromViewer=True)
+                                        calledFromViewer=True,
+                                        suffix='fixed')
 
             modelList = getDynamoModels(path)
             if modelList:
@@ -133,7 +135,8 @@ class DynamoDataViewer(pwviewer.Viewer):
                             makePath(tmpPath)
                         outMeshes, outCoords = createBoxingOutputObjects(self.protocol, precedentsPointer,
                                                                          boxSize=outputCoords.getBoxSize(),
-                                                                         savePicked=False)
+                                                                         savePicked=True,
+                                                                         suffix='fixed')
                         # Preserve previous outputs and generate new ones if necessary. The possible outputs are
                         # different depending on if the viewer was called from the boxing protocol or from the model
                         # workflow protocol results

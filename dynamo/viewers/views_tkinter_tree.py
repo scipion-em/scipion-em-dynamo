@@ -123,7 +123,7 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "modelFilePath = fullfile(currentTomoModelsDir, [model_name, '.omd'])\n"
             contents += "model=eval(['dmodels.', model_type, '()'])\n"  # Create a model of the same type as registered for each groupId in each tomogram
             contents += "model.file = modelFilePath\n"
-            contents += "model.name = model_name\n"
+            contents += "model.name = ['m', model_name]\n"
             contents += "model.cvolume = cvolume\n"
             contents += "nParticles = size(coords, 1)\n"
             contents += "model.individual_labels = 1:nParticles\n"
