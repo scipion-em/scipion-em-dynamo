@@ -27,7 +27,8 @@ import threading
 from os.path import abspath, join, exists
 from shutil import rmtree
 
-from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, MB_GENERAL, PROJECT_DIR, PRJ_FROM_VIEWER
+from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, PROJECT_DIR, PRJ_FROM_VIEWER, TOMOGRAMS_DIR, \
+    DATA_MODIFIED_FROM_VIEWER
 from dynamo.utils import getCurrentTomoCountFile, getDynamoModels, getCatalogFile
 from pyworkflow.gui.dialog import ToolbarListDialog
 from pyworkflow.utils import makePath
@@ -99,23 +100,11 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "else\n"
             contents += "continue\n"
             contents += "end\n"
-
             contents += "data = cellfun(@(x) regexp(x,',','Split'), importdata(coordFile), 'un', 0)\n"
             contents += "data = vertcat(data{:})\n"
             contents += "coordsMatrix = cell2mat(cellfun(@(x) str2double(x), data(:, 1:4), 'un', 0))\n"
             contents += "modelTypeList = data(:, 5)\n"
             contents += "idm_vec = unique(coordsMatrix(:,4))'\n"  # Get the groupIds
-
-            # contents += "fidc = fopen(coordFile)\n"
-            # contents += "data = textscan(fidc, '%d,%d,%d,%i,%s')\n"
-            # contents += "fclose(fidc)\n"
-            # contents += "coordMatrix = cell2mat(data[:, 1:3])\n"
-            # contents += "idm_vec = cell2mat(data[:, 4])\n"
-            # contents += "modelTypeList = data[:, 5]\n"
-
-            # contents += "coordsMatrix = readmatrix(coordFile,'Delimiter',',')\n"  # Read it
-            # contents += "idm_vec = unique(coordsMatrix(:,4))'\n"  # Get the groupIds
-
             contents += "for idm=1:length(idm_vec)\n"
             contents += "model_type = modelTypeList{idm}\n"
             contents += "model_name = [model_type, '_', num2str(idm)]\n"
@@ -160,10 +149,20 @@ class DynamoTomoDialog(ToolbarListDialog):
             content += "tomoFiles = cellfun(@(x) x.file, ctlg.volumes, 'UniformOutput', false)\n"  # Cell with the tomo names
             content += "currentTomoInd = find(ismember(tomoFiles, '%s'))\n" % abspath(tomo.getFileName())  # Index of the current tomo in the catalog
             content += "loadDynSyntax = sprintf('dtmslice @{%s}%i', ctlgNoExt, currentTomoInd)\n"
+            content += "launchTime = datetime\n"  # Capture the timestamp right before calling Dynamo's picker GUI
             content += "eval(loadDynSyntax)\n"  # Launch Dynamo's picker GUI
-            content += "modeltrack.loadFromCatalogue('handles',ctlg,'full',true,'select',false)\n"  # Load the models contained in the catalogue
+            content += "modeltrack.loadFromCatalogue('handles', ctlg, 'full', true, 'select', false)\n"  # Load the models contained in the catalogue
             content += "uiwait(dpkslicer.getHandles().figure_fastslicer)\n"  # Wait until it's closed
+
             content += "modeltrack.saveAllInCatalogue\n"  # Save in the catalog
+            # Check the model files last modification timestamp and proceed consequently
+            content += "currentTomoModelsDir = fullfile('%s', ['volume_', num2str(currentTomoInd)], 'models')\n" % join(self.path, PROJECT_DIR, TOMOGRAMS_DIR)
+            content += "dirSt = dir(fullfile(currentTomoModelsDir, '*.omd'))\n"
+            content += "lastModDates = {dirSt.date}\n"
+            content += "if any(cellfun(@(x) launchTime < datetime(x), lastModDates))\n"  # The user made some changes to the data from the viewer
+            content += "fMod = fopen('%s', 'w')\n" % join(self.path, PROJECT_DIR, DATA_MODIFIED_FROM_VIEWER)  # Create an empty file to inform Scipion about the user actions
+            content += "fprintf(fMod, '1')\n"
+            content += "fclose(fMod)\n"
             content += "models = dcmodels(ctlgNoExt, 'i', currentTomoInd)\n"
             content += "nParticles = 0\n"
             content += "for i=1:length(models)\n"
@@ -174,7 +173,7 @@ class DynamoTomoDialog(ToolbarListDialog):
             content += "fid = fopen('%s', 'w')\n" % self.currentTomoTxtFile
             content += "fprintf(fid, '%i', nParticles)\n"  # Save the number of particles to a text file
             content += "fclose(fid)\n"
-            content += "nParticles"
+            content += "end\n"
             codeFid.write(content)
         return codeFilePath
 

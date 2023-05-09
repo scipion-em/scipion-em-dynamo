@@ -39,7 +39,7 @@ from tomo.constants import BOTTOM_LEFT_CORNER
 from tomo.objects import SetOfCoordinates3D, SetOfMeshes
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 from dynamo import VLL_FILE, MB_BY_LEVELS, MB_ELLIPSOIDAL, MB_VESICLE, MB_ELLIPSOIDAL_MARKED, MB_GENERAL, \
-    MB_GENERAL_BOXES
+    MB_GENERAL_BOXES, PROJECT_DIR, DATA_MODIFIED_FROM_VIEWER
 
 # Dynamo model names mapping
 DYN_GEN_MODEL_OBJ_NAME = 'general'
@@ -96,7 +96,7 @@ class DynamoDataViewer(pwviewer.Viewer):
 
             # Remove the possible particle count files from previous executions that may cause incorrect values in the
             # tomo provider
-            [remove(partFile) for partFile in glob.glob(join(path, '*_count.txt'))]
+            # [remove(partFile) for partFile in glob.glob(join(path, '*_count.txt'))]
             tomoProvider = DynamoTomogramProvider(tomoList, path, nParticlesDict=nCoordsDict)
             listTomosFile = join(path, VLL_FILE)
 
@@ -114,58 +114,56 @@ class DynamoDataViewer(pwviewer.Viewer):
                                         calledFromViewer=True,
                                         suffix='fixed')
 
-            modelList = getDynamoModels(path)
-            if modelList:
-                # Check if the modification file of the newest model file is higher than the time capture right before
-                # calling the Dynamo dialog. In that case, it means that some modification was carried out by the user from
-                # it and we have to ask if the changes should be saved
-                if dynamoDialogCallingTime < getNewestModelModDate(modelList):
-                    import tkinter as tk
-                    from dynamo.protocols.protocol_boxing import DynPickingOuts
-                    from dynamo.protocols.protocol_model_workflow import DynModelWfOuts
-                    from dynamo.protocols import DynamoBoxing
+            # Check if the modification file of the newest model file is higher than the time capture right before
+            # calling the Dynamo dialog. In that case, it means that some modification was carried out by the user from
+            # it and we have to ask if the changes should be saved
+            if exists(self.protocol._getExtraPath(PROJECT_DIR, DATA_MODIFIED_FROM_VIEWER)):
+                import tkinter as tk
+                from dynamo.protocols.protocol_boxing import DynPickingOuts
+                from dynamo.protocols.protocol_model_workflow import DynModelWfOuts
+                from dynamo.protocols import DynamoBoxing
 
-                    frame = tk.Frame()
-                    # Because the coordinates are written as general models, they'll have cropped points and angles defined
-                    # (particularity of Dynamo for this kind of models). Hence, coordinates will be saved as if the model
-                    # workflow had been carried out
-                    if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
-                        tmpPath = self.protocol._getTmpPath()
-                        if not exists(tmpPath):  # Some files will be created there, and it may not exist
-                            makePath(tmpPath)
-                        outMeshes, outCoords = createBoxingOutputObjects(self.protocol, precedentsPointer,
-                                                                         boxSize=outputCoords.getBoxSize(),
-                                                                         savePicked=True,
-                                                                         suffix='fixed')
-                        # Preserve previous outputs and generate new ones if necessary. The possible outputs are
-                        # different depending on if the viewer was called from the boxing protocol or from the model
-                        # workflow protocol results
-                        coordsName = DynPickingOuts.coordinates.name
-                        prevCoords = getattr(self.protocol, coordsName, None)
-                        if isinstance(self.protocol, DynamoBoxing):
-                            meshesName = DynPickingOuts.meshes.name
-                            prevMeshes = getattr(self.protocol, meshesName, None)
-                            prevOutputs = [prevCoords, prevMeshes]
-                            prevOutputNames = [coordsName, meshesName]
-                        else:  # Model workflow outputs
-                            # failedMeshesName = DynModelWfOuts.failedMeshes.name
-                            # prevFailedMeshes = getattr(self.protocol, failedMeshesName, None)
-                            prevOutputs = [prevCoords]
-                            prevOutputNames = [coordsName]
+                frame = tk.Frame()
+                # Because the coordinates are written as general models, they'll have cropped points and angles defined
+                # (particularity of Dynamo for this kind of models). Hence, coordinates will be saved as if the model
+                # workflow had been carried out
+                if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
+                    tmpPath = self.protocol._getTmpPath()
+                    if not exists(tmpPath):  # Some files will be created there, and it may not exist
+                        makePath(tmpPath)
+                    outMeshes, outCoords = createBoxingOutputObjects(self.protocol, precedentsPointer,
+                                                                     boxSize=outputCoords.getBoxSize(),
+                                                                     savePicked=True,
+                                                                     suffix='fixed')
+                    # Preserve previous outputs and generate new ones if necessary. The possible outputs are
+                    # different depending on if the viewer was called from the boxing protocol or from the model
+                    # workflow protocol results
+                    coordsName = DynPickingOuts.coordinates.name
+                    prevCoords = getattr(self.protocol, coordsName, None)
+                    if isinstance(self.protocol, DynamoBoxing):
+                        meshesName = DynPickingOuts.meshes.name
+                        prevMeshes = getattr(self.protocol, meshesName, None)
+                        prevOutputs = [prevCoords, prevMeshes]
+                        prevOutputNames = [coordsName, meshesName]
+                    else:  # Model workflow outputs
+                        # failedMeshesName = DynModelWfOuts.failedMeshes.name
+                        # prevFailedMeshes = getattr(self.protocol, failedMeshesName, None)
+                        prevOutputs = [prevCoords]
+                        prevOutputNames = [coordsName]
 
-                        outputsDict = {}
-                        if outCoords:
-                            outputsDict[DynModelWfOuts.fixedCoordinates.name] = outCoords
-                        if outMeshes:
-                            outputsDict[DynModelWfOuts.fixedMeshes.name] = outMeshes
-                        for key, val in zip(prevOutputNames, prevOutputs):
-                            if val:
-                                outputsDict[key] = val
+                    outputsDict = {}
+                    if outCoords:
+                        outputsDict[DynModelWfOuts.fixedCoordinates.name] = outCoords
+                    if outMeshes:
+                        outputsDict[DynModelWfOuts.fixedMeshes.name] = outMeshes
+                    for key, val in zip(prevOutputNames, prevOutputs):
+                        if val:
+                            outputsDict[key] = val
 
-                        self.protocol._defineOutputs(**outputsDict)
-                        for key, val in outputsDict.items():
-                            if val:
-                                self.protocol._defineSourceRelation(precedentsPointer, val)
+                    self.protocol._defineOutputs(**outputsDict)
+                    for key, val in outputsDict.items():
+                        if val:
+                            self.protocol._defineSourceRelation(precedentsPointer, val)
             return views
 
     @staticmethod
