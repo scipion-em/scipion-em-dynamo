@@ -1,3 +1,8 @@
+V3.1.18
+  - Model workflow able to generate correct (coordinates of a model) and failed (meshes whose model workflow failed
+    and need to be fixed).
+  - Viewer adapted to this new scenario.
+  - The generation of the saving yes/no dialog window was adapted to the new scenario, too
 V3.1.16
   - Alignment improvement: if dynamo fails, alignStep does not finish
 V3.1.15
