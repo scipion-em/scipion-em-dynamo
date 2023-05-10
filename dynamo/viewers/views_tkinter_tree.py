@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 import threading
+from os import remove
 from os.path import abspath, join, exists
 from shutil import rmtree
 
@@ -123,6 +124,9 @@ class DynamoTomoDialog(ToolbarListDialog):
             contents += "end\n"
             contents += "dynamo_write(catalogue, '%s')\n" % catalogueWithExt
         else:
+            prjModifiedFile = join(extraPath, PROJECT_DIR, DATA_MODIFIED_FROM_VIEWER)
+            if exists(prjModifiedFile):
+                remove(prjModifiedFile)
             contents = "dcm -create %s -vll %s\n" % (catalogue, listTomosFile)
 
         self.catalgueMngCode = contents
@@ -149,20 +153,50 @@ class DynamoTomoDialog(ToolbarListDialog):
             content += "tomoFiles = cellfun(@(x) x.file, ctlg.volumes, 'UniformOutput', false)\n"  # Cell with the tomo names
             content += "currentTomoInd = find(ismember(tomoFiles, '%s'))\n" % abspath(tomo.getFileName())  # Index of the current tomo in the catalog
             content += "loadDynSyntax = sprintf('dtmslice @{%s}%i', ctlgNoExt, currentTomoInd)\n"
-            content += "launchTime = datetime\n"  # Capture the timestamp right before calling Dynamo's picker GUI
-            content += "eval(loadDynSyntax)\n"  # Launch Dynamo's picker GUI
+            content += "currentTomoModelsDir = fullfile('%s', ['volume_', num2str(currentTomoInd)], 'models')\n" % join(self.path, PROJECT_DIR, TOMOGRAMS_DIR)
+            # Read models points and crop points before launching dynamo GUI
+            content += "dirSt = dir(fullfile(currentTomoModelsDir, '*.omd'))\n"
+            content += "prevModelList = cellfun(@(x) fullfile(currentTomoModelsDir, x), {dirSt.name}, 'un', 0)\n"
+            content += "nModelsPrev = length(prevModelList)\n"
+            content += "prevPointsStList = cell(1, nModelsPrev)\n"
+            content += "for iModel=1:nModelsPrev\n"
+            content += "iPrevModel = dread(prevModelList{iModel})\n"
+            content += "prevPointsStList{iModel} = struct('points', iPrevModel.points, 'crop_points', iPrevModel.crop_points)\n"
+            content += "end\n"
+            # Launch Dynamo's picker GUI
+            content += "eval(loadDynSyntax)\n"
             content += "modeltrack.loadFromCatalogue('handles', ctlg, 'full', true, 'select', false)\n"  # Load the models contained in the catalogue
             content += "uiwait(dpkslicer.getHandles().figure_fastslicer)\n"  # Wait until it's closed
-
             content += "modeltrack.saveAllInCatalogue\n"  # Save in the catalog
-            # Check the model files last modification timestamp and proceed consequently
-            content += "currentTomoModelsDir = fullfile('%s', ['volume_', num2str(currentTomoInd)], 'models')\n" % join(self.path, PROJECT_DIR, TOMOGRAMS_DIR)
+            # Read models points and crop points after having closed dynamo GUI
             content += "dirSt = dir(fullfile(currentTomoModelsDir, '*.omd'))\n"
-            content += "lastModDates = {dirSt.date}\n"
-            content += "if any(cellfun(@(x) launchTime < datetime(x), lastModDates))\n"  # The user made some changes to the data from the viewer
-            content += "fMod = fopen('%s', 'w')\n" % join(self.path, PROJECT_DIR, DATA_MODIFIED_FROM_VIEWER)  # Create an empty file to inform Scipion about the user actions
-            content += "fprintf(fMod, '1')\n"
-            content += "fclose(fMod)\n"
+            content += "postModelList = cellfun(@(x) fullfile(currentTomoModelsDir, x), {dirSt.name}, 'un', 0)\n"
+            content += "nModelsPost = length(postModelList)\n"
+            content += "postPointsStList = cell(1, nModelsPost)\n"
+            content += "for iModel=1:nModelsPost\n"
+            content += "iPostModel = dread(postModelList{iModel})\n"
+            content += "postPointsStList{iModel} = struct('points', iPostModel.points, 'crop_points', iPostModel.crop_points)\n"
+            content += "end\n"
+            # Compare the points and cropped points stored from before and after running the viewer to check if the
+            # they have changed
+            content += "prjModified = false\n"
+            content += "if nModelsPrev == nModelsPost\n"
+            content += "for iModel=1:length(prevPointsStList)\n"
+            content += "iPrevSt = prevPointsStList{iModel}\n"
+            content += "iPostSt = postPointsStList{iModel}\n"
+            content += "pickedPointsChanged = size(iPrevSt.points, 1) ~= size(iPostSt.points, 1)\n"
+            content += "croppedPointsChanged = size(iPrevSt.crop_points, 1) ~= size(iPostSt.crop_points, 1)\n"
+            content += "if pickedPointsChanged || croppedPointsChanged\n"
+            content += "prjModified = true\n"
+            content += "break\n"
+            content += "end\n"
+            content += "end\n"
+            content += "else\n"
+            content += "prjModified = true\n"
+            content += "end\n"
+            # If there was any data modification carried out using the viewer, the tree is updated consequently and
+            # some text files are generated to indicate that the user operated that way
+            content += "if prjModified == true\n"
             content += "models = dcmodels(ctlgNoExt, 'i', currentTomoInd)\n"
             content += "nParticles = 0\n"
             content += "for i=1:length(models)\n"
@@ -170,8 +204,12 @@ class DynamoTomoDialog(ToolbarListDialog):
             content += "newParts = size(model.points, 1)\n"
             content += "nParticles = nParticles + newParts\n"  # Sum the no. of particles from all the models generated for the current tomogram
             content += "end\n"
+            # Save the number of particles to a text file
             content += "fid = fopen('%s', 'w')\n" % self.currentTomoTxtFile
-            content += "fprintf(fid, '%i', nParticles)\n"  # Save the number of particles to a text file
+            content += "fprintf(fid, '%i', nParticles)\n"
+            content += "fclose(fid)\n"
+            # Save a txt file to indicate that the project was modified using the viewer
+            content += "fid = fopen('%s', 'w')\n" % join(self.path, PROJECT_DIR, DATA_MODIFIED_FROM_VIEWER)
             content += "fclose(fid)\n"
             content += "end\n"
             codeFid.write(content)
