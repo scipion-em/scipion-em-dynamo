@@ -35,7 +35,7 @@ class DynamoTomogramProvider(TomogramsTreeProvider):
         self.nParticlesDict = nParticlesDict
 
     def getColumns(self):
-        return [('TomoId', 200), ("No. coords", 100), ('status', 150)]
+        return [('TomoId', 200), ("No. coords", 100), ('Status', 150)]
 
     def getObjectInfo(self, tomogram):
         count = 0
@@ -43,6 +43,7 @@ class DynamoTomogramProvider(TomogramsTreeProvider):
                    'parent': None,
                    'values': (count, 'TO DO'),
                    'tags': 'pending'}
+
         coordsInTomoCountFile = getCurrentTomoCountFile(self._path, tomogram)
         if exists(coordsInTomoCountFile):
             with open(coordsInTomoCountFile, 'r') as fn:
