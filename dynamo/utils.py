@@ -150,10 +150,10 @@ def genMCode4ReadAndSaveData(outPath, modelFileList, savePicked=True, saveCroppe
     return content
 
 
-def createSetOfOutputCoords(protPath, outPath, precedentsPointer, boxSize=20):
+def createSetOfOutputCoords(protPath, outPath, precedentsPointer, boxSize=20, suffix=''):
     # Create the output set
     precedents = precedentsPointer.get()
-    outCoords = SetOfCoordinates3D.create(protPath, template='coordinates3d%s.sqlite')
+    outCoords = SetOfCoordinates3D.create(protPath, template='coordinates3d%s.sqlite', suffix=suffix)
     outCoords.setPrecedents(precedentsPointer)
     outCoords.setSamplingRate(precedents.getSamplingRate())
     outCoords.setBoxSize(boxSize)
@@ -187,7 +187,7 @@ def getDynamoModels(fpath):
     return glob.glob(join(fpath, '**/*.omd'), recursive=True)
 
 
-def createBoxingOutputObjects(prot, precedentsPointer, boxSize=20, savePicked=True):
+def createBoxingOutputObjects(prot, precedentsPointer, boxSize=20, savePicked=True, suffix=''):
     meshes = None
     outCoords = None
     precedents = precedentsPointer.get()
@@ -204,7 +204,7 @@ def createBoxingOutputObjects(prot, precedentsPointer, boxSize=20, savePicked=Tr
         readModels(prot, outPath, tmpPath, dynamoModels, savePicked=savePicked, saveCropped=saveCropped)
         if savePicked:
             # Create the output set of meshes (always produced)
-            meshes = SetOfMeshes.create(prot._getPath(), template='meshes%s.sqlite')
+            meshes = SetOfMeshes.create(prot._getPath(), template='meshes%s.sqlite', suffix=suffix)
             meshes.setPrecedents(precedents)
             meshes.setSamplingRate(precedents.getSamplingRate())
             meshes.setBoxSize(boxSize)
@@ -225,7 +225,9 @@ def createBoxingOutputObjects(prot, precedentsPointer, boxSize=20, savePicked=Tr
                     coord._dynModelFile = String(values[5])
                     meshes.append(coord)
         if saveCropped:
-            outCoords = createSetOfOutputCoords(prot._getPath(), outPath, precedentsPointer, boxSize=prot.boxSize.get())
+            outCoords = createSetOfOutputCoords(prot._getPath(), outPath, precedentsPointer,
+                                                boxSize=prot.boxSize.get(),
+                                                suffix=suffix)
             dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict)
 
     return meshes, outCoords

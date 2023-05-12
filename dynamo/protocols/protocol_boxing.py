@@ -43,8 +43,8 @@ from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 
 
 class DynPickingOuts(Enum):
-    coordinates = SetOfCoordinates3D
-    meshes = SetOfMeshes
+    coordinates = SetOfCoordinates3D()
+    meshes = SetOfMeshes()
 
 
 class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
