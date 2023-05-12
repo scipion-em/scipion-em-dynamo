@@ -88,7 +88,7 @@ class DynamoDataViewer(pwviewer.Viewer):
                 with open(join(path, removeBaseExt(tomo.getFileName()) + '.txt'), 'w') as fid:
                     for coord in outputCoords.iterCoordinates(tomo):
                         coords = list(coord.getPosition(BOTTOM_LEFT_CORNER))
-                        modelType = self._getModelType(coord._dynModelName.get())
+                        modelType = self._getModelType(coord)
                         # angles = list(matrix2eulerAngles(coord.getMatrix()))[:3]  # Keep the angles, not the shifts (Dynamo boxing GUI is not expecting them at this point)
                         fid.write(",".join(map(str, coords + [coord.getGroupId(), modelType])) + "\n")
                         coordCounter += 1
@@ -167,8 +167,8 @@ class DynamoDataViewer(pwviewer.Viewer):
             return views
 
     @staticmethod
-    def _getModelType(modelName):
+    def _getModelType(coord):
         """Map the Dynamo model names into the protocol encoding model value"""
         # If more than one model of the same type, they're stored as modelName_num
-        return dynModelsDict.get(modelName.split('_')[0], DYN_GEN_MODEL_OBJ_NAME)
-
+        modelName = getattr(coord, '_dynModelName', DYN_GEN_MODEL_OBJ_NAME)
+        return dynModelsDict.get(modelName.split('_')[0])
