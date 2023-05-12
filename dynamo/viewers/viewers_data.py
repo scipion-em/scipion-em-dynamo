@@ -170,5 +170,5 @@ class DynamoDataViewer(pwviewer.Viewer):
     def _getModelType(coord):
         """Map the Dynamo model names into the protocol encoding model value"""
         # If more than one model of the same type, they're stored as modelName_num
-        modelName = getattr(coord, '_dynModelName', MB_GENERAL)
-        return dynModelsDict.get(modelName.split('_')[0])
+        modelName = getattr(coord, '_dynModelName', None)
+        return dynModelsDict.get(modelName.get().split('_')[0] if modelName is not None else MB_GENERAL)

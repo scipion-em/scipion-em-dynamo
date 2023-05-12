@@ -3,6 +3,10 @@ V3.1.18
     and need to be fixed).
   - Viewer adapted to this new scenario.
   - The generation of the saving yes/no dialog window was adapted to the new scenario, too
+  - Viewer shows a floating message when launching dynamo.
+V3.1.17
+  - Fix test
+  - Dynamo version check message rewritten
 V3.1.16
   - Alignment improvement: if dynamo fails, alignStep does not finish
 V3.1.15

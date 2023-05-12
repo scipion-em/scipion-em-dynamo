@@ -23,6 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
+logger = logging.getLogger(__name__)
 import threading
 from os import remove
 from os.path import abspath, join, exists
@@ -31,7 +33,7 @@ from shutil import rmtree
 from dynamo import Plugin, VLL_FILE, CATALOG_BASENAME, PROJECT_DIR, PRJ_FROM_VIEWER, TOMOGRAMS_DIR, \
     DATA_MODIFIED_FROM_VIEWER
 from dynamo.utils import getCurrentTomoCountFile, getDynamoModels, getCatalogFile
-from pyworkflow.gui.dialog import ToolbarListDialog
+from pyworkflow.gui.dialog import ToolbarListDialog, FloatingMessage
 from pyworkflow.utils import makePath
 from pyworkflow.utils.process import runJob
 
@@ -135,9 +137,18 @@ class DynamoTomoDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui)
 
     def lanchDynamoForTomogram(self, tomo):
+
+        # TODO: Remove xPos and yPos when auto-centering released by pyworkflow
+        msg = FloatingMessage(self, "Launching dynamo. Please wait!.", xPos=100, yPos=100)
+        msg.show()
+        #self.showFloatingMessage("Launching dynamo. Please wait!.")
+
         commandsFile = self.writeMatlabCode(tomo)
         args = ' %s' % commandsFile
-        runJob(None, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+        runJob(logger, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+
+        msg.close()
+        #self.closeFloatingMessage()
 
     def writeMatlabCode(self, tomo):
         # Initialization params
