@@ -1,3 +1,6 @@
+V3.1.19:
+  - Hot fix: one of the steps of the common list from the model workflow is not included in the Dynamo side. The plugin
+    now offers the same behavior, so this kind of models do not fail now.
 V3.1.18
   - Model workflow able to generate correct (coordinates of a model) and failed (meshes whose model workflow failed
     and need to be fixed).
