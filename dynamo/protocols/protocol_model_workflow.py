@@ -222,14 +222,15 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
             codeFid.write(content)
         return codeFilePath
 
-    def _genCommonModelWfSteps(self):
+    def _genCommonModelWfSteps(self, isVesicle=False):
         """See
         https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Example_of_membrane_model_workflow_through_the_command_line"""
         contentMWf = "m.mesh_parameter = %i\n" % self.meshParameter.get()
         contentMWf += "m.crop_mesh_parameter = %i\n" % self.cropping.get()
         contentMWf += "m.mesh_maximum_triangles = %i\n" % self.maxTr.get()
         contentMWf = "m.subdivision_iterations=%i\n" % self.subDivision.get()
-        contentMWf += "m.controlUpdate()\n"
+        if not isVesicle:
+            contentMWf += "m.controlUpdate()\n"  # This step fails for vesicle model on the Dynamo side
         contentMWf += "m.createMesh()\n"
         if self.doRefineMesh.get():
             contentMWf += "m.refineMesh()\n"
@@ -243,7 +244,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     def genVesicleCmdFileContents(self):
         # Let Dynamo approximate the geometry based on the points annotated in the boxing protocol
         contentMWf = "m.approximateGeometryFromPoints()\n"
-        contentMWf += self._genCommonModelWfSteps()
+        contentMWf += self._genCommonModelWfSteps(isVesicle=True)
         return contentMWf
 
     def genSCmdFileContents(self):
