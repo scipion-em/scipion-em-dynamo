@@ -38,7 +38,7 @@ from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, Str
 from pyworkflow.utils import Message
 from pyworkflow.utils.path import makePath
 from dynamo import Plugin
-from dynamo.convert import writeSetOfVolumes, writeDynTable, readDynTable
+from dynamo.convert import writeSetOfVolumes, writeDynTable, dynTableLine2Subtomo
 from tomo.protocols.protocol_base import ProtTomoSubtomogramAveraging
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 
@@ -89,14 +89,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     _devStatus = BETA
     _possibleOutputs = DynRefineOuts
 
-    @classmethod
-    def getUrl(cls):
-        return "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Alignment_project"
-
     def __init__(self, **args):
         ProtTomoSubtomogramAveraging.__init__(self, **args)
+        self.dynTableDict = None
         self.dimRounds = String()
-        self.fhTable = None
         self.masksDir = None
         self.doMra = None
 
@@ -461,13 +457,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
         Plugin.runDynamo(self, IMPORT_CMD_FILE, cwd=self._getExtraPath())
 
-    def showDynamoGUI(self):
-        fhCommands2 = open(self._getExtraPath(SHOW_PROJECT_CMD_FILE), 'w')
-        content2 = "dcp '%s';" % DYNAMO_ALIGNMENT_PROJECT
-        fhCommands2.write(content2)
-        fhCommands2.close()
-        Plugin.runDynamo(self, SHOW_PROJECT_CMD_FILE, cwd=self._getExtraPath())
-
     def alignStep(self):
         with open(self._getExtraPath(ALIGNMENT_CMD_FILE), 'w') as fhCommands2:
             alignmentCommands = self.get_computing_command()
@@ -487,16 +476,11 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
         resultsDir = self.getLastIterResultsDir()
         if not os.path.exists(resultsDir):
-            raise RuntimeError("Results folder (%s) no generated. "
+            raise RuntimeError("No results folder (%s) was generated. "
                                "Probably there has been an error while running the alignment in Dynamo. "
                                "Please, see run.stdout log for more details." % resultsDir)
 
-    def getTotalIterations(self):
-        iters = self.numberOfIters.getListFromValues()
-        return sum(iters)
-
     def createOutputStep(self):
-
         niters = self.getTotalIterations()
 
         if self.doMra:
@@ -534,13 +518,9 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             outSubtomos = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
             inputSet = self.inputVolumes.get()
             outSubtomos.copyInfo(inputSet)
-            resTbl = join(self.getLastIterAvgsDir(), 'refined_table_ref_001_ite_%04d.tbl' % niters)
-            avgFile = join(self.getLastIterAvgsDir(), 'average_symmetrized_ref_001_ite_%04d.em' % niters)
-            # Open the final particles table, that will be used in the updateItemCallback
-            self.fhTable = open(resTbl, 'r')
             outSubtomos.copyItems(inputSet, updateItemCallback=self._updateItem)
-            self.fhTable.close()
             # Fill the resulting average object
+            avgFile = join(self.getLastIterAvgsDir(), 'average_symmetrized_ref_001_ite_%04d.em' % niters)
             averageSubTomogram.setFileName(self.convertToMrc(avgFile))
             averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
             # Define outputs and relations
@@ -557,6 +537,17 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         self._store()
 
     # --------------------------- UTILS functions --------------------------------
+    def getTotalIterations(self):
+        iters = self.numberOfIters.getListFromValues()
+        return sum(iters)
+
+    def showDynamoGUI(self):
+        fhCommands2 = open(self._getExtraPath(SHOW_PROJECT_CMD_FILE), 'w')
+        content2 = "dcp '%s';" % DYNAMO_ALIGNMENT_PROJECT
+        fhCommands2.write(content2)
+        fhCommands2.close()
+        Plugin.runDynamo(self, SHOW_PROJECT_CMD_FILE, cwd=self._getExtraPath())
+
     def getDimRounds(self, nRounds):
         """The number of rounds will be determined the same as Dynamo, which is through the number of elements
         introduced in label 'Iterations'. The parameter 'Particle dimensions' present a specific behavior: if one round,
@@ -681,7 +672,13 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         return command
 
     def _updateItem(self, item, row):
-        readDynTable(self, item)
+        row = self.getDynRow(item.getObjId())
+        if row is None:
+            # This is to consider possible particle removal carried out by Dynamo during the alignment
+            item._appendItem = False
+        else:
+            # row to subtomo
+            dynTableLine2Subtomo(row, item)
 
     def prepareMask(self, maskObj):
         if maskObj:
@@ -689,7 +686,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 writeSetOfVolumes(maskObj, join(self._getExtraPath(), 'fmasks/fmask_initial_ref_'), 'ix')
                 return self.get_dvput('fmask', self.masksDir)
             else:
-                return self.get_dvput('fmask', maskObj.getFileName())
+                return self.get_dvput('fmask', abspath(maskObj.getFileName()))
         else:
             return ''
 
@@ -727,6 +724,24 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         be active at least in one of the rounds"""
         return np.any(np.array(iParam.getListFromValues()) > 0)
 
+    def getResultsTblFile(self):
+        niters = self.getTotalIterations()
+        return join(self.getLastIterAvgsDir(), 'refined_table_ref_001_ite_%04d.tbl' % niters)
+
+    def getDynRow(self, lineId):
+        if self.dynTableDict is None:
+            self._loadDynamoTable()
+        return self.dynTableDict.get(lineId, None)
+
+    def _loadDynamoTable(self):
+        """Reads a Dynamo tbl file and stores it in a dictionary of type:
+        {key = objId (first number in a Dynamo table row), value = line}"""
+        tblFile = self.getResultsTblFile()
+        with open(tblFile, 'r') as dynTable:
+            self.dynTableDict = {}
+            for lineNum, line in enumerate(dynTable):
+                self.dynTableDict[int(line.split()[0])] = line
+
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
         validateMsgs = []
@@ -753,9 +768,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         # Check the masks
         if introducedMasks:
             for mask in masks:
-                if not self.sizesOk(mask):
-                    validateMsgs.append('The introduced masks must be of the same size as the template.')
-                    break
+                if mask:
+                    if not self.sizesOk(mask):
+                        validateMsgs.append('The introduced masks must be of the same size as the template.')
+                        break
         # Check the dims values
         dimValues = self.dim.getListFromValues()
         nDims = len(dimValues)
