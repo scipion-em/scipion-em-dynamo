@@ -24,8 +24,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from xmipp3.constants import SOURCE_GEOMETRY, MASK3D_CYLINDER
+from xmipp3.constants import MASK3D_CYLINDER
 from xmipp3.protocols import XmippProtCreateMask3D
+from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
 
 from dynamo.protocols import DynamoSubTomoMRA
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING
