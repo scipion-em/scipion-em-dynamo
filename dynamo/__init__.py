@@ -39,8 +39,6 @@ _references = ['CASTANODIEZ2012139']
 class Plugin(pwem.Plugin):
     _homeVar = DYNAMO_HOME
     _pathVars = [DYNAMO_HOME]
-    _url = "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Main_Page"
-    # _supportedVersions =
 
     @classmethod
     def _defineVariables(cls):

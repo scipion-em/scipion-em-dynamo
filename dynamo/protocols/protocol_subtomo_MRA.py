@@ -96,6 +96,10 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         self.masksDir = None
         self.doMra = None
 
+    @classmethod
+    def getUrl(cls):
+        return "https://wiki.dynamo.biozentrum.unibas.ch/w/index.php/Alignment_project"
+
     # --------------------------- DEFINE param functions ------------------------
 
     def _defineParams(self, form: Form):
