@@ -24,6 +24,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from xmipp3.constants import MASK3D_CYLINDER
+from xmipp3.protocols import XmippProtCreateMask3D
+from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
+
 from dynamo.protocols import DynamoSubTomoMRA
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING
 from dynamo.protocols.protocol_subtomo_MRA import FROM_PREVIOUS_ESTIMATION, NO_THRESHOLD
@@ -77,15 +81,17 @@ class TestDynamoAlignSubtomograms(TestDynamoStaBase):
 
     @classmethod
     def runAlignSubtomos(cls, nIters='3', dims='0', thMode=str(NO_THRESHOLD),
-                         areaSearchMode=str(FROM_PREVIOUS_ESTIMATION), protLabel=None):
-        protAlign = cls.newProtocol(DynamoSubTomoMRA,
-                                    inputVolumes=cls.subtomosExtracted,
-                                    templateRef=cls.avg,
-                                    numberOfIters=nIters,
-                                    dim=dims,
-                                    thresholdMode=thMode,
-                                    limm=areaSearchMode,
-                                    useGpu=True)
+                         areaSearchMode=str(FROM_PREVIOUS_ESTIMATION), alignMask=None, protLabel=None):
+        argsDict = {'inputVolumes': cls.subtomosExtracted,
+                    'templateRef': cls.avg,
+                    'numberOfIters': nIters,
+                    'dim': dims,
+                    'thresholdMode': thMode,
+                    'limm': areaSearchMode,
+                    'useGpu': True}
+        if alignMask:
+            argsDict['alignMask'] = alignMask
+        protAlign = cls.newProtocol(DynamoSubTomoMRA, **argsDict)
         if protLabel:
             protAlign.setObjLabel(protLabel)
         cls.launchProtocol(protAlign)
@@ -96,6 +102,25 @@ class TestDynamoAlignSubtomograms(TestDynamoStaBase):
     def test_alignSubtomos_oneRound(self):
         print(magentaStr("\n==> aligning the subtomograms, 1 round:"))
         subtomos, avg = self.runAlignSubtomos(protLabel='Subtomo align, 1 round')
+        self.checkResults(avg, subtomos)
+
+    def test_alignSubtomos_oneRound_With_AlignMask(self):
+        print(magentaStr("\n==> aligning the subtomograms with alignment mask, 1 round:"))
+        # Generate the mask
+        protMask3D = self.newProtocol(XmippProtCreateMask3D,
+                                      source=SOURCE_GEOMETRY,
+                                      samplingRate=self.bin2SRate,
+                                      size=self.bin2BoxSize,
+                                      geo=MASK3D_CYLINDER,
+                                      radius=15,
+                                      shiftCenter=True,
+                                      centerZ=6,
+                                      height=20,
+                                      doSmooth=True)
+        self.launchProtocol(protMask3D)
+        alignMask = getattr(protMask3D, 'outputMask', None)
+        # Align the subtomograms
+        subtomos, avg = self.runAlignSubtomos(protLabel='Subtomo align, 1 round', alignMask=alignMask)
         self.checkResults(avg, subtomos)
 
     def test_alignSubtomos_twoRounds(self):
