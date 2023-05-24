@@ -149,7 +149,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
         """ adds a subtomogram to a set """
         subtomo.cleanObjId()
         subtomo.setFileName(newFileName)
-        dynTableLine2Subtomo(line, subtomo, subtomoSet, tomo=tomo, coordSet=coordSet)
+        dynTableLine2Subtomo(line, subtomo, subtomoSet=subtomoSet, tomo=tomo, coordSet=coordSet)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
