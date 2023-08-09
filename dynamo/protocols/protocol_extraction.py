@@ -36,7 +36,7 @@ from pyworkflow.object import String
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam
 from pyworkflow.utils import removeExt
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
-from tomo.objects import SetOfSubTomograms, SubTomogram
+from tomo.objects import SetOfSubTomograms, SubTomogram, Coordinate3D, Tomogram
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
 from tomo.protocols import ProtTomoBase
@@ -123,10 +123,10 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         # Get the intersection between the tomograms and coordinates provided (this covers possible subsets made)
         inTomos = self.getInputTomograms()
         inCoords = self.inputCoordinates.get()
-        coordsPresentTomoIds = inCoords.getUniqueValues(['_tomoId'])
-        tomosPresentTsIds = inTomos.getUniqueValues(['_tsId'])
+        coordsPresentTomoIds = inCoords.getUniqueValues([Coordinate3D.TOMO_ID_ATTR])
+        tomosPresentTsIds = inTomos.getUniqueValues([Tomogram.TS_ID_FIELD])
         commonTomoIds = list(set(coordsPresentTomoIds).intersection(set(tomosPresentTsIds)))
-        self.tomoTsIdDict = {tomo.getTsId(): tomo for tomo in inTomos if tomo.getTsId() in commonTomoIds}
+        self.tomoTsIdDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos if tomo.getTsId() in commonTomoIds}
         self.coordsFileName = self._getExtraPath('coords.txt')
         self.anglesFileName = self._getExtraPath('angles.txt')
         # Calculate the scale factor
