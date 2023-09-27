@@ -143,7 +143,7 @@ def dynTableLine2Subtomo(inLine, subtomo, subtomoSet=None, tomo=None, coordSet=N
         subtomoSet.append(subtomo)
 
 
-def readDynCoord(tableFile, coord3DSet, tomo):
+def readDynCoord(tableFile, coord3DSet, tomo, scaleFactor=1):
     with open(tableFile) as fhTable:
         for nline in fhTable:
             coordinate3d = Coordinate3D()
@@ -160,9 +160,9 @@ def readDynCoord(tableFile, coord3DSet, tomo):
             z = nline[25]
             groupId = nline[21]
             coordinate3d.setVolume(tomo)
-            coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
-            coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
-            coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setX(float(x) * scaleFactor, const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setY(float(y) * scaleFactor, const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setZ(float(z) * scaleFactor, const.BOTTOM_LEFT_CORNER)
             coordinate3d.setGroupId(int(groupId))
             coordinate3d.setMatrix(A)
             coord3DSet.append(coordinate3d)
