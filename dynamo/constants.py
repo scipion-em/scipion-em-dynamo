@@ -28,7 +28,6 @@ This file contains constants related to scipion-em-dynamo protocols
 
 DYNAMO_PROGRAM = 'dynamo'
 DYNAMO_HOME = 'DYNAMO_HOME'
-DYNAMO_VERSION_1_146 = '1.146'
 DYNAMO_VERSION_1_1_532 = '1.1.532'
 DEFAULT_VERSION = DYNAMO_VERSION_1_1_532
 MINIMUM_VERSION_NUM = int(DYNAMO_VERSION_1_1_532.replace('.', ''))
