@@ -53,7 +53,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
         form.addSection(label='Input')
         form.addParam('inputTomos', params.PointerParam,
                       pointerClass='SetOfTomograms',
-                      label="Input Tomograms",
+                      label="Tomograms",
                       important=True)
         form.addParam('binning', params.IntParam,
                       default=2,
