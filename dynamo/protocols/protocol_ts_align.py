@@ -23,13 +23,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from collections import namedtuple
 from enum import Enum
+from os.path import join, basename, abspath
+
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
+from pyworkflow import BETA
 from pyworkflow.protocol import params, GT, GE
-from pyworkflow.utils import removeBaseExt, getExt, Message
-from tomo.objects import Tomogram, SetOfTomograms, SetOfTiltSeries
+from pyworkflow.utils import removeBaseExt, getExt, Message, createLink, makePath
+from tomo.objects import Tomogram, SetOfTomograms, SetOfTiltSeries, TiltSeriesBase, TiltImageBase
 from dynamo import Plugin
 
 
@@ -37,14 +41,16 @@ class DynamoTsAlignOuts(Enum):
     tiltSeries = SetOfTiltSeries
 
 
-class DynamoTsAlign(EMProtocol):
+class DynamoTsAlign(DynamoProtocolBase):
     """Tilt  series alignment"""
 
     _label = 'tilt series alignment'
     _possibleOutputs = DynamoTsAlignOuts
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._acq = None
         # self.content = ''
         # self.finalTomoNamesDict = {}
 
@@ -57,7 +63,7 @@ class DynamoTsAlign(EMProtocol):
                       important=True)
 
         form.addSection('Detection settings')
-        form.addParam('detectionBinningFactor', params.IntParam,
+        form.addParam('binning', params.IntParam,
                       default=1,
                       validators=[GE(1)],
                       label='Detection binning factor',
@@ -79,42 +85,56 @@ class DynamoTsAlign(EMProtocol):
                            'alignment and depiction of sets of markers.\nIf set to -1, it will be considered as '
                            'twice of the current value of the mask.')
 
+        form.addParallelSection(threads=4, mpi=0)
 
+    # --------------------------- INSERT steps functions ----------------------
+    def _insertAllSteps(self):
+        mdObjDict = self._initialize()
+        for mdObj in mdObjDict.values():
+            self._insertFunctionStep(self.convertInputStep, mdObj)
+            self._insertFunctionStep(self.runTsAlignStep, mdObj)
+        #     origTomoName = tomo.getFileName()
+        #     finalTomoName = self.getFinalTomoName(tomo)
+        #     self.finalTomoNamesDict[finalTomoName] = tomo
+        #     if self.doConvertFiles:
+        #         self._insertFunctionStep(self.convertInputStep, origTomoName, finalTomoName)
+        #     # Generate one unique file with all the tomograms to be binned
+        #     self._insertFunctionStep(self.createMCodeStep, origTomoName, finalTomoName)
+        # # That way, we can carry out the binning of all the tomograms provided with only one call to MATLAB, improving
+        # # the efficiency, as this call is very slow
+        # self._insertFunctionStep(self.binTomosStep)
+        # self._insertFunctionStep(self.createOutputStep)
 
-    #     form.addParam('binning', params.IntParam,
-    #                   default=2,
-    #                   validators=[GT(0)],
-    #                   label="Binning Factor",
-    #                   help="A Binning Factor of 1 means that no binning will be carried out.")
-    #     form.addParam('zChunk', params.IntParam,
-    #                   default=300,
-    #                   expertLevel=params.LEVEL_ADVANCED,
-    #                   label="Number of slices kept in memory",
-    #                   help="Maximum number of Z slices that are kept simultaneously in the memory during the "
-    #                        "binning process. This parameter might be important for larger size tomograms, making "
-    #                        "possible to process them in vertical slabs of thickness = value introduced in the  "
-    #                        "current parameter. This procedure can be accelerated using the multiple threads to engage "
-    #                        "several cores in parallel. However, this will only make sense if the total memory occupied "
-    #                        "by all the slabs simultaneously in memory in a given time fits in the RAM of the machine.")
-    #     form.addParallelSection(threads=4, mpi=0)
-    #
-    # # --------------------------- INSERT steps functions ----------------------
-    # def _insertAllSteps(self):
-    #     self._initialize()
-    #     for tomo in self.inputTomos:
-    #         origTomoName = tomo.getFileName()
-    #         finalTomoName = self.getFinalTomoName(tomo)
-    #         self.finalTomoNamesDict[finalTomoName] = tomo
-    #         if self.doConvertFiles:
-    #             self._insertFunctionStep(self.convertInputStep, origTomoName, finalTomoName)
-    #         # Generate one unique file with all the tomograms to be binned
-    #         self._insertFunctionStep(self.createMCodeStep, origTomoName, finalTomoName)
-    #     # That way, we can carry out the binning of all the tomograms provided with only one call to MATLAB, improving
-    #     # the efficiency, as this call is very slow
-    #     self._insertFunctionStep(self.binTomosStep)
-    #     self._insertFunctionStep(self.createOutputStep)
-    #
-    # # --------------------------- STEPS functions -----------------------------
+    # --------------------------- STEPS functions -----------------------------
+    def _initialize(self):
+        inTsSet = self.inputTs.get()
+        self._acq = inTsSet.getAcquisition()
+        mdObjDict = {}
+        for ts in inTsSet:
+            ts = ts.clone(ignoreAttrs=[])
+            tsId = ts.getTsId()
+            tsDir = self._getExtraPath(tsId)
+            mdObjDict[tsId] = DynTsAliMdObj(ts=ts,
+                                            tsDir=tsDir,
+                                            workflowDir=join(tsDir, 'workflow'),
+                                            tltFile=join(tsDir, tsId + '.tlt'),
+                                            matlabFile=join(tsDir, 'alignTs.m'))
+        return mdObjDict
+
+    @staticmethod
+    def convertInputStep(mdObj):
+        # Create a directory for the current TS under extra dir
+        makePath(mdObj.tsDir)
+        # Create the tlt file that corresponds to the current ts
+        mdObj.ts.generateTltFile(mdObj.tltFile)
+
+    def runTsAlignStep(self, mdObj):
+        mCode = self._genMatlabCode(mdObj)
+        with open(mdObj.matlabFile, 'w') as codeFile:
+            codeFile.write(mCode)
+        args = ' %s' % mdObj.matlabFile
+        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+
     # def _initialize(self):
     #     self.inputTomos = self.inputTomos.get()
     #     self.doConvertFiles = not self.isCompatibleFileFormat()
@@ -160,7 +180,49 @@ class DynamoTsAlign(EMProtocol):
     #     self._defineOutputs(**{DynamoTsAlignOuts.tomograms.name: outTomos})
     #     self._defineSourceRelation(self.inputTomos, outTomos)
     #
-    # # --------------------------- DEFINE utils functions ----------------------
+    # --------------------------- DEFINE utils functions ----------------------
+    def _genMatlabCode(self, mdObj):
+        # Create the workflow
+        cmd = "name = 'scipionDynamoTsAlign';\n"
+        cmd += "folder = '%s';\n" % mdObj.workflowDir
+        cmd += "u = dtsa(name,'--nogui','-path',folder, 'fp',1);\n"
+        # Entering the data ######################################
+        # Basic data
+        cmd += "u.enter.tiltSeries('%s');\n" % abspath(mdObj.ts.getFirstItem().getFileName())
+        cmd += "u.enter.tiltAngles('%s');\n" % mdObj.tltFile
+        # Acquisition data
+        cmd += "u.enter.settingAcquisition.apix(%f);\n" % self.inputTs.get().getSamplingRate()
+        cmd += "u.enter.settingAcquisition.sphericalAberration(%f);\n" % self._acq.getSphericalAberration()
+        cmd += "u.enter.settingAcquisition.amplitudeContrast(%f);\n" % self._acq.getAmplitudeContrast()
+        cmd += "u.enter.settingAcquisition.voltage(%f);\n" % self._acq.getVoltage()
+        # Detection settings
+        # cmd += "u.enter.settingDetection.detectionBinningFactor(%i);\n" % self.getBinningFactor(
+        #     self.binning.get())
+        cmd += "u.enter.settingDetection.detectionBinningFactor(%i);\n" % self.binning.get()
+        cmd += "u.enter.settingDetection.beadRadius(%i);\n" % self.beadRadius.get()
+        cmd += "u.enter.settingDetection.maskRadius(%i);\n" % self.maskRadius.get()
+        cmd += "u.enter.templateSidelength(%i);\n" % self._getTemplateSideLength()
+        # Computing settings
+        cmd += "u.enter.settingComputing.parallelCPUUse(0);\n"  # enable the use of parallel cores
+        cmd += "u.enter.settingComputing.cpus('*');\n"
+        # cmd += "u.enter.settingComputing.cpus(%i);\n" % self.numberOfThreads.get()
+        # Run the workflow
+
+        # cmd += "fid = fopen('/home/jjimenez/test_JJ.txt', 'wt')\n"
+        # cmd += "fprintf(fid, pwd);\n"
+        # cmd += "fclose(fid);\n"
+
+        cmd += "u.area.indexing.step.tiltGapFiller.parameterSet.residualsThreshold(8);\n"
+        # cmd += "workflow.area.refinement.step.trimMarkers.parameterSet.maximalResidualObservation(5);"
+
+        cmd += "u.run.all('noctf', 1);\n"
+        # JORGE_END
+        return cmd
+
+    def _getTemplateSideLength(self):
+        tsl = self.templateSideLength.get()
+        return tsl if tsl != -1 else 2 * self.maskRadius.get()
+
     # def getConvertedOutFileName(self, inFileName):
     #     return self._getExtraPath(removeBaseExt(inFileName) + '.mrc')
     #
@@ -188,3 +250,13 @@ class DynamoTsAlign(EMProtocol):
     #     else:
     #         summary.append("Output tomograms not ready yet.")
     #     return summary
+
+
+class DynTsAliMdObj:
+
+    def __init__(self, ts=None, tsDir=None, workflowDir=None, tltFile=None, matlabFile=None):
+        self.ts = ts
+        self.tsDir = tsDir
+        self.workflowDir = workflowDir
+        self.tltFile = tltFile
+        self.matlabFile = matlabFile
