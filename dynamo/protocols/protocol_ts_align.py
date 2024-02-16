@@ -212,11 +212,21 @@ class DynamoTsAlign(DynamoProtocolBase):
         # cmd += "fprintf(fid, pwd);\n"
         # cmd += "fclose(fid);\n"
 
-        cmd += "u.area.indexing.step.tiltGapFiller.parameterSet.residualsThreshold(8);\n"
+        # cmd += "u.area.indexing.step.tiltGapFiller.parameterSet.residualsThreshold(8);\n"
         # cmd += "workflow.area.refinement.step.trimMarkers.parameterSet.maximalResidualObservation(5);"
 
-        cmd += "u.run.all('noctf', 1);\n"
-        # JORGE_END
+        # cmd += "u.run.all('noctf', 1);\n"
+
+        # Alignment
+        cmd += "u.run.area.uptoAlignment();\n"
+        # Reconstruction (binned)
+        cmd += "st = u.area.reconstruction.step.binnedReconstruction;\n"
+        cmd += "st.step.parameters.reconstructionBinnedHeight = 200;\n"  # TODO update this with the corresponding param
+        cmd += "st.step.parameters.reconstructBinnedSIRT = true;\n"
+        cmd += "st.step.parameters.reconstructBinnedWBP = false;\n"
+        cmd += "st.run();\n"
+        # st = u.area.reconstruction.step.fullReconstruction; parm=st.step.parameters.reconstructFullWBP;
+        # parm.value=0; st.run()
         return cmd
 
     def _getTemplateSideLength(self):
