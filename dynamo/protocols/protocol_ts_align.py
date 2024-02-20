@@ -28,12 +28,13 @@ from os.path import join, abspath
 import numpy as np
 from emtable import Table
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
+from pwem import ALIGN_NONE, ALIGN_2D
 from pwem.objects import Transform
 from pyworkflow import BETA
 from pyworkflow.object import Set
 from pyworkflow.protocol import GE, LEVEL_ADVANCED, IntParam, PointerParam
 from pyworkflow.utils import Message, makePath
-from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
+from tomo.objects import SetOfTiltSeries
 from dynamo import Plugin
 
 
@@ -54,12 +55,9 @@ class DynamoTsAlign(DynamoProtocolBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._acq = None
         self._sRate = -1
         self._beadRadiusPx = -1
         self._maskRadiusPx = -1
-        # self.content = ''
-        # self.finalTomoNamesDict = {}
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -97,12 +95,11 @@ class DynamoTsAlign(DynamoProtocolBase):
             self._insertFunctionStep(self.convertInputStep, mdObj)
             self._insertFunctionStep(self.runTsAlignStep, mdObj)
             self._insertFunctionStep(self.createOutputStep, mdObj)
-            self._insertFunctionStep(self.closeOutputStep)
+        self._insertFunctionStep(self._closeOutputSet)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         inTsSet = self.inputTs.get()
-        self._acq = inTsSet.getAcquisition()
         self._sRate = inTsSet.getSamplingRate()
         self._beadRadiusPx = self._getRadiusInPix(self.beadDiamNm.get())
         self._maskRadiusPx = self._getMaskRadiusPix()
@@ -136,61 +133,44 @@ class DynamoTsAlign(DynamoProtocolBase):
 
     def createOutputStep(self, mdObj):
         # Note: it always generates the interpolated
+        # Read the alignment file
+        aliData = self._readAliFile(mdObj.outAliFile)
         # Tilt series
         outTsSet = self._getOutputSetOfTs()
-        self._fillTsAndUpdateTsSet(mdObj, outTsSet)
+        self._fillTsAndUpdateTsSet(mdObj, outTsSet, aliData)
         # Interpolated tilt series
         outTsSetInterp = self._getOutputSetOfTs(interpolated=True)
-        self._fillTsAndUpdateTsSet(mdObj, outTsSetInterp, interpolated=True)
-
-    def closeOutputStep(self):
-        inTsSet = self.inputTs.get()
-        # Tilt series -> close
-        outTsSet = self._getOutputSetOfTs()
-        outTsSet.setStreamState(Set.STREAM_CLOSED)
-        # Interpolated tilt series -> close
-        outTsSetInterp = self._getOutputSetOfTs(interpolated=True)
-        outTsSetInterp.setStreamState(Set.STREAM_CLOSED)
-        # Create the outputs and define the relations
-        self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: outTsSet,
-                               self._possibleOutputs.tiltSeriesInterpolated.name: outTsSetInterp})
-        self._defineSourceRelation(inTsSet, outTsSet)
-        self._defineSourceRelation(inTsSet, outTsSetInterp)
+        self._fillTsAndUpdateTsSet(mdObj, outTsSetInterp, aliData, interpolated=True)
+        self._store()
 
     # --------------------------- DEFINE utils functions ----------------------
     def _genMatlabCode(self, mdObj):
+        inTsSet = self.inputTs.get()
+        acq = inTsSet.getAcquisition()
         # Create the workflow
         cmd = "name = '%s';\n" % self.tsAliPrjName
-        cmd += "folder = '%s';\n" % mdObj.tsDir  #workflowDir
+        cmd += "folder = '%s';\n" % mdObj.tsDir
         cmd += "u = dtsa(name,'--nogui','-path',folder, 'fp',1);\n"
         # Entering the data ######################################
         # Basic data
         cmd += "u.enter.tiltSeries('%s');\n" % abspath(mdObj.ts.getFirstItem().getFileName())
         cmd += "u.enter.tiltAngles('%s');\n" % mdObj.tltFile
         # Acquisition data
-        cmd += "u.enter.settingAcquisition.apix(%f);\n" % self.inputTs.get().getSamplingRate()
-        cmd += "u.enter.settingAcquisition.sphericalAberration(%f);\n" % self._acq.getSphericalAberration()
-        cmd += "u.enter.settingAcquisition.amplitudeContrast(%f);\n" % self._acq.getAmplitudeContrast()
-        cmd += "u.enter.settingAcquisition.voltage(%f);\n" % self._acq.getVoltage()
+        cmd += "u.enter.settingAcquisition.apix(%f);\n" % inTsSet.getSamplingRate()
+        cmd += "u.enter.settingAcquisition.sphericalAberration(%f);\n" % acq.getSphericalAberration()
+        cmd += "u.enter.settingAcquisition.amplitudeContrast(%f);\n" % acq.getAmplitudeContrast()
+        cmd += "u.enter.settingAcquisition.voltage(%f);\n" % acq.getVoltage()
         # Detection settings
         # cmd += "u.enter.settingDetection.detectionBinningFactor(%i);\n" % self.binning.get()
         cmd += "u.enter.settingDetection.beadRadius(%i);\n" % self._beadRadiusPx
         cmd += "u.enter.settingDetection.maskRadius(%i);\n" % self._maskRadiusPx
         cmd += "u.enter.templateSidelength(%i);\n" % self._getTemplateSideLengthPix()
         # Computing settings
-        cmd += "u.enter.settingComputing.parallelCPUUse(0);\n"  # enable the use of parallel cores
-        # cmd += "u.enter.settingComputing.cpus('*');\n"
+        cmd += "u.enter.settingComputing.parallelCPUUse(1);\n"  # enable the use of parallel cores
         cmd += "u.enter.settingComputing.cpus(%i);\n" % self.numberOfThreads.get()
-        # Run the workflow
-
-        # cmd += "fid = fopen('/home/jjimenez/test_JJ.txt', 'wt')\n"
-        # cmd += "fprintf(fid, pwd);\n"
-        # cmd += "fclose(fid);\n"
 
         # cmd += "u.area.indexing.step.tiltGapFiller.parameterSet.residualsThreshold(8);\n"
         # cmd += "workflow.area.refinement.step.trimMarkers.parameterSet.maximalResidualObservation(5);"
-
-        # cmd += "u.run.all('noctf', 1);\n"
 
         # Alignment
         cmd += "u.run.area.uptoAlignment();\n"
@@ -221,9 +201,12 @@ class DynamoTsAlign(DynamoProtocolBase):
         if interpolated:
             outSetName = self._possibleOutputs.tiltSeriesInterpolated.name
             suffix = 'interpolated'
+            ali = ALIGN_NONE
         else:
             outSetName = self._possibleOutputs.tiltSeries.name
             suffix = ''
+            ali = ALIGN_2D
+
         outTsSet = getattr(self, outSetName, None)
         if outTsSet:
             outTsSet.enableAppend()
@@ -231,8 +214,11 @@ class DynamoTsAlign(DynamoProtocolBase):
             outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix=suffix)
             outTsSet.copyInfo(inTsSet)
             outTsSet.setSamplingRate(self._sRate)
+            outTsSet.setAlignment(ali)
             outTsSet.setStreamState(Set.STREAM_OPEN)
-            setattr(self, outSetName, inTsSet)
+            # Create the outputs and define the relations
+            self._defineOutputs(**{outSetName: outTsSet})
+            self._defineSourceRelation(inTsSet, outTsSet)
 
         return outTsSet
 
@@ -280,33 +266,44 @@ class DynamoTsAlign(DynamoProtocolBase):
             f.writelines(lines)
         return newFileName
 
-    def _fillTsAndUpdateTsSet(self, mdObj, outTsSet, interpolated=False):
-        aliData = self._readAliFile(mdObj.outAliFile)
-        tiltSeries = TiltSeries()
-        tiltSeries.copyInfo(mdObj.ts)
-        outTi = TiltImage()
-        transform = Transform()
+    @staticmethod
+    def _fillTsAndUpdateTsSet(mdObj, outTsSet, aliData, interpolated=False):
+        ts = mdObj.ts
+        outTs = ts.clone()
+        outTs.copyInfo(ts)
+        outTsSet.append(outTs)
+        identityMatrix = np.eye(3)
+        outTiltAxisAngle = aliData[0].get('thetas')  # It's the same for all the tilt images
+        acq = outTs.getAcquisition()
+        acq.setTiltAxisAngle(outTiltAxisAngle)
+        outTs.setAcquisition(acq)
+        outTs.setInterpolated(interpolated)
         # Tilt series
-        for aliRow, ti in zip(aliData, mdObj.ts.iterItems()):
-            trMatrix = np.eye(3)
+        for aliRow, ti in zip(aliData, ts.iterItems()):
+            transform = Transform()
+            outTi = ti.clone()
             outTi.copyInfo(ti, copyId=True)
+            trMatrix = identityMatrix
             enabled = bool(aliRow.get('used'))
             if interpolated:
-                outFileName = mdObj.tsOutFileName
+                outFileName = mdObj.tsInterpFileName
                 if not enabled:
                     continue
             else:
                 outFileName = ti.getFileName()
                 if enabled:
+                    acq = outTi.getAcquisition()
+                    acq.setTiltAxisAngle(outTiltAxisAngle)
                     # Alignment data
-                    rot = aliRow.get('thetas')
+                    # rot = aliRow.get('thetas')
                     tilt = aliRow.get('psis')
                     sx = aliRow.get('x')
                     sy = aliRow.get('y')
                     outTi.setTiltAngle(tilt)
-                    outTi.getAcquisition().setTiltAxisAngle(rot)
-                    trMatrix[0, 0] = trMatrix[1, 1] = np.cos(np.deg2rad(rot))
-                    trMatrix[0, 1] = np.sin(np.deg2rad(rot))
+                    outTi.setAcquisition(acq)
+                    trMatrix = np.eye(3)
+                    trMatrix[0, 0] = trMatrix[1, 1] = np.cos(np.deg2rad(outTiltAxisAngle))
+                    trMatrix[0, 1] = np.sin(np.deg2rad(outTiltAxisAngle))
                     trMatrix[1, 0] = -trMatrix[0, 1]
                     trMatrix[0, 2] = sx
                     trMatrix[1, 2] = sy
@@ -315,9 +312,10 @@ class DynamoTsAlign(DynamoProtocolBase):
             transform.setMatrix(trMatrix)
             outTi.setTransform(transform)
             outTi.setEnabled(enabled)
-            tiltSeries.append(outTi)
+            outTs.append(outTi)
 
-        outTsSet.update(tiltSeries)
+        outTsSet.update(outTs)
+        outTsSet.write()
 
     def _getRadiusInPix(self, inDiameterInNm):
         return 10 * inDiameterInNm / (2 * self._sRate)
@@ -330,22 +328,12 @@ class DynamoTsAlign(DynamoProtocolBase):
         tslPix = self.templateSideLengthPix.get()
         return 4 * self._maskRadiusPx if tslPix == -1 else tslPix
 
-    # # --------------------------- DEFINE info functions ----------------------
-    # def _methods(self):
-    #     methodsMsgs = ["*Binning Factor*: %s" % self.binning.get()]
-    #     return methodsMsgs
-    #
-    # def _summary(self):
-    #     summary = []
-    #     if self.getOutputsSize() >= 1:
-    #         for _, outTomos in self.iterOutputAttributes():
-    #             summary.append("Output *%s*:" % outTomos.getNameId().split('.')[1])
-    #             summary.append("    * Binning Factor: *%s*" % self.binning.get())
-    #             summary.append("    * Number of Tomograms Binned: *%s*" %
-    #                            outTomos.getSize())
-    #     else:
-    #         summary.append("Output tomograms not ready yet.")
-    #     return summary
+    # --------------------------- DEFINE info functions ----------------------
+    def _validate(self):
+        errorMsg = []
+        if self.inputTs.get().interpolated():
+            errorMsg.append("The introduced tilt series are interpolated. Please introduce non-interpolated.")
+        return errorMsg
 
 
 class DynTsAliMdObj:
