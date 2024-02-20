@@ -31,11 +31,28 @@ from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem import ALIGN_NONE, ALIGN_2D
 from pwem.objects import Transform
 from pyworkflow import BETA
-from pyworkflow.object import Set
+from pyworkflow.object import Set, String
 from pyworkflow.protocol import GE, LEVEL_ADVANCED, IntParam, PointerParam
 from pyworkflow.utils import Message, makePath
-from tomo.objects import SetOfTiltSeries
+from tomo.objects import SetOfTiltSeries, TiltSeries
 from dynamo import Plugin
+
+# Fields in Dynamo align star files
+ALI_TABLE = 'align'
+INDEX = 'index'
+USED = 'used'
+TILT_ANGLE = 'thetas'
+TILT_AXIS_ANGLE = 'psis'
+SHIFT_X = 'x'
+SHIFT_Y = 'y'
+TYPE_DICT_FOR_PARSING = {
+    INDEX: int,
+    USED: int,
+    TILT_ANGLE: float,
+    TILT_AXIS_ANGLE: float,
+    SHIFT_X: float,
+    SHIFT_Y: float
+}
 
 
 class DynamoTsAlignOuts(Enum):
@@ -50,7 +67,7 @@ class DynamoTsAlign(DynamoProtocolBase):
     _possibleOutputs = DynamoTsAlignOuts
     _devStatus = BETA
     tsAliPrjName = 'scipionDynamoTsAlign.AWF'
-    tsOutFileName = 'alignedFullStack.mrc'
+    tsOutFileName = 'alignedBinnedStack.mrc'
     tsOutAliFileName = 'stackAlignerImod.star'
 
     def __init__(self, **kwargs):
@@ -58,6 +75,7 @@ class DynamoTsAlign(DynamoProtocolBase):
         self._sRate = -1
         self._beadRadiusPx = -1
         self._maskRadiusPx = -1
+        self.excludedViewsMsg = String()
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -173,7 +191,12 @@ class DynamoTsAlign(DynamoProtocolBase):
         # cmd += "workflow.area.refinement.step.trimMarkers.parameterSet.maximalResidualObservation(5);"
 
         # Alignment
-        cmd += "u.run.area.uptoAlignment();\n"
+        cmd += "u.run.area.uptoRefinement();\n"
+        cmd += "u.area.alignment.step.fixAlignmentMarkers.run();\n"
+        # cmd += "u.area.alignment.step.alignFullStack.run();\n"
+        cmd += "u.area.alignment.step.alignWorkingStack.run()\n"
+        # cmd += "u.run.area.uptoAlignment();\n"
+
         # Reconstruction
         # -------------------------------------------------------------------------------------------------------------------------------------------------------------
         # {'reconstructionFullSize'      }    {'400  400  400'}    {'400  400  400'}    {'reconstruction size'                      }    {'pixels'                   }
@@ -248,7 +271,7 @@ class DynamoTsAlign(DynamoProtocolBase):
         # beginning of the contents of a new table
         fixedAliFile = self._fixStarTableName(aliFile)
         dataTable = Table()
-        dataTable.read(fixedAliFile, tableName='align')
+        dataTable.read(fixedAliFile, tableName=ALI_TABLE, types=TYPE_DICT_FOR_PARSING)
         return dataTable
 
     @staticmethod
@@ -266,47 +289,52 @@ class DynamoTsAlign(DynamoProtocolBase):
             f.writelines(lines)
         return newFileName
 
-    @staticmethod
-    def _fillTsAndUpdateTsSet(mdObj, outTsSet, aliData, interpolated=False):
+    def _fillTsAndUpdateTsSet(self, mdObj, outTsSet, aliData, interpolated=False):
         ts = mdObj.ts
-        outTs = ts.clone()
+        tsId = ts.getTsId()
+        # The interpolated TS may contain fewer images if there have been image exclusion, so it's created from scratch
+        # instead of cloning it
+        outTs = TiltSeries(tsId=tsId) if interpolated else ts.clone()
         outTs.copyInfo(ts)
         outTsSet.append(outTs)
         identityMatrix = np.eye(3)
-        outTiltAxisAngle = aliData[0].get('thetas')  # It's the same for all the tilt images
+        outTiltAxisAngle = aliData[0].get(TILT_AXIS_ANGLE)  # It's the same for all the tilt images
         acq = outTs.getAcquisition()
         acq.setTiltAxisAngle(outTiltAxisAngle)
         outTs.setAcquisition(acq)
         outTs.setInterpolated(interpolated)
+        excludedViewsList = []
         # Tilt series
-        for aliRow, ti in zip(aliData, ts.iterItems()):
-            transform = Transform()
-            outTi = ti.clone()
-            outTi.copyInfo(ti, copyId=True)
-            trMatrix = identityMatrix
-            enabled = bool(aliRow.get('used'))
-            if interpolated:
-                outFileName = mdObj.tsInterpFileName
-                if not enabled:
-                    continue
+        for i, ti in enumerate(ts.iterItems()):
+            aliRow = aliData[i]
+            enabled = bool(aliRow.get(USED))
+            if interpolated and not enabled:
+                excludedViewsList.append(i)
+                continue
             else:
-                outFileName = ti.getFileName()
-                if enabled:
-                    acq = outTi.getAcquisition()
-                    acq.setTiltAxisAngle(outTiltAxisAngle)
-                    # Alignment data
-                    # rot = aliRow.get('thetas')
-                    tilt = aliRow.get('psis')
-                    sx = aliRow.get('x')
-                    sy = aliRow.get('y')
-                    outTi.setTiltAngle(tilt)
-                    outTi.setAcquisition(acq)
-                    trMatrix = np.eye(3)
-                    trMatrix[0, 0] = trMatrix[1, 1] = np.cos(np.deg2rad(outTiltAxisAngle))
-                    trMatrix[0, 1] = np.sin(np.deg2rad(outTiltAxisAngle))
-                    trMatrix[1, 0] = -trMatrix[0, 1]
-                    trMatrix[0, 2] = sx
-                    trMatrix[1, 2] = sy
+                transform = Transform()
+                outTi = ti.clone()
+                outTi.copyInfo(ti, copyId=True)
+                trMatrix = identityMatrix
+                if interpolated:
+                    outFileName = mdObj.tsInterpFileName
+                else:
+                    outFileName = ti.getFileName()
+                    if enabled:
+                        acq = outTi.getAcquisition()
+                        acq.setTiltAxisAngle(outTiltAxisAngle)
+                        # Alignment data
+                        tilt = aliRow.get(TILT_ANGLE)
+                        sx = aliRow.get(SHIFT_X)
+                        sy = aliRow.get(SHIFT_Y)
+                        outTi.setTiltAngle(tilt)
+                        outTi.setAcquisition(acq)
+                        trMatrix = np.eye(3)
+                        trMatrix[0, 0] = trMatrix[1, 1] = np.cos(np.deg2rad(outTiltAxisAngle))
+                        trMatrix[0, 1] = np.sin(np.deg2rad(outTiltAxisAngle))
+                        trMatrix[1, 0] = -trMatrix[0, 1]
+                        trMatrix[0, 2] = sx
+                        trMatrix[1, 2] = sy
 
             outTi.setFileName(outFileName)
             transform.setMatrix(trMatrix)
@@ -316,6 +344,11 @@ class DynamoTsAlign(DynamoProtocolBase):
 
         outTsSet.update(outTs)
         outTsSet.write()
+
+        if excludedViewsList:
+            prevMsg = self.excludedViewsMsg.get() if self.excludedViewsMsg.get() else ''
+            self.excludedViewsMsg.set(prevMsg + f'\n{tsId}: {excludedViewsList}')
+            self._store(self.excludedViewsMsg)
 
     def _getRadiusInPix(self, inDiameterInNm):
         return 10 * inDiameterInNm / (2 * self._sRate)
@@ -334,6 +367,14 @@ class DynamoTsAlign(DynamoProtocolBase):
         if self.inputTs.get().interpolated():
             errorMsg.append("The introduced tilt series are interpolated. Please introduce non-interpolated.")
         return errorMsg
+
+    def _summary(self):
+        msg = []
+        exludedViewsMsg = self.excludedViewsMsg.get()
+        if exludedViewsMsg:
+            msg.append("*Interpolated TS stacks have a few tilt images removed.*\n" +
+                       self.excludedViewsMsg.get())
+        return msg
 
 
 class DynTsAliMdObj:
