@@ -61,16 +61,24 @@ class DynRecTomoChoices(Enum):
     WBP = 1
 
 
+class DynBinningChoices(Enum):
+    """Dynamo works with powers of 2 as binning factors"""
+    none = 0
+    bin2 = 2
+    bin4 = 4
+    bin8 = 8
+
+
 class DynamoTsAlignOuts(Enum):
     tiltSeries = SetOfTiltSeries()
     tiltSeriesInterpolated = SetOfTiltSeries()
     tomograms = SetOfTomograms()
 
 
-class DynamoTsAlign(DynamoProtocolBase):
-    """Tilt  series alignment"""
+class DynamoTsAlignAndTomoRec(DynamoProtocolBase):
+    """Tilt series alignment and tomogram reconstruction"""
 
-    _label = 'tilt series alignment'
+    _label = 'ts align & tomo rec'
     _possibleOutputs = DynamoTsAlignOuts
     _devStatus = BETA
     tsAliPrjName = 'scipionDynamoTsAlign.AWF'
@@ -94,16 +102,17 @@ class DynamoTsAlign(DynamoProtocolBase):
                       important=True)
         form.addParam('genInterpolated', BooleanParam,
                       default=True,
+                      expertLevel=LEVEL_ADVANCED,
                       label='Generate the interpolated aligned TS?')
         group = form.addGroup('Detection settings')
         group.addParam('beadDiamNm', IntParam,
                        default=-1,
                        validators=[GE(1)],
-                       label='Gold bead diameter nm]')
+                       label='Gold bead diameter [nm]')
         group.addParam('maskDiamNm', IntParam,
                        default=-1,
                        expertLevel=LEVEL_ADVANCED,
-                       label='Mask around gold bead diameter [Å]',
+                       label='Mask around gold bead diameter [nm]',
                        help='The general police is to choose a radius that diameter the white "halo" around the '
                             'bead and a couple of additional pixels.|nIf set to -1, it will be assumed as 1.5 * '
                             'gold bead diameter')
@@ -115,14 +124,21 @@ class DynamoTsAlign(DynamoProtocolBase):
                             'alignment and depiction of sets of markers.\nIf set to -1, it will be considered as '
                             'twice of the current value of the mask.')
         form.addParam('recTomo', BooleanParam,
-                      default=False,
+                      default=True,
                       label='Reconstruct the tomogram?')
         group = form.addGroup('Reconstruction settings', condition='recTomo')
-        group.addParam('binning', IntParam,
-                       default=4,
-                       label='binning factor',
+        group.addParam('binning', EnumParam,
+                       choices=[DynBinningChoices.none.name, DynBinningChoices.bin2.name,
+                                DynBinningChoices.bin4.name, DynBinningChoices.bin8.name],
+                       display=EnumParam.DISPLAY_HLIST,
+                       default=2,  # Bin 4
+                       label='Binning',
                        help='The tomogram reconstruction implies the generation of the interpolated tilt series. The '
-                            'binning factor introduced will be applied to both.')
+                            'binning factor introduced will be applied to both.\n\n'
+                            '*Note for Dynamo users*: the binning factor introduced must be interpreted literally, '
+                            'not as in Dynamo (power of 2). This parameter will be transformed internally, so Dynamo '
+                            'behaves as epexted. For example: a bin factor of 4 here will be passed to Dynamo as 2, a '
+                            'bin factor of 2 will be passed as 1, and so on.\n\n')
         group.addParam('recMethod', EnumParam,
                        choices=[DynRecTomoChoices.SIRT.name, DynRecTomoChoices.WBP.name],
                        display=EnumParam.DISPLAY_HLIST,

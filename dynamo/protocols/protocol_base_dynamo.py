@@ -23,6 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import math
+
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from tomo.protocols import ProtTomoBase
@@ -39,6 +41,8 @@ class DynamoProtocolBase(EMProtocol, ProtTomoBase):
         """From Dynamo: a binning Factor of 1 will decrease the size of the Tomograms by 2,
         a Binning Factor of 2 by 4... So Dynamo interprets the binning factor as 2**binFactor, while IMOD
         interprets it literally. Thus, this method will convert the binning introduced by the user in the
-        Dynamo convention"""
-        return (2 ** (self.binning.get() - 1)) / 2 if forDynamo else self.binning.get()
+        Dynamo convention. Values that do not correspond to an integer value are floor-rounded internally by Dynamo,
+        interpreting, for example, a literal bin factor of 6 as log2(6) = 2.5849, and then it's rewritten as 2,
+        which corresponds to a literal binning factor of 2 ** 2 = 4."""
+        return int(math.log2(self.binning.get())) if forDynamo else self.binning.get()
 
