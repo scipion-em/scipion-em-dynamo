@@ -29,12 +29,13 @@ import numpy as np
 from emtable import Table
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem import ALIGN_NONE, ALIGN_2D
+from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow import BETA
 from pyworkflow.object import Set, String
-from pyworkflow.protocol import GE, LEVEL_ADVANCED, IntParam, PointerParam
+from pyworkflow.protocol import GE, LEVEL_ADVANCED, IntParam, PointerParam, BooleanParam, EnumParam
 from pyworkflow.utils import Message, makePath
-from tomo.objects import SetOfTiltSeries, TiltSeries
+from tomo.objects import SetOfTiltSeries, TiltSeries, SetOfTomograms, Tomogram
 from dynamo import Plugin
 
 # Fields in Dynamo align star files
@@ -55,9 +56,15 @@ TYPE_DICT_FOR_PARSING = {
 }
 
 
+class DynRecTomoChoices(Enum):
+    SIRT = 0
+    WBP = 1
+
+
 class DynamoTsAlignOuts(Enum):
     tiltSeries = SetOfTiltSeries()
     tiltSeriesInterpolated = SetOfTiltSeries()
+    tomograms = SetOfTomograms()
 
 
 class DynamoTsAlign(DynamoProtocolBase):
@@ -72,6 +79,7 @@ class DynamoTsAlign(DynamoProtocolBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._inTsSet = None
         self._sRate = -1
         self._beadRadiusPx = -1
         self._maskRadiusPx = -1
@@ -84,6 +92,9 @@ class DynamoTsAlign(DynamoProtocolBase):
                       pointerClass='SetOfTiltSeries',
                       label="Tilt series",
                       important=True)
+        form.addParam('genInterpolated', BooleanParam,
+                      default=True,
+                      label='Generate the interpolated aligned TS?')
         group = form.addGroup('Detection settings')
         group.addParam('beadDiamNm', IntParam,
                        default=-1,
@@ -103,7 +114,27 @@ class DynamoTsAlign(DynamoProtocolBase):
                        help='It should be at least twice the current value of the mask. It is used for detection, '
                             'alignment and depiction of sets of markers.\nIf set to -1, it will be considered as '
                             'twice of the current value of the mask.')
-
+        form.addParam('recTomo', BooleanParam,
+                      default=False,
+                      label='Reconstruct the tomogram?')
+        group = form.addGroup('Reconstruction settings', condition='recTomo')
+        group.addParam('binning', IntParam,
+                       default=4,
+                       label='binning factor',
+                       help='The tomogram reconstruction implies the generation of the interpolated tilt series. The '
+                            'binning factor introduced will be applied to both.')
+        group.addParam('recMethod', EnumParam,
+                       choices=[DynRecTomoChoices.SIRT.name, DynRecTomoChoices.WBP.name],
+                       display=EnumParam.DISPLAY_HLIST,
+                       label="Reconstruction method",
+                       default=DynRecTomoChoices.SIRT.value,
+                       help="Choose either SART or weighted back "
+                            "projection (WBP).")
+        group.addParam('tomoThk', IntParam,
+                       default=-1,
+                       label='Thickness (binned) [px]',
+                       help='If set to -1, the thickness will be internally calculated as 1/3 of the X '
+                            'dimension of the binned tilt series.')
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -117,12 +148,13 @@ class DynamoTsAlign(DynamoProtocolBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        inTsSet = self.inputTs.get()
-        self._sRate = inTsSet.getSamplingRate()
+        self._inTsSet = self.inputTs.get()
+        self._sRate = self._inTsSet.getSamplingRate()
+        self._binnedSRate = self._sRate * 2 ** self.getBinningFactor()
         self._beadRadiusPx = self._getRadiusInPix(self.beadDiamNm.get())
         self._maskRadiusPx = self._getMaskRadiusPix()
         mdObjDict = {}
-        for ts in inTsSet:
+        for ts in self._inTsSet:
             ts = ts.clone(ignoreAttrs=[])
             tsId = ts.getTsId()
             tsDir = self._getExtraPath(tsId)
@@ -132,7 +164,10 @@ class DynamoTsAlign(DynamoProtocolBase):
                                             tltFile=join(tsDir, tsId + '.tlt'),
                                             matlabFile=join(tsDir, 'alignTs.m'),
                                             tsInterpFileName=join(outAliDir, self.tsOutFileName),
-                                            outAliFile=join(outAliDir, self.tsOutAliFileName))
+                                            outAliFile=join(outAliDir, self.tsOutAliFileName),
+                                            tomoFileName=join(tsDir, self.tsAliPrjName, 'reconstruction',
+                                                              self._getTomoFileName())
+                                            )
         return mdObjDict
 
     @staticmethod
@@ -150,21 +185,26 @@ class DynamoTsAlign(DynamoProtocolBase):
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
     def createOutputStep(self, mdObj):
-        # Note: it always generates the interpolated
         # Read the alignment file
         aliData = self._readAliFile(mdObj.outAliFile)
         # Tilt series
         outTsSet = self._getOutputSetOfTs()
         self._fillTsAndUpdateTsSet(mdObj, outTsSet, aliData)
         # Interpolated tilt series
-        outTsSetInterp = self._getOutputSetOfTs(interpolated=True)
-        self._fillTsAndUpdateTsSet(mdObj, outTsSetInterp, aliData, interpolated=True)
+        if self.genInterpolated.get():
+            outTsSetInterp = self._getOutputSetOfTs(interpolated=True)
+            self._fillTsAndUpdateTsSet(mdObj, outTsSetInterp, aliData, interpolated=True)
+        # Tomograms
+        if self.recTomo.get():
+            outTomos = self._getOutputSetOfTomos()
+            self._createTomoAndUpdateTomoSet(mdObj, outTomos)
+
         self._store()
 
     # --------------------------- DEFINE utils functions ----------------------
     def _genMatlabCode(self, mdObj):
-        inTsSet = self.inputTs.get()
-        acq = inTsSet.getAcquisition()
+
+        acq = self._inTsSet.getAcquisition()
         # Create the workflow
         cmd = "name = '%s';\n" % self.tsAliPrjName
         cmd += "folder = '%s';\n" % mdObj.tsDir
@@ -174,28 +214,24 @@ class DynamoTsAlign(DynamoProtocolBase):
         cmd += "u.enter.tiltSeries('%s');\n" % abspath(mdObj.ts.getFirstItem().getFileName())
         cmd += "u.enter.tiltAngles('%s');\n" % mdObj.tltFile
         # Acquisition data
-        cmd += "u.enter.settingAcquisition.apix(%f);\n" % inTsSet.getSamplingRate()
+        cmd += "u.enter.settingAcquisition.apix(%f);\n" % self._inTsSet.getSamplingRate()
         cmd += "u.enter.settingAcquisition.sphericalAberration(%f);\n" % acq.getSphericalAberration()
         cmd += "u.enter.settingAcquisition.amplitudeContrast(%f);\n" % acq.getAmplitudeContrast()
         cmd += "u.enter.settingAcquisition.voltage(%f);\n" % acq.getVoltage()
         # Detection settings
-        # cmd += "u.enter.settingDetection.detectionBinningFactor(%i);\n" % self.binning.get()
         cmd += "u.enter.settingDetection.beadRadius(%i);\n" % self._beadRadiusPx
         cmd += "u.enter.settingDetection.maskRadius(%i);\n" % self._maskRadiusPx
         cmd += "u.enter.templateSidelength(%i);\n" % self._getTemplateSideLengthPix()
         # Computing settings
         cmd += "u.enter.settingComputing.parallelCPUUse(1);\n"  # enable the use of parallel cores
         cmd += "u.enter.settingComputing.cpus(%i);\n" % self.numberOfThreads.get()
-
-        # cmd += "u.area.indexing.step.tiltGapFiller.parameterSet.residualsThreshold(8);\n"
-        # cmd += "workflow.area.refinement.step.trimMarkers.parameterSet.maximalResidualObservation(5);"
-
         # Alignment
         cmd += "u.run.area.uptoRefinement();\n"
         cmd += "u.area.alignment.step.fixAlignmentMarkers.run();\n"
-        # cmd += "u.area.alignment.step.alignFullStack.run();\n"
-        cmd += "u.area.alignment.step.alignWorkingStack.run()\n"
-        # cmd += "u.run.area.uptoAlignment();\n"
+        if self.genInterpolated.get() or self.recTomo.get():  # The reconstruction needs the interpolated
+            cmd += ("u.area.alignment.step.alignWorkingStack.parameterSet.alignmentBinLevel(%i);\n" %
+                    self.getBinningFactor())
+            cmd += "u.area.alignment.step.alignWorkingStack.run()\n"
 
         # Reconstruction
         # -------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -207,27 +243,33 @@ class DynamoTsAlign(DynamoProtocolBase):
         # {'reconstructFullWBP'          }    {'1'            }    {'1'            }    {'WBP reconstruction'                       }    {0x0 char                   }
         # {'reconstructFullWBPCTF'       }    {'0'            }    {'0'            }    {'CTF-corrected WBP reconstruction'         }    {0x0 char                   }
         # -------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-        # cmd += "u.area.reconstruction.step.fullReconstruction.parameterSet.reconstructionShiftCenter([1855, 1919, 150]);\n"
-        # cmd += "u.area.reconstruction.step.fullReconstruction.parameterSet.reconstructionFullSize([928, 960, 300]);\n"
-        # cmd += "u.area.reconstruction.step.fullReconstruction.parameterSet.reconstructFullWBP(0);\n"
-        # cmd += "u.area.reconstruction.step.fullReconstruction.parameterSet.reconstructFullSIRT(1);\n"
-        # cmd += "u.area.reconstruction.step.binnedReconstruction.parameterSet.reconstructBinnedWBP(0);\n"
-        # cmd += "u.area.reconstruction.step.binnedReconstruction.parameterSet.reconstructBinnedSIRT(0);\n"
-        # cmd += "u.area.reconstruction.step.binnedReconstruction.parameterSet.reconstructionBinnedHeight(300);\n"
-        # cmd += "u.area.reconstruction.run();\n"
+        if self.recTomo.get():
+            # Disable the full size reconstruction
+            cmd += "u.area.reconstruction.step.fullReconstruction.parameterSet.reconstructFullWBP(0);\n"
+            cmd += "u.area.reconstruction.step.fullReconstruction.parameterSet.reconstructFullSIRT(0);\n"
+            sirtValue = 1 if self.recMethod.get() == DynRecTomoChoices.SIRT.value else 0
+            wbpValue = 1 if self.recMethod.get() == DynRecTomoChoices.WBP.value else 0
+            cmd += ("u.area.reconstruction.step.binnedReconstruction.parameterSet.reconstructBinnedWBP(%i);\n"
+                    % wbpValue)
+            cmd += ("u.area.reconstruction.step.binnedReconstruction.parameterSet.reconstructBinnedSIRT(%i);\n"
+                    % sirtValue)
+            cmd += ("u.area.reconstruction.step.binnedReconstruction.parameterSet.reconstructionBinnedHeight(%i);\n"
+                    % self._getThickness())
+            cmd += "u.area.reconstruction.run();\n"
 
         return cmd
 
-    def _getOutputSetOfTs(self, interpolated=False):
-        inTsSet = self.inputTs.get()
+    def _getOutputSetOfTs(self, interpolated=False) -> SetOfTiltSeries:
+
         if interpolated:
             outSetName = self._possibleOutputs.tiltSeriesInterpolated.name
             suffix = 'interpolated'
+            sRate = self._binnedSRate
             ali = ALIGN_NONE
         else:
             outSetName = self._possibleOutputs.tiltSeries.name
             suffix = ''
+            sRate = self._sRate
             ali = ALIGN_2D
 
         outTsSet = getattr(self, outSetName, None)
@@ -235,15 +277,31 @@ class DynamoTsAlign(DynamoProtocolBase):
             outTsSet.enableAppend()
         else:
             outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix=suffix)
-            outTsSet.copyInfo(inTsSet)
-            outTsSet.setSamplingRate(self._sRate)
+            outTsSet.copyInfo(self._inTsSet)
+            outTsSet.setSamplingRate(sRate)
             outTsSet.setAlignment(ali)
             outTsSet.setStreamState(Set.STREAM_OPEN)
             # Create the outputs and define the relations
             self._defineOutputs(**{outSetName: outTsSet})
-            self._defineSourceRelation(inTsSet, outTsSet)
+            self._defineSourceRelation(self._inTsSet, outTsSet)
 
         return outTsSet
+
+    def _getOutputSetOfTomos(self) -> SetOfTomograms:
+
+        outSetName = self._possibleOutputs.tomograms.name
+        outputSetOfTomograms = getattr(self, outSetName, None)
+        if outputSetOfTomograms:
+            outputSetOfTomograms.enableAppend()
+        else:
+            outputSetOfTomograms = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
+            outputSetOfTomograms.copyInfo(self._inTsSet)
+            outputSetOfTomograms.setSamplingRate(self._binnedSRate)
+            outputSetOfTomograms.setStreamState(Set.STREAM_OPEN)
+            self._defineOutputs(**{outSetName: outputSetOfTomograms})
+            self._defineSourceRelation(self._inTsSet, outputSetOfTomograms)
+
+        return outputSetOfTomograms
 
     def _readAliFile(self, aliFile):
         # The alignment file is generated as MATLAB files that can be parsed calling Dynamo, and as star files, that
@@ -288,6 +346,19 @@ class DynamoTsAlign(DynamoProtocolBase):
         with open(newFileName, "w") as f:
             f.writelines(lines)
         return newFileName
+
+    def _createTomoAndUpdateTomoSet(self, mdObj, outTomos):
+        ts = mdObj.ts
+        newTomogram = Tomogram()
+        newTomogram.setLocation(mdObj.tomoFileName)
+        newTomogram.setSamplingRate(self._binnedSRate)
+        newTomogram.setOrigin()
+        newTomogram.setAcquisition(ts.getAcquisition())
+        newTomogram.setTsId(ts.getTsId())
+
+        outTomos.append(newTomogram)
+        outTomos.update(newTomogram)
+        outTomos.write()
 
     def _fillTsAndUpdateTsSet(self, mdObj, outTsSet, aliData, interpolated=False):
         ts = mdObj.ts
@@ -361,6 +432,21 @@ class DynamoTsAlign(DynamoProtocolBase):
         tslPix = self.templateSideLengthPix.get()
         return 4 * self._maskRadiusPx if tslPix == -1 else tslPix
 
+    def _getThickness(self):
+        tomoThk = self.tomoThk.get()
+        if tomoThk != -1:
+            return tomoThk
+        else:
+            ih = ImageHandler()
+            x, _, _, _ = ih.getDimensions(self._inTsSet.getFirstItem().getFirstItem().getFileName())
+            return round(x / (2 ** self.getBinningFactor() * 3))
+
+    def _getTomoFileName(self):
+        if self.recMethod.get() == DynRecTomoChoices.SIRT.value:
+            return 'binnedReconstructionSIRT.mrc'
+        else:
+            return 'binnedReconstructionWBP.mrc'
+
     # --------------------------- DEFINE info functions ----------------------
     def _validate(self):
         errorMsg = []
@@ -379,10 +465,12 @@ class DynamoTsAlign(DynamoProtocolBase):
 
 class DynTsAliMdObj:
 
-    def __init__(self, ts=None, tsDir=None, tltFile=None, matlabFile=None, tsInterpFileName=None, outAliFile=None):
+    def __init__(self, ts=None, tsDir=None, tltFile=None, matlabFile=None, tsInterpFileName=None, tomoFileName=None,
+                 outAliFile=None):
         self.ts = ts
         self.tsDir = tsDir
         self.tltFile = tltFile
         self.matlabFile = matlabFile
         self.tsInterpFileName = tsInterpFileName
+        self.tomoFileName = tomoFileName
         self.outAliFile = outAliFile
