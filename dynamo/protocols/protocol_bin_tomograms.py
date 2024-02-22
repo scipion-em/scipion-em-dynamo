@@ -55,11 +55,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
                       pointerClass='SetOfTomograms',
                       label="Tomograms",
                       important=True)
-        form.addParam('binning', params.IntParam,
-                      default=2,
-                      validators=[GT(0)],
-                      label="Binning Factor",
-                      help="A Binning Factor of 1 means that no binning will be carried out.")
+        self._addBinningParam(form)
         form.addParam('zChunk', params.IntParam,
                       default=300,
                       expertLevel=params.LEVEL_ADVANCED,

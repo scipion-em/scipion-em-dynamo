@@ -96,6 +96,8 @@ class TestDynamoAliRec(TestDynamoAliRecBase):
         expectedDimsTsInterp = {'TS_03': [959, 927, 40],
                                 'TS_54': [959, 927, 40]}
         # TS_54 has 41 tilt images, but Dynamo will remove 1 in this concrete execution case
+        exludedViews = {'TS_03': [],
+                        'TS_54': [4]}
 
         print(magentaStr("\n==> Testing Dynamo:"
                          "\n\t- Align only"
@@ -105,13 +107,15 @@ class TestDynamoAliRec(TestDynamoAliRecBase):
                                 beadDiamNm=10,
                                 recTomo=False,
                                 binning=self.binFactor4,
-                                tomoThk=self.thickness)
+                                tomoThk=self.thickness,
+                                numberOfThreads=13)  # TODO: remove this line
         prot.setObjLabel('Align only, and gen interp')
         self.launchProtocol(prot)
 
         # CHECK THE OUTPUTS
         # Non-interpolated TS
-        self._checkNonInterpTsSet(getattr(prot, prot._possibleOutputs.tiltSeries.name, None))
+        self._checkNonInterpTsSet(getattr(prot, prot._possibleOutputs.tiltSeries.name, None),
+                                  excludedViewsDict=exludedViews)
 
         # Interpolated TS
         self.checkTiltSeries(getattr(prot, prot._possibleOutputs.tiltSeriesInterpolated.name, None),
@@ -202,3 +206,4 @@ class TestDynamoAliRec(TestDynamoAliRecBase):
     #
     #
     #
+

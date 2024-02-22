@@ -25,6 +25,8 @@
 # **************************************************************************
 from enum import Enum
 from os.path import join, abspath
+
+import mrcfile
 import numpy as np
 from emtable import Table
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
@@ -59,14 +61,6 @@ TYPE_DICT_FOR_PARSING = {
 class DynRecTomoChoices(Enum):
     SIRT = 0
     WBP = 1
-
-
-class DynBinningChoices(Enum):
-    """Dynamo works with powers of 2 as binning factors"""
-    none = 0
-    bin2 = 2
-    bin4 = 4
-    bin8 = 8
 
 
 class DynamoTsAlignOuts(Enum):
@@ -127,18 +121,7 @@ class DynamoTsAlignAndTomoRec(DynamoProtocolBase):
                       default=True,
                       label='Reconstruct the tomogram?')
         group = form.addGroup('Reconstruction settings', condition='recTomo')
-        group.addParam('binning', EnumParam,
-                       choices=[DynBinningChoices.none.name, DynBinningChoices.bin2.name,
-                                DynBinningChoices.bin4.name, DynBinningChoices.bin8.name],
-                       display=EnumParam.DISPLAY_HLIST,
-                       default=2,  # Bin 4
-                       label='Binning',
-                       help='The tomogram reconstruction implies the generation of the interpolated tilt series. The '
-                            'binning factor introduced will be applied to both.\n\n'
-                            '*Note for Dynamo users*: the binning factor introduced must be interpreted literally, '
-                            'not as in Dynamo (power of 2). This parameter will be transformed internally, so Dynamo '
-                            'behaves as epexted. For example: a bin factor of 4 here will be passed to Dynamo as 2, a '
-                            'bin factor of 2 will be passed as 1, and so on.\n\n')
+        self._addBinningParam(group)
         group.addParam('recMethod', EnumParam,
                        choices=[DynRecTomoChoices.SIRT.name, DynRecTomoChoices.WBP.name],
                        display=EnumParam.DISPLAY_HLIST,
@@ -166,7 +149,7 @@ class DynamoTsAlignAndTomoRec(DynamoProtocolBase):
     def _initialize(self):
         self._inTsSet = self.inputTs.get()
         self._sRate = self._inTsSet.getSamplingRate()
-        self._binnedSRate = self._sRate * 2 ** self.getBinningFactor()
+        self._binnedSRate = self._sRate * self.getBinningFactor(forDynamo=False)
         self._beadRadiusPx = self._getRadiusInPix(self.beadDiamNm.get())
         self._maskRadiusPx = self._getMaskRadiusPix()
         mdObjDict = {}
@@ -366,6 +349,9 @@ class DynamoTsAlignAndTomoRec(DynamoProtocolBase):
     def _createTomoAndUpdateTomoSet(self, mdObj, outTomos):
         ts = mdObj.ts
         newTomogram = Tomogram()
+
+        # out_tomo_rx_path = self.rotXTomo(mdObj)
+        # newTomogram.setLocation(out_tomo_rx_path)
         newTomogram.setLocation(mdObj.tomoFileName)
         newTomogram.setSamplingRate(self._binnedSRate)
         newTomogram.setOrigin()
@@ -385,7 +371,7 @@ class DynamoTsAlignAndTomoRec(DynamoProtocolBase):
         outTs.copyInfo(ts)
         outTsSet.append(outTs)
         identityMatrix = np.eye(3)
-        outTiltAxisAngle = aliData[0].get(TILT_AXIS_ANGLE)  # It's the same for all the tilt images
+        outTiltAxisAngle = -aliData[0].get(TILT_AXIS_ANGLE)  # It's the same for all the tilt images
         acq = outTs.getAcquisition()
         acq.setTiltAxisAngle(outTiltAxisAngle)
         outTs.setAcquisition(acq)
@@ -464,11 +450,11 @@ class DynamoTsAlignAndTomoRec(DynamoProtocolBase):
             return 'binnedReconstructionWBP.mrc'
 
     # --------------------------- DEFINE info functions ----------------------
-    def _validate(self):
-        errorMsg = []
+    def _warnings(self):
+        warnMsg = []
         if self.inputTs.get().interpolated():
-            errorMsg.append("The introduced tilt series are interpolated. Please introduce non-interpolated.")
-        return errorMsg
+            warnMsg.append("The introduced tilt series are interpolated. Please introduce non-interpolated.")
+        return warnMsg
 
     def _summary(self):
         msg = []
@@ -477,6 +463,21 @@ class DynamoTsAlignAndTomoRec(DynamoProtocolBase):
             msg.append("*Interpolated TS stacks have a few tilt images removed.*\n" +
                        self.excludedViewsMsg.get())
         return msg
+
+    def rotXTomo(self, mdObj):
+        tsId = mdObj.ts.getTsId()
+        outPath = self._getExtraPath(tsId)
+        makePath(outPath)
+        inTomoFile = mdObj.tomoFileName
+        outTomoFile = join(outPath, '%s.mrc' % tsId)
+
+        with mrcfile.open(inTomoFile, mode='r', permissive=True) as mrc:
+            rotData = np.rot90(mrc.data, k=1, axes=(1, 2))
+
+        with mrcfile.open(outTomoFile, mode='w+') as mrc:
+            mrc.set_data(rotData)
+
+        return outTomoFile
 
 
 class DynTsAliMdObj:
