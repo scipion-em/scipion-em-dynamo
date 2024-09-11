@@ -1,8 +1,10 @@
-V3.3.0:
+V3.1.22:
+  - Binning tomograms protocol: fix bug.
+  - MRA protocol: add sampling rate validations.
+V3.1.21:
   - Prevent viewers from locking the screen focus.
-V3.2.20:
+V3.1.20:
   - Fix the setup file
-V3.2.20:
   - Subtomogram alignment: fix bug when using masks.
   - Subtomogram alignment: fix output problem when the alignment removed some particles.
 V3.1.19:
