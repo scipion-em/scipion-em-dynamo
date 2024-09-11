@@ -778,7 +778,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
         # Check the reference
         if not self.sizesOk(subtomo, False):
-            validateMsgs.append('The size of the template should be equal or smaller than the size of the particles.')
+            validateMsgs.append('The size of the template should be equal to the size of the particles.')
         # Check sampling rate reference and subtomograms
         if not self.samplingOk():
             validateMsgs.append('The sampling of the subtomograms does not match with the sampling of the subtomograms.'
