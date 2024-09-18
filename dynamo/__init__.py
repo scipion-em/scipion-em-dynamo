@@ -24,14 +24,14 @@
 # *
 # **************************************************************************
 import os.path
-from os.path import join
+from os.path import join, dirname
 import subprocess
 import pwem
 import pyworkflow
 import pyworkflow.utils as pwutils
 from .constants import *
 
-__version__ = '3.1.20'
+__version__ = '3.1.22'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -106,28 +106,16 @@ class Plugin(pwem.Plugin):
             cudaMsgs.append(msg)
             useGpu = False
 
-        SW_EM = env.getEmFolder()
-        dyn_folder = 'dynamo-%s' % DEFAULT_VERSION
-
-        compile_cuda = "echo ' > %s' && " % preMsgs
-        if useGpu:
-            compile_cuda += "cd %s/%s/cuda && make clean && ./config.sh && " \
-                            "make all && " \
-                            "touch cuda_compiled && " % (SW_EM, dyn_folder)
-        compile_cuda += "echo ' > %s'" % cudaMsgs
-        commands = [(compile_cuda, '%s/%s/cuda/cuda_compiled' % (SW_EM, dyn_folder))]
-
-        env.addPackage('dynamo',
-                       version='1.146',
-                       tar='dynamo-1.146.tar.gz',
-                       commands=commands,
-                       default=False)
-
         # Dynamo 1.1.532
-        commands = [("cd cuda && make clean && ./config.sh %s && make all && touch cuda_compiled" % os.path.dirname(pwem.Config.CUDA_LIB), 'cuda/cuda_compiled')]
-        env.addPackage('dynamo', version='1.1.532',
+        commands = "./dynamo_setup_linux.sh "  # OpenMP commands
+        if useGpu:
+            # Cuda commands
+            commands += (f"&& cd cuda && ./config.sh {dirname(pwem.Config.CUDA_LIB)} && make clean && make motors && "
+                         f"make extended && touch cuda_compiled")
+        commands = [(commands, 'cuda/cuda_compiled')]
+        env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_532,
                        tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
-                       createBuildDir = True,
+                       createBuildDir=True,
                        commands=commands,
                        default=True)
 
@@ -140,11 +128,11 @@ class Plugin(pwem.Plugin):
         # Check the installed binary version
         dynamoVer = cls.getHome().split('-')[-1].replace('v', '')
         if int(dynamoVer.replace('.', '')) < MINIMUM_VERSION_NUM:
-           msg = ['The Dynamo version pointed by variable %s '
-                  '(%s) is not supported --> %s.\n\n'
-                  'Please, update the variable value or comment it in %s' %
-                  (DYNAMO_HOME, dynamoVer, DYNAMO_VERSION_1_1_532,
-                   pyworkflow.Config.SCIPION_CONFIG)]
+            msg = ['The Dynamo version pointed by variable %s '
+                   '(%s) is not supported --> %s.\n\n'
+                   'Please, update the variable value or comment it in %s' %
+                   (DYNAMO_HOME, dynamoVer, DYNAMO_VERSION_1_1_532,
+                    pyworkflow.Config.SCIPION_CONFIG)]
         return msg
 
     @classmethod

@@ -118,7 +118,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                       label='Set of subtomograms',
                       help="Set of subtomograms to align with dynamo")
         form.addParam('templateRef', PointerParam,
-                      pointerClass='Volume, SubTomogram',
+                      pointerClass='Volume',
                       important=True,
                       label="Template",
                       help='The size of the template should be equal or smaller than the size of the particles.')  # If you '
@@ -722,6 +722,16 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         else:
             return testDims == refDims
 
+    def samplingOk(self):
+        samplingRef = self.templateRef.get().getSamplingRate()
+        samplingSubtomos = self.inputVolumes.get().getSamplingRate()
+        checkResult = False
+        tol = 0.005
+        if abs(samplingRef-samplingSubtomos) > tol:
+            return False
+        else:
+            return True
+
     @staticmethod
     def anyValActiveInNumListParam(iParam) -> bool:
         """Checks if any of the values of a NumericListParam is greater than 0, which means to
@@ -767,13 +777,17 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         #                                 'size as the set of references')
 
         # Check the reference
-        if not self.sizesOk(subtomo):
-            validateMsgs.append('The size of the template should be equal or smaller than the size of the particles.')
+        if not self.sizesOk(subtomo, False):
+            validateMsgs.append('The size of the template should be equal to the size of the particles.')
+        # Check sampling rate reference and subtomograms
+        if not self.samplingOk():
+            validateMsgs.append('The sampling of the subtomograms does not match with the sampling of the subtomograms.'
+                                'Please resample any of them')
         # Check the masks
         if introducedMasks:
             for mask in masks:
                 if mask:
-                    if not self.sizesOk(mask):
+                    if not self.sizesOk(mask, False):
                         validateMsgs.append('The introduced masks must be of the same size as the template.')
                         break
         # Check the dims values

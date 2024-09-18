@@ -78,7 +78,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
         for tomo in self.inputTomos:
             origTomoName = tomo.getFileName()
             finalTomoName = self.getFinalTomoName(tomo)
-            self.finalTomoNamesDict[finalTomoName] = tomo
+            self.finalTomoNamesDict[finalTomoName] = tomo.clone()
             if self.doConvertFiles:
                 self._insertFunctionStep(self.convertInputStep, origTomoName, finalTomoName)
             # Generate one unique file with all the tomograms to be binned

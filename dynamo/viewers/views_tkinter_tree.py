@@ -59,6 +59,7 @@ class DynamoTomoDialog(ToolbarListDialog):
                                    itemDoubleClick=self.doubleClickOnTomogram,
                                    allowSelect=False,
                                    cancelButton=True,
+                                   lockGui=False,
                                    **kwargs)
 
     def refresh_gui(self):
