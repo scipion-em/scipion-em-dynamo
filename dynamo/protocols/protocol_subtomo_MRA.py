@@ -534,6 +534,17 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             self._defineSourceRelation(self.inputVolumes, outSubtomos)
             self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
 
+    # TODO: get the .fsc file from the results dir (aliPrj/results)
+    # def genFSCs(self, starFile, tableName, fscColumns):
+    #     fscSet = self._createSetOfFSCs()
+    #     columValues = table.getColumnValues(columnName)
+    #     fsc = FSC(objLabel=columnName[3:])
+    #     fsc.setData(resolution_inv, columValues)
+    #     fscSet.append(fsc)
+    #
+    #     fscSet.write()
+    #     return fscSet
+
     def closeSetsStep(self):
         for outputset in self._iterOutputsNew():
             if isinstance(outputset, SetOfSubTomograms):
