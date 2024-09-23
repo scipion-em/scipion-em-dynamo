@@ -31,6 +31,8 @@ from os.path import join, abspath
 
 import mrcfile
 import numpy as np
+
+from pwem.convert.headers import setMRCSamplingRate
 from pwem.objects.data import SetOfVolumes, FSC, SetOfFSCs
 from pyworkflow import BETA
 from pyworkflow.object import Set, String
@@ -531,9 +533,9 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             sRate = inputSet.getSamplingRate()
             avgFile = join(self.getLastIterAvgsDir(), 'average_symmetrized_ref_001_ite_%04d.em' % niters)
             avgMrcFile = self.convertToMrc(avgFile)
-            self.setSamplingRateInHeader(avgMrcFile, sRate)
             averageSubTomogram.setFileName(avgMrcFile)
             averageSubTomogram.setSamplingRate(sRate)
+            averageSubTomogram.fixMRCVolume(setSamplingRate=sRate)  # Update sampling rate in file header
             # Generate the FSC curve
             fscs = self.genFSCs(niters, sRate)
             # Define outputs and relations
@@ -545,16 +547,6 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             self._defineSourceRelation(inputSetPointer, averageSubTomogram)
             self._defineSourceRelation(inputSetPointer, fscs)
 
-    @staticmethod
-    def setSamplingRateInHeader(fileInMrc, sRate):
-        with mrcfile.mmap(fileInMrc, mode='r+') as mrc:
-            mrc.voxel_size = sRate
-            # mrc.update_header_stats()
-            # mrc.header.cella.x = sRate
-            # mrc.header.cella.y = sRate
-            # mrc.header.cella.z = sRate
-
-    # TODO: get the .fsc file from the results dir (aliPrj/results)
     def genFSCs(self, nIters, sRate):
         dimVals = self.dim.getListFromValues()
         boxSize = dimVals[-1]  # The final box size will be the box size specified for the last round
