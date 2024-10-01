@@ -28,8 +28,12 @@
 import os
 from enum import Enum
 from os.path import join, abspath
+
+import mrcfile
 import numpy as np
-from pwem.objects.data import SetOfVolumes
+
+from pwem.convert.headers import setMRCSamplingRate
+from pwem.objects.data import SetOfVolumes, FSC, SetOfFSCs
 from pyworkflow import BETA
 from pyworkflow.object import Set, String
 from pyworkflow.protocol import GPU_LIST, USE_GPU
@@ -80,6 +84,7 @@ AREA_SEARCH_MODES = [NO_LIMITS, CENTER_OF_THE_BOX, FROM_PREVIOUS_ESTIMATION, FRO
 class DynRefineOuts(Enum):
     subtomograms = SetOfSubTomograms
     average = AverageSubTomogram
+    fscs = SetOfFSCs
 
 
 class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
@@ -486,6 +491,8 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
 
     def createOutputStep(self):
         niters = self.getTotalIterations()
+        inputSetPointer = self.inputVolumes
+        inputSet = inputSetPointer.get()
 
         if self.doMra:
             fhSurvivRefs = open(self._getExtraPath('%s/results/ite_%04d/currently_surviving_references_ite_%04d.txt')
@@ -516,23 +523,53 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                 name2 = 'AverageRef%s' % str(ref)
                 args2 = {name2: averageSubTomogram}
                 self._defineOutputs(**args2)
-                self._defineSourceRelation(inputSet, averageSubTomogram)
+                self._defineSourceRelation(inputSetPointer, averageSubTomogram)
         else:
             averageSubTomogram = AverageSubTomogram()
             outSubtomos = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
-            inputSet = self.inputVolumes.get()
             outSubtomos.copyInfo(inputSet)
             outSubtomos.copyItems(inputSet, updateItemCallback=self._updateItem)
             # Fill the resulting average object
+            sRate = inputSet.getSamplingRate()
             avgFile = join(self.getLastIterAvgsDir(), 'average_symmetrized_ref_001_ite_%04d.em' % niters)
-            averageSubTomogram.setFileName(self.convertToMrc(avgFile))
-            averageSubTomogram.setSamplingRate(inputSet.getSamplingRate())
+            avgMrcFile = self.convertToMrc(avgFile)
+            averageSubTomogram.setFileName(avgMrcFile)
+            averageSubTomogram.setSamplingRate(sRate)
+            averageSubTomogram.fixMRCVolume(setSamplingRate=sRate)  # Update sampling rate in file header
+            # Generate the FSC curve
+            fscs = self.genFSCs(niters, sRate)
             # Define outputs and relations
             outsDict = {self._possibleOutputs.subtomograms.name: outSubtomos,
-                        self._possibleOutputs.average.name: averageSubTomogram}
+                        self._possibleOutputs.average.name: averageSubTomogram,
+                        self._possibleOutputs.fscs.name: fscs}
             self._defineOutputs(**outsDict)
-            self._defineSourceRelation(self.inputVolumes, outSubtomos)
-            self._defineSourceRelation(self.inputVolumes, averageSubTomogram)
+            self._defineSourceRelation(inputSetPointer, outSubtomos)
+            self._defineSourceRelation(inputSetPointer, averageSubTomogram)
+            self._defineSourceRelation(inputSetPointer, fscs)
+
+    def genFSCs(self, nIters, sRate):
+        dimVals = self.dim.getListFromValues()
+        boxSize = dimVals[-1]  # The final box size will be the box size specified for the last round
+        # sRateDotBoxSize = sRate * boxSize / 2
+        fscSet = self._createSetOfFSCs()
+        fscFile = join(self.getLastIterAvgsDir(), 'eo_fsc_ref_001_ite_%04d.fsc' % nIters)
+
+        with open(fscFile, 'r') as file:
+            contents = file.read()
+            fscValues = [float(val) for val in contents.split()]
+            nyquistFreq = 1 / (2 * sRate)
+            # nPoints = boxSize / 2 # + 1  # Freq. points + 1 (Because of Fourier's symmetry)
+            nPoints = len(fscValues)
+            step = nyquistFreq / (nPoints - 1)
+            freqPoints = [step * i for i in range(1, nPoints + 1)]
+            # invResolution = [sRateDotBoxSize / (n + 1) for n in range(round(boxSize/2))]
+
+        fsc = FSC()
+        fsc.setData(freqPoints, fscValues)
+        fscSet.append(fsc)
+
+        fscSet.write()
+        return fscSet
 
     def closeSetsStep(self):
         for outputset in self._iterOutputsNew():
