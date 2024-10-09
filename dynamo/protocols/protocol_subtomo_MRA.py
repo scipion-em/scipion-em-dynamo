@@ -401,9 +401,9 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
         self.initialize()
-        self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.alignStep)
-        self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.convertInputStep, needsGPU=False)
+        self._insertFunctionStep(self.alignStep, needsGPU=True)
+        self._insertFunctionStep(self.createOutputStep, needsGPU=False)
         # if self.doMra:
         #     self._insertFunctionStep(self.closeSetsStep)
 

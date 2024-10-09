@@ -139,18 +139,16 @@ class DynamoTomoDialog(ToolbarListDialog):
 
     def lanchDynamoForTomogram(self, tomo):
 
-        # TODO: Remove xPos and yPos when auto-centering released by pyworkflow
         # Make this work when launched as protocol.
-        #msg = FloatingMessage(self, "Launching dynamo. Please wait!.", xPos=100, yPos=100)
-        #msg.show()
-        #self.showFloatingMessage("Launching dynamo. Please wait!.")
+        if self.calledFromViewer:
+            self.info("Launching dynamo. Please wait!.")
 
         commandsFile = self.writeMatlabCode(tomo)
         args = ' %s' % commandsFile
         runJob(logger, Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
 
-        #msg.close()
-        #self.closeFloatingMessage()
+        if self.calledFromViewer:
+            self.info("Done.")
 
     def writeMatlabCode(self, tomo):
         # Initialization params

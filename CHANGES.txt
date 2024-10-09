@@ -4,6 +4,8 @@ V3.2.0:
   - Protocol subtomograms alignment:
     * Generate the FSC curve.
     * Set the sampling rate correctly in the average/s header/s.
+   - Steps more precise in GPU usage. Improved execution
+
 V3.1.22:
   - Binning tomograms protocol: fix bug.
   - MRA protocol: add sampling rate validations.
