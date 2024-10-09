@@ -319,9 +319,9 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     def _warnings(self):
         warnMsg = []
         presentModelList = self.inputMeshes.get().getUniqueValues([DYN_MODEL_NAME])
+        preMsg = 'Some of the models provided are not allowed in this protocol. Allowed models are:\n'
         for presentModel in presentModelList:
             if presentModel in MODELS_NOT_PROCESSED_IN_MW:
-                warnMsg.append('Some of the models provided are not allowed in this protocol. Allowed models are:\n%s'
-                               % '\n - '.join(MODELS_ALLOWED_IN_MW_NAMES.insert(0, '')))
+                warnMsg.append(f'{preMsg}{MODELS_NOT_PROCESSED_IN_MW}')
                 break
         return warnMsg
