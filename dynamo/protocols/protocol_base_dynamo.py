@@ -35,10 +35,10 @@ class DynamoProtocolBase(EMProtocol, ProtTomoBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def getBinningFactor(self, forDynamo=True):
+    def getBinningFactor(self, fromDynamo=True):
         """From Dynamo: a binning Factor of 1 will decrease the size of the Tomograms by 2,
         a Binning Factor of 2 by 4... So Dynamo interprets the binning factor as 2**binFactor, while IMOD
         interprets it literally. Thus, this method will convert the binning introduced by the user in the
         Dynamo convention"""
-        return (2 ** (self.binning.get() - 1)) / 2 if forDynamo else self.binning.get()
+        return (2 ** (self.binning.get() - 1)) / 2 if fromDynamo else self.binning.get()
 

@@ -25,9 +25,12 @@
 # *
 # **************************************************************************
 from enum import Enum
+from os.path import abspath
+
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.emlib.image import ImageHandler
-from pyworkflow.protocol import params, GT
+from pyworkflow.object import Set
+from pyworkflow.protocol import params, GT, STEPS_PARALLEL
 from pyworkflow.utils import removeBaseExt, getExt
 from tomo.objects import Tomogram, SetOfTomograms
 from dynamo import Plugin
@@ -42,11 +45,14 @@ class DynamoBinTomograms(DynamoProtocolBase):
 
     _label = 'bin tomograms'
     _possibleOutputs = DynamoBinOuts
+    stepsExecutionMode = STEPS_PARALLEL
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.content = ''
         self.finalTomoNamesDict = {}
+        self.ih = None
+        self.sRate = None
+        self.doConvertFiles = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -70,35 +76,81 @@ class DynamoBinTomograms(DynamoProtocolBase):
                            "current parameter. This procedure can be accelerated using the multiple threads to engage "
                            "several cores in parallel. However, this will only make sense if the total memory occupied "
                            "by all the slabs simultaneously in memory in a given time fits in the RAM of the machine.")
-        form.addParallelSection(threads=4, mpi=0)
+        form.addParam('binThreads', params.IntParam,
+                      label='Dynamo threads',
+                      default=3,
+                      help='Number of threads used by Dynamo each time it is called in the protocol execution. For '
+                           'example, if 2 Scipion threads and 3 Dynamo threads are set, the tomograms will be '
+                           'processed in groups of 2 at the same time with a call of tomo3d with 3 threads each, so '
+                           '6 threads will be used at the same time. Beware the memory of your machine has '
+                           'memory enough to load together the number of tomograms specified by Scipion threads.')
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._initialize()
-        for tomo in self.inputTomos:
-            origTomoName = tomo.getFileName()
-            finalTomoName = self.getFinalTomoName(tomo)
-            self.finalTomoNamesDict[finalTomoName] = tomo.clone()
-            if self.doConvertFiles:
-                self._insertFunctionStep(self.convertInputStep, origTomoName, finalTomoName)
-            # Generate one unique file with all the tomograms to be binned
-            self._insertFunctionStep(self.createMCodeStep, origTomoName, finalTomoName)
-        # That way, we can carry out the binning of all the tomograms provided with only one call to MATLAB, improving
-        # the efficiency, as this call is very slow
-        self._insertFunctionStep(self.binTomosStep)
-        self._insertFunctionStep(self.createOutputStep)
+        stepIds = []
+        for tsId in self.tomoDict.keys():
+            cInPid = self._insertFunctionStep(self.convertInputStep, tsId,
+                                              prerequisites=[],
+                                              needsGPU=False)
+            binId = self._insertFunctionStep(self.binTomosStep, tsId,
+                                             prerequisites=cInPid,
+                                             needsGPU=False)
+            cOutId = self._insertFunctionStep(self.createOutputStep, tsId,
+                                              prerequisites=binId,
+                                              needsGPU=False)
+            stepIds.append(cOutId)
+        self._insertFunctionStep(self._closeOutputSet,
+                                 prerequisites=stepIds,
+                                 needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        self.inputTomos = self.inputTomos.get()
+        self.ih = ImageHandler()
+        self.tomoDict = {tomo.getTsId(): tomo.clone() for tomo in self.inputTomos.get()}
         self.doConvertFiles = not self.isCompatibleFileFormat()
+        self.sRate = self.inputTomos.get().getSamplingRate() * self.getBinningFactor(fromDynamo=False)
 
-    @staticmethod
-    def convertInputStep(origName, finalName):
-        ih = ImageHandler()
-        ih.convert(origName, finalName)
+    def convertInputStep(self, tsId: str):
+        if self.doConvertFiles:
+            tomo = self.tomoDict[tsId]
+            origName = tomo.getFileName()
+            finalName = self.getConvertedOrLinkedTsFn(tsId)
+            self.ih.convert(origName, finalName)
 
-    def createMCodeStep(self, origTomoName, finalTomoName):
+    def binTomosStep(self, tsId: str):
+        mFile = self.createMCodeFile(tsId)
+        args = ' %s' % mFile
+        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+
+    def createOutputStep(self, tsId: str):
+        with self._lock:
+            outTomos = self.getOutputSetOfTomograms()
+            inTomo = self.tomoDict[tsId]
+            tomo = Tomogram()
+            tomo.copyInfo(inTomo)
+            tomo.setSamplingRate(self.sRate)
+            tomo.setFileName(self.getOutTsFn(tsId))
+            outTomos.append(tomo)
+            outTomos.update(tomo)
+            outTomos.write()
+            self._store(outTomos)
+
+    # --------------------------- DEFINE utils functions ----------------------
+    def isCompatibleFileFormat(self):
+        """Compatible with MRC and em (MRC with that extension)"""
+        compatibleExts = ['.em', '.mrc']
+        return True if (getExt(self.inputTomos.get().getFirstItem().getFileName())
+                        not in compatibleExts) else False
+
+    def getConvertedOrLinkedTsFn(self, tsId: str):
+        return self._getExtraPath(f'in_{tsId}.mrc')
+
+    def getOutTsFn(self, tsId: str):
+        return self._getExtraPath(f'{tsId}.mrc')
+
+    def createMCodeFile(self, tsId: str):
         # FROM DYNAMO:
         # ______________________________________________________________________________________________
         # bin(fileIn,fileOut,binFactor,varargin)
@@ -108,43 +160,32 @@ class DynamoBinTomograms(DynamoProtocolBase):
         # p.addParamValue('maximumMegaBytes',[]);
         # p.addParamValue('showStatistics',false,'short','sst');
         # ______________________________________________________________________________________________
-        self.content += "dpktomo.tools.bin('%s', '%s', %i, 'slabSize', %i, 'matlabWorkers', %i, " \
-                        "'showStatistics', true)\n" % \
-                        (origTomoName, finalTomoName, super().getBinningFactor(), self.zChunk.get(),
-                         self.numberOfThreads.get())
-
-    def binTomosStep(self):
+        origName = abspath(self.getConvertedOrLinkedTsFn(tsId))
+        finalName = abspath(self.getOutTsFn(tsId))
         mFile = self._getExtraPath('binTomograms.m')
         with open(mFile, 'w') as codeFile:
-            codeFile.write(self.content)
-        args = ' %s' % mFile
-        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+            content = ("dpktomo.tools.bin('%s', '%s', %i, 'slabSize', %i, 'matlabWorkers', %i, "
+                       "'showStatistics', true)\n") % (origName, finalName, super().getBinningFactor(),
+                                                       self.zChunk.get(), self.binThreads.get())
+            codeFile.write(content)
+        return mFile
 
-    def createOutputStep(self):
-        sr = self.inputTomos.getSamplingRate() * super().getBinningFactor(forDynamo=False)  # Not for, but from
-        outTomos = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
-        outTomos.setSamplingRate(sr)
-        for tomoName, inTomo in self.finalTomoNamesDict.items():
-            tomo = Tomogram()
-            tomo.copyInfo(inTomo)
-            tomo.setSamplingRate(sr)
-            tomo.setFileName(tomoName)
-            outTomos.append(tomo)
+    def getOutputSetOfTomograms(self) -> SetOfTomograms:
+        outTomograms = getattr(self, self._possibleOutputs.tomograms.name, None)
+        if outTomograms:
+            outTomograms.enableAppend()
+            tomograms = outTomograms
+        else:
+            tomograms = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
+            tomograms.copyInfo(self.inputTomos.get())
+            tomograms.setSamplingRate(self.sRate)
+            tomograms.setStreamState(Set.STREAM_OPEN)
+            setattr(self, self._possibleOutputs.tomograms.name, tomograms)
+            self._defineOutputs(**{self._possibleOutputs.tomograms.name: tomograms})
+            self._defineSourceRelation(self.inputTomos, tomograms)
 
-        self._defineOutputs(**{DynamoBinOuts.tomograms.name: outTomos})
-        self._defineSourceRelation(self.inputTomos, outTomos)
+        return tomograms
 
-    # --------------------------- DEFINE utils functions ----------------------
-    def getConvertedOutFileName(self, inFileName):
-        return self._getExtraPath(removeBaseExt(inFileName) + '.mrc')
-
-    def getFinalTomoName(self, tomo):
-        return self.getConvertedOutFileName(tomo.getFileName())
-
-    def isCompatibleFileFormat(self):
-        """Compatible with MRC and em (MRC with that extension)"""
-        compatibleExts = ['.em', '.mrc']
-        return True if getExt(self.inputTomos.getFirstItem().getFileName()) not in compatibleExts else False
 
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):

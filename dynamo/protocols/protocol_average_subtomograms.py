@@ -66,10 +66,10 @@ class DynamoProtAvgSubtomograms(EMProtocol, ProtTomoBase):
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.avgStep)
-        self._insertFunctionStep(self.convertOutputStep)
-        self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.convertInputStep, needsGPU=False)
+        self._insertFunctionStep(self.avgStep, needsGPU=False)
+        self._insertFunctionStep(self.convertOutputStep, needsGPU=False)
+        self._insertFunctionStep(self.createOutputStep, needsGPU=False)
 
     # --------------- STEPS functions -----------------------
     def convertInputStep(self):

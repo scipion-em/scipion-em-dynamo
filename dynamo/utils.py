@@ -31,7 +31,6 @@ from dynamo import CATALOG_FILENAME, CATALOG_BASENAME, SUFFIX_COUNT, Plugin, \
     BASENAME_CROPPED, BASENAME_PICKED, GUI_MW_FILE
 from dynamo.convert import eulerAngles2matrix
 from pyworkflow.object import String
-from pyworkflow.utils import removeBaseExt
 from tomo.constants import BOTTOM_LEFT_CORNER
 from tomo.objects import SetOfCoordinates3D, Coordinate3D, SetOfMeshes
 
