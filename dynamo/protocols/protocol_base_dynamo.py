@@ -24,21 +24,38 @@
 # *
 # **************************************************************************
 from pwem.protocols import EMProtocol
-from pyworkflow import BETA
+from pyworkflow.protocol import IntParam
 from tomo.protocols import ProtTomoBase
+
+IN_TOMOS = 'inputTomos'
+IN_COORDS = 'inputCoords'
+BIN_THREADS_MSG = 'Threads used by Dynamo each time it is called by Scipion'
 
 
 class DynamoProtocolBase(EMProtocol, ProtTomoBase):
 
-    _devStatus = BETA
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def getBinningFactor(self, fromDynamo=True):
+    @staticmethod
+    def insertBinThreads(form, helpMsg=BIN_THREADS_MSG):
+        form.addParam('binThreads', IntParam,
+                      label='Dynamo threads',
+                      default=3,
+                      help=helpMsg)
+
+    def getBinningFactor(self, fromDynamo: bool = True) -> int:
         """From Dynamo: a binning Factor of 1 will decrease the size of the Tomograms by 2,
         a Binning Factor of 2 by 4... So Dynamo interprets the binning factor as 2**binFactor, while IMOD
         interprets it literally. Thus, this method will convert the binning introduced by the user in the
         Dynamo convention"""
         return (2 ** (self.binning.get() - 1)) / 2 if fromDynamo else self.binning.get()
+
+    def getInTomos(self, isPointer: bool = False):
+        inTomos = getattr(self, IN_TOMOS, None)
+        return inTomos if isPointer else inTomos.get()
+
+    def getInCoords(self, isPointer: bool = False):
+        inCoords = getattr(self, IN_COORDS, None)
+        return inCoords if isPointer else inCoords.get()
 

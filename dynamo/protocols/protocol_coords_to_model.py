@@ -23,21 +23,15 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
 import os
 import numpy as np
-
-from pyworkflow import BETA
 from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 import pyworkflow.object as pwobj
-
 from pwem.protocols import EMProtocol
-
 from tomo.protocols import ProtTomoBase
 import tomo.constants as const
 from tomo.objects import SetOfMeshes, MeshPoint
-
 from dynamo import Plugin, VLL_FILE, CATALOG_FILENAME
 
 
@@ -46,8 +40,6 @@ class DynamoCoordsToModel(EMProtocol, ProtTomoBase):
     protocols"""
 
     _label = 'coords to model'
-    _devStatus = BETA
-
     OUTPUT_PREFIX = 'outputMeshes'
 
     def __init__(self, **kwargs):

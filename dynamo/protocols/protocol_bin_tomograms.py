@@ -27,11 +27,11 @@
 from enum import Enum
 from os.path import abspath
 
-from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
+from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase, IN_TOMOS
 from pwem.emlib.image import ImageHandler
 from pyworkflow.object import Set
 from pyworkflow.protocol import params, GT, STEPS_PARALLEL
-from pyworkflow.utils import removeBaseExt, getExt
+from pyworkflow.utils import getExt, Message
 from tomo.objects import Tomogram, SetOfTomograms
 from dynamo import Plugin
 
@@ -56,8 +56,8 @@ class DynamoBinTomograms(DynamoProtocolBase):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('inputTomos', params.PointerParam,
+        form.addSection(label=Message.LABEL_INPUT)
+        form.addParam(IN_TOMOS, params.PointerParam,
                       pointerClass='SetOfTomograms',
                       label="Input Tomograms",
                       important=True)
@@ -76,14 +76,13 @@ class DynamoBinTomograms(DynamoProtocolBase):
                            "current parameter. This procedure can be accelerated using the multiple threads to engage "
                            "several cores in parallel. However, this will only make sense if the total memory occupied "
                            "by all the slabs simultaneously in memory in a given time fits in the RAM of the machine.")
-        form.addParam('binThreads', params.IntParam,
-                      label='Dynamo threads',
-                      default=3,
-                      help='Number of threads used by Dynamo each time it is called in the protocol execution. For '
-                           'example, if 2 Scipion threads and 3 Dynamo threads are set, the tomograms will be '
-                           'processed in groups of 2 at the same time with a call of tomo3d with 3 threads each, so '
-                           '6 threads will be used at the same time. Beware the memory of your machine has '
-                           'memory enough to load together the number of tomograms specified by Scipion threads.')
+        self.insertBinThreads(form,
+                              helpMsg='Number of threads used by Dynamo each time it is called in the protocol '
+                                      'execution. For example, if 2 Scipion threads and 3 Dynamo threads are set, '
+                                      'the tomograms will be processed in groups of 2 at the same time with a call '
+                                      'of tomo3d with 3 threads each, so 6 threads will be used at the same time. '
+                                      'Beware the memory of your machine has memory enough to load together the '
+                                      'number of tomograms specified by Scipion threads.')
         form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -107,10 +106,11 @@ class DynamoBinTomograms(DynamoProtocolBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
+        inTomos = self.getInTomos()
         self.ih = ImageHandler()
-        self.tomoDict = {tomo.getTsId(): tomo.clone() for tomo in self.inputTomos.get()}
+        self.tomoDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos}
         self.doConvertFiles = not self.isCompatibleFileFormat()
-        self.sRate = self.inputTomos.get().getSamplingRate() * self.getBinningFactor(fromDynamo=False)
+        self.sRate = inTomos.getSamplingRate() * self.getBinningFactor(fromDynamo=False)
 
     def convertInputStep(self, tsId: str):
         if self.doConvertFiles:
@@ -141,7 +141,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
     def isCompatibleFileFormat(self):
         """Compatible with MRC and em (MRC with that extension)"""
         compatibleExts = ['.em', '.mrc']
-        return True if (getExt(self.inputTomos.get().getFirstItem().getFileName())
+        return True if (getExt(self.getInTomos().getFirstItem().getFileName())
                         not in compatibleExts) else False
 
     def getConvertedOrLinkedTsFn(self, tsId: str):
@@ -177,7 +177,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
             tomograms = outTomograms
         else:
             tomograms = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
-            tomograms.copyInfo(self.inputTomos.get())
+            tomograms.copyInfo(self.getInTomos())
             tomograms.setSamplingRate(self.sRate)
             tomograms.setStreamState(Set.STREAM_OPEN)
             setattr(self, self._possibleOutputs.tomograms.name, tomograms)
@@ -185,7 +185,6 @@ class DynamoBinTomograms(DynamoProtocolBase):
             self._defineSourceRelation(self.inputTomos, tomograms)
 
         return tomograms
-
 
     # --------------------------- DEFINE info functions ----------------------
     def _methods(self):
