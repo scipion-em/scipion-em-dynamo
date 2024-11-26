@@ -24,24 +24,21 @@
 # *
 # **************************************************************************
 import logging
-
 from dynamo import Plugin
-
-logger = logging.getLogger(__file__)
+from pwem.convert import transformations
+from pwem.convert.transformations import euler_from_matrix, translation_from_matrix
 import math, os
 import numpy as np
 from scipy.io import loadmat
-
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.process import runJob
-import pyworkflow.object as pwobj
-
 from pwem.convert.headers import getFileFormat, MRC
 from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform, Volume
-
-from tomo.objects import Coordinate3D, MeshPoint, TomoAcquisition, SetOfCoordinates3D, SetOfMeshes
+from tomo.objects import Coordinate3D, TomoAcquisition
 import tomo.constants as const
+
+logger = logging.getLogger(__file__)
 
 
 def convertOrLinkVolume(inVolume: Volume, outVolume: str):
@@ -169,55 +166,29 @@ def readDynCoord(tableFile, coord3DSet, tomo, scaleFactor=1):
 
 
 # matrix2euler dynamo
-def matrix2eulerAngles(A):
-    tol = 1e-4
-    if abs(A[2, 2] - 1) < tol:
-        tilt = 0
-        narot = math.atan2(A[1, 0], A[0, 0]) * 180 / math.pi
-        tdrot = 0
-    elif abs(A[2, 2] + 1) < tol:
-        tdrot = 0
-        tilt = 180
-        narot = math.atan2(A[1, 0], A[0, 0]) * 180 / math.pi
-    else:
-        tdrot = math.atan2(A[2, 0], A[2, 1])
-        tilt = math.acos(A[2, 2])
-        narot = math.atan2(A[0, 2], -A[1, 2])
-    tilt = tilt * 180 / math.pi
-    narot = narot * 180 / math.pi
-    tdrot = tdrot * 180 / math.pi
-    return tdrot, tilt, narot, A[0, 3], A[1, 3], A[2, 3]
+def matrix2eulerAngles(matrix):
+    # Relevant info:
+    #   * Dynamo's transformation system is ZXZ
+    #   * Sscipion = R * Sdynamo ==> Sdynamo = Rinv * Sscipion
+    rotMatrix = matrix[:3, :3]
+    rotMatrixInv = np.linalg.inv(rotMatrix)
+    tdrot, tilt, narot = np.rad2deg(euler_from_matrix(rotMatrix, axes='szxz'))
+    shiftsScipion = - translation_from_matrix(matrix)
+    shiftsDynamo = np.dot(rotMatrixInv, shiftsScipion)
+    shiftx, shifty, shiftz = shiftsDynamo
+    return tdrot, tilt, narot, shiftx, shifty, shiftz
 
 
 # euler2matrix dynamo
 def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
-    tdrot = float(tdrot)
-    tilt = float(tilt)
-    narot = float(narot)
-    tdrot = tdrot * math.pi / 180
-    narot = narot * math.pi / 180
-    tilt = tilt * math.pi / 180
-    costdrot = math.cos(tdrot)
-    cosnarot = math.cos(narot)
-    costilt = math.cos(tilt)
-    sintdrot = math.sin(tdrot)
-    sinnarot = math.sin(narot)
-    sintilt = math.sin(tilt)
-    A = np.empty([4, 4])
-    A[3, 3] = 1
-    A[3, 0:3] = 0
+    A = np.eye(4)
     A[0, 3] = float(shiftx)
     A[1, 3] = float(shifty)
     A[2, 3] = float(shiftz)
-    A[0, 0] = costdrot * cosnarot - sintdrot * costilt * sinnarot
-    A[0, 1] = -cosnarot * sintdrot - costdrot * costilt * sinnarot
-    A[0, 2] = sinnarot * sintilt
-    A[1, 0] = costdrot * sinnarot + cosnarot * sintdrot * costilt
-    A[1, 1] = costdrot * cosnarot * costilt - sintdrot * sinnarot
-    A[1, 2] = -cosnarot * sintilt
-    A[2, 0] = sintdrot * sintilt
-    A[2, 1] = costdrot * sintilt
-    A[2, 2] = costilt
+    tdrot = np.deg2rad(float(tdrot))
+    narot = np.deg2rad(float(narot))
+    tilt = np.deg2rad(float(tilt))
+    A = transformations.euler_matrix(tdrot, tilt, narot, axes='szxz')
     return A
 
 
@@ -241,45 +212,3 @@ def readDynCatalogue(ctlg_path, save_path):
 
     # Read MatLab binary into Python
     return loadmat(matPath, struct_as_record=False, squeeze_me=True)['s']
-
-
-def textFile2Coords(protocol, setTomograms, outPath, directions=True, mesh=False):
-    if mesh:
-        suffix = protocol._getOutputSuffix(SetOfMeshes)
-        coord3DSet = protocol._createSetOfMeshes(setTomograms, suffix)
-    else:
-        suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
-        coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
-    coord3DSet.setName("tomoCoord")
-    coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
-    coord3DSet.setBoxSize(protocol.boxSize.get())
-    coord3DSet._dynCatalogue = pwobj.String(os.path.join(outPath, "tomos.ctlg"))
-    for tomo in setTomograms.iterItems():
-        outPoints = pwutils.join(outPath, pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-        outAngles = pwutils.join(outPath, 'angles_' + pwutils.removeBaseExt(tomo.getFileName()) + '.txt')
-        if not os.path.isfile(outPoints):
-            continue
-        if not os.path.isfile(outAngles) and directions:
-            continue
-
-        # Populate Set of 3D Coordinates with 3D Coordinates
-        points = np.loadtxt(outPoints, delimiter=' ')
-        angles = np.loadtxt(outAngles, delimiter=' ') if directions else None
-        for idx in range(len(points)):
-            if mesh:
-                coord = MeshPoint()
-            else:
-                coord = Coordinate3D()
-            coord.setVolume(tomo)
-            coord.setPosition(points[idx, 0], points[idx, 1], points[idx, 2], const.BOTTOM_LEFT_CORNER)
-            if directions:
-                matrix = eulerAngles2matrix(angles[idx, 0], angles[idx, 1], angles[idx, 2], 0, 0, 0)
-                coord.setMatrix(matrix)
-            coord.setGroupId(points[idx, 3])
-            coord3DSet.append(coord)
-
-    name = protocol.OUTPUT_PREFIX + suffix
-    args = {name: coord3DSet}
-    protocol._defineOutputs(**args)
-    protocol._defineSourceRelation(setTomograms, coord3DSet)
-    protocol._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)

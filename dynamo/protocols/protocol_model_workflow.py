@@ -24,12 +24,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
 from enum import Enum
 from os import remove
 from os.path import abspath, exists
 from pwem.protocols import EMProtocol
-from pyworkflow import BETA
-from pyworkflow.protocol import IntParam, PointerParam, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.protocol import IntParam, PointerParam, BooleanParam, LEVEL_ADVANCED, STEPS_PARALLEL
+from pyworkflow.utils import Message, cyanStr
 from tomo.objects import SetOfCoordinates3D, SetOfMeshes, Coordinate3D
 from tomo.protocols import ProtTomoBase
 from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NAME, M_SURFACE_NAME, \
@@ -37,8 +38,10 @@ from dynamo import Plugin, M_GENERAL_DES, M_GENERAL_WITH_BOXES_DES, M_GENERAL_NA
     M_SPH_VESICLE_NAME, M_VESICLE_DES, M_ELLIPSOIDAL_VESICLE_DES, M_MARKED_ELLIP_VESICLE_NAME, \
     M_MARKED_ELLIP_VESICLE_DES, \
     MB_BY_LEVELS, MB_ELLIPSOIDAL, MB_GENERAL, MB_GENERAL_BOXES, MB_VESICLE, MB_ELLIPSOIDAL_MARKED, \
-    MODELS_NOT_PROCESSED_IN_MW, MODELS_ALLOWED_IN_MW_NAMES, M_VESICLE_NAME
+    MODELS_NOT_PROCESSED_IN_MW, M_VESICLE_NAME
 from ..utils import genMCode4ReadAndSaveData, dynamoCroppingResults2Scipion, createSetOfOutputCoords, getCroppedFile
+
+logger = logging.getLogger(__name__)
 
 # Model types mapping
 MODEL_CHOICES = [M_ELLIPSOIDAL_VESICLE_NAME, M_SURFACE_NAME, M_GENERAL_NAME]
@@ -88,8 +91,8 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
     """
 
     _label = 'model workflow'
-    _devStatus = BETA
     _possibleOutputs = DynModelWfOuts
+    stepsExecutionMode = STEPS_PARALLEL
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -97,7 +100,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label='Input')
+        form.addSection(label=Message.LABEL_INPUT)
         form.addParam('inputMeshes', PointerParam,
                       pointerClass='SetOfMeshes',
                       label="Input Meshes",
@@ -142,6 +145,7 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                        default=10,
                        label="Cropping parameter",
                        help='Intended mesh parameter for the "crop_mesh" that defined a cropping geometry on a surface')
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -149,14 +153,23 @@ class DynamoModelWorkflow(EMProtocol, ProtTomoBase):
                                                              DYN_MODEL_NAME,
                                                              DYN_MODEL_FILE,
                                                              '_groupId'])
+        pIdList = []
         for tomoId, modelName, modelFile in zip(modelsDict[Coordinate3D.TOMO_ID_ATTR],
                                                 modelsDict[DYN_MODEL_NAME],
                                                 modelsDict[DYN_MODEL_FILE]):
-            self._insertFunctionStep(self.applyWorkflowStep, tomoId, modelName, modelFile)
-        self._insertFunctionStep(self.createOutputStep)
+            wfId = self._insertFunctionStep(self.applyWorkflowStep, tomoId, modelName, modelFile,
+                                     prerequisites=[],
+                                     needsGPU=False)
+            pIdList.append(wfId)
+        self._insertFunctionStep(self.createOutputStep,
+                                 prerequisites=pIdList,
+                                 needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def applyWorkflowStep(self, tomoId, modelName, modelFile):
+        logger.info(cyanStr(f'===> {tomoId}: Running the model workflow:'))
+        logger.info(cyanStr(f'======> Model name = {modelName}'))
+        logger.info(cyanStr(f'======> Model file = {modelFile}'))
         commandsFile = self.writeMatlabFile(tomoId, modelName, modelFile)
         args = ' %s' % commandsFile
         try:

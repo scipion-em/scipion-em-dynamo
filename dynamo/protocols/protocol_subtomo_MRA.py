@@ -28,13 +28,10 @@
 import os
 from enum import Enum
 from os.path import join, abspath
-
-import mrcfile
 import numpy as np
 
-from pwem.convert.headers import setMRCSamplingRate
+from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.objects.data import SetOfVolumes, FSC, SetOfFSCs
-from pyworkflow import BETA
 from pyworkflow.object import Set, String
 from pyworkflow.protocol import GPU_LIST, USE_GPU
 from pyworkflow.protocol.params import PointerParam, BooleanParam, IntParam, StringParam, LEVEL_ADVANCED, \
@@ -87,11 +84,10 @@ class DynRefineOuts(Enum):
     fscs = SetOfFSCs
 
 
-class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
+class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
     """This protocol will align subtomograms using Dynamo"""  # MRA Subtomogram Averaging"""
 
     _label = 'Subtomogram alignment'
-    _devStatus = BETA
     _possibleOutputs = DynRefineOuts
 
     def __init__(self, **args):
@@ -373,7 +369,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
                            "computations can be kept for reuse.However, trying to keep all the particles in memory can "
                            "lead to saturate it,blocking the CPU. Additionally, a small batch allows to divide the "
                            "matrix in more blocks. This might be useful in parallel computations.")
-        form.addParallelSection(threads=4, mpi=0)
+        self.insertBinThreads(form)
 
         # form.addParam('pca', BooleanParam,
         #               label='Perform PCA',
@@ -698,7 +694,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
         command += self.getRoundParams('high', self.high)
 
         # --- Processing software + hardware resources ---
-        command += self.get_dvput('mwa', self.numberOfThreads.get())  # Cores used to calculate the average in each iter
+        command += self.get_dvput('mwa', self.binThreads.get())  # Cores used to calculate the average in each iter
         if self.useGpu.get():
             # Param 'cores' is used to specify the number of CPUs involved in the alignment. If GPU is used, Dynamo
             # only works well setting it to 1.
@@ -707,7 +703,7 @@ class DynamoSubTomoMRA(ProtTomoSubtomogramAveraging):
             command += self.get_dvput('gpu_motor', 'spp')
             # command += self.get_dvput('gpu_identifier_set', self.getGpuList()[0])
         else:
-            command += self.get_dvput('cores', self.numberOfThreads.get())
+            command += self.get_dvput('cores', self.binThreads.get())
             command += self.get_dvput('destination', 'standalone')
 
         return command
