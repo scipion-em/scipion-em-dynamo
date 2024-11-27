@@ -181,15 +181,21 @@ def matrix2eulerAngles(matrix):
 
 # euler2matrix dynamo
 def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
-    A = np.eye(4)
-    A[0, 3] = float(shiftx)
-    A[1, 3] = float(shifty)
-    A[2, 3] = float(shiftz)
+    M = np.eye(4)
+    sx = float(shiftx)
+    sy = float(shifty)
+    sz = float(shiftz)
+    Sdynamo = np.array([sx, sy, sz])
     tdrot = np.deg2rad(float(tdrot))
     narot = np.deg2rad(float(narot))
     tilt = np.deg2rad(float(tilt))
-    A = transformations.euler_matrix(tdrot, tilt, narot, axes='szxz')
-    return A
+    R = transformations.euler_matrix(tdrot, tilt, narot, axes='szxz')
+    R = R[:3, :3]
+    # Rinv = np.linalg.inv(R)
+    Sscipion = - np.dot(R, Sdynamo)
+    M[:3, :3] = R
+    M[:3, 3] = Sscipion
+    return M
 
 
 def readDynCatalogue(ctlg_path, save_path):
