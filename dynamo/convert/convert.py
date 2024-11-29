@@ -169,7 +169,7 @@ def readDynCoord(tableFile, coord3DSet, tomo, scaleFactor=1):
 def matrix2eulerAngles(matrix):
     # Relevant info:
     #   * Dynamo's transformation system is ZXZ
-    #   * Sscipion = R * Sdynamo ==> Sdynamo = Rinv * Sscipion
+    #   * Sscipion = R * (-Sdynamo) ==> Sdynamo = Rinv * (-Sscipion)
     rotMatrix = matrix[:3, :3]
     rotMatrixInv = np.linalg.inv(rotMatrix)
     tdrot, tilt, narot = np.rad2deg(euler_from_matrix(rotMatrix, axes='szxz'))
@@ -181,15 +181,23 @@ def matrix2eulerAngles(matrix):
 
 # euler2matrix dynamo
 def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
-    A = np.eye(4)
-    A[0, 3] = float(shiftx)
-    A[1, 3] = float(shifty)
-    A[2, 3] = float(shiftz)
+    # Relevant info:
+    #   * Dynamo's transformation system is ZXZ
+    #   * Sscipion = R * (-Sdynamo) ==> Sdynamo = Rinv * (-Sscipion)
+    M = np.eye(4)
+    sx = float(shiftx)
+    sy = float(shifty)
+    sz = float(shiftz)
+    Sdynamo = np.array([sx, sy, sz])
     tdrot = np.deg2rad(float(tdrot))
     narot = np.deg2rad(float(narot))
     tilt = np.deg2rad(float(tilt))
-    A = transformations.euler_matrix(tdrot, tilt, narot, axes='szxz')
-    return A
+    R = transformations.euler_matrix(tdrot, tilt, narot, axes='szxz')
+    R = R[:3, :3]
+    Sscipion = - np.dot(R, Sdynamo)
+    M[:3, :3] = R
+    M[:3, 3] = Sscipion
+    return M
 
 
 def readDynCatalogue(ctlg_path, save_path):
