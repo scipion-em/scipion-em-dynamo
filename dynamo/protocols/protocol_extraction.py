@@ -184,10 +184,11 @@ class DynamoExtraction(DynamoProtocolBase):
             self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
+        inCoordsPointer = self.getInCoords(isPointer=True)
         outSubtomos = SetOfSubTomograms.create(self._getPath(), template='submograms%s.sqlite')
         finalSRate = self.getInputTomograms().getSamplingRate()
         outSubtomos.setSamplingRate(finalSRate)
-        outSubtomos._coordsPointer = self.getInCoords(isPointer=True)
+        outSubtomos.setCoordinates3D(inCoordsPointer)
         if self.getInputTomograms().getFirstItem().getAcquisition():
             outSubtomos.setAcquisition(self.getInputTomograms().getFirstItem().getAcquisition())
         currentSubtomoFiles = sorted(glob.glob(self._getExtraPath('**', '*.mrc')))
@@ -209,7 +210,7 @@ class DynamoExtraction(DynamoProtocolBase):
                   "extracted are the ones in which the picking was performed, or a binned version of them."
 
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: outSubtomos})
-        self._defineSourceRelation(self.getInCoords(isPointer=True), outSubtomos)
+        self._defineSourceRelation(inCoordsPointer, outSubtomos)
 
     # --------------------------- DEFINE utils functions ----------------------
     def getInputTomograms(self):

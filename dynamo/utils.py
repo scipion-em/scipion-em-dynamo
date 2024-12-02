@@ -204,7 +204,7 @@ def createBoxingOutputObjects(prot, precedentsPointer, boxSize=20, savePicked=Tr
         if savePicked:
             # Create the output set of meshes (always produced)
             meshes = SetOfMeshes.create(prot._getPath(), template='meshes%s.sqlite', suffix=suffix)
-            meshes.setPrecedents(precedents)
+            meshes.setPrecedents(precedentsPointer)
             meshes.setSamplingRate(precedents.getSamplingRate())
             meshes.setBoxSize(boxSize)
             meshes._dynCatalogue = String(getCatalogFile(outPath))  # Extended attribute
