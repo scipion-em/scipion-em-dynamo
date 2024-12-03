@@ -31,7 +31,6 @@ from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from dynamo.utils import createBoxingOutputObjects, getDynamoModels, getNewestModelModDate
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 import pyworkflow.utils as pwutils
-from pyworkflow import BETA
 from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.protocol.params import IntParam, BooleanParam
 from pyworkflow.utils.properties import Message
@@ -57,7 +56,6 @@ class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
      saved in the catalogue and registered."""
 
     _label = 'vectorial picking'
-    _devStatus = BETA
     _possibleOutputs = DynPickingOuts
 
     def __init__(self, **kwargs):
@@ -79,8 +77,11 @@ class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.launchDynamoBoxingStep, interactive=True)
+        self._insertFunctionStep(self.convertInputStep,
+                                 needsGPU=False)
+        self._insertFunctionStep(self.launchDynamoBoxingStep,
+                                 needsGPU = False,
+                                 interactive=True)
 
     # --------------------------- STEPS functions -----------------------------
     def convertInputStep(self):

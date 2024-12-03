@@ -28,13 +28,14 @@ import copy
 import glob
 from enum import Enum
 from os.path import abspath, join, dirname, basename
+
+from dynamo.protocols.protocol_base_dynamo import IN_TOMOS, IN_COORDS, DynamoProtocolBase
 from dynamo.utils import getCatalogFile
 from pwem.objects import Transform
 from pwem.protocols import EMProtocol
-from pyworkflow import BETA
 from pyworkflow.object import String
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam
-from pyworkflow.utils import removeExt
+from pyworkflow.utils import removeExt, Message
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
 from tomo.objects import SetOfSubTomograms, SubTomogram, Coordinate3D, Tomogram
 from dynamo import Plugin, VLL_FILE
@@ -54,11 +55,10 @@ class DynSubtomoExtractOuts(Enum):
     subtomograms = SetOfSubTomograms
 
 
-class DynamoExtraction(EMProtocol, ProtTomoBase):
+class DynamoExtraction(DynamoProtocolBase):
     """Extraction of subtomograms using Dynamo"""
 
     _label = 'subtomogram extraction'
-    _devStatus = BETA
     _possibleOutputs = DynSubtomoExtractOuts
 
     def __init__(self, **kwargs):
@@ -74,8 +74,8 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('inputCoordinates', PointerParam,
+        form.addSection(label=Message.LABEL_INPUT)
+        form.addParam(IN_COORDS, PointerParam,
                       label="Input Coordinates",
                       important=True,
                       pointerClass='SetOfCoordinates3D')
@@ -88,7 +88,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                            'step ( _same as picking_ option ).\nIf you select _other_ option, you must provide '
                            'a different tomogram to extract from.\n*Note*: In the _other_ case, ensure that provided '
                            'tomogram and coordinates are related ')
-        form.addParam('inputTomograms', PointerParam,
+        form.addParam(IN_TOMOS, PointerParam,
                       pointerClass='SetOfTomograms',
                       condition='tomoSource != %s' % SAME_AS_PICKING,
                       label='Input tomogram',
@@ -106,26 +106,30 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                            'over a white background.  Xmipp, Spider, Relion '
                            'and Eman require white particles over a black '
                            'background.')
-        form.addParallelSection(threads=4, mpi=0)
+        self.insertBinThreads(form)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._initialize()
-        self._insertFunctionStep(self.writeSetOfCoordinates3D)
-        self._insertFunctionStep(self.launchDynamoExtractStep)
+        self._insertFunctionStep(self.writeSetOfCoordinates3D,
+                                 needsGPU=False)
+        self._insertFunctionStep(self.launchDynamoExtractStep,
+                                 needsGPU=False)
         if self.doInvert.get():
-            self._insertFunctionStep(self.invertContrastStep)
-        self._insertFunctionStep(self.createOutputStep)
+            self._insertFunctionStep(self.invertContrastStep,
+                                     needsGPU=False)
+        self._insertFunctionStep(self.createOutputStep,
+                                 needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         self.cropDirName = self._getExtraPath(CROP_DIR)
         # Get the intersection between the tomograms and coordinates provided (this covers possible subsets made)
         inTomos = self.getInputTomograms()
-        inCoords = self.inputCoordinates.get()
-        coordsPresentTomoIds = inCoords.getUniqueValues([Coordinate3D.TOMO_ID_ATTR])
-        tomosPresentTsIds = inTomos.getUniqueValues([Tomogram.TS_ID_FIELD])
-        commonTomoIds = list(set(coordsPresentTomoIds).intersection(set(tomosPresentTsIds)))
+        inCoords = self.getInCoords()
+        coordsPresentTomoIds = inCoords.getTSIds()
+        tomosPresentTsIds = inTomos.getTSIds()
+        commonTomoIds = set(coordsPresentTomoIds).intersection(set(tomosPresentTsIds))
         self.tomoTsIdDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos if tomo.getTsId() in commonTomoIds}
         self.coordsFileName = self._getExtraPath('coords.txt')
         self.anglesFileName = self._getExtraPath('angles.txt')
@@ -145,7 +149,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                 self.dynamoTomoIdDict[idt + 1] = tomo.getFileName()
                 tomoPath = abspath(tomo.getFileName())
                 tomoFid.write(tomoPath + '\n')
-                for coord in self.inputCoordinates.get().iterCoordinates(tomo):
+                for coord in self.getInCoords().iterCoordinates(tomo):
                     angles_coord = matrix2eulerAngles(coord.getMatrix())
                     x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
                     y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
@@ -180,10 +184,11 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
             self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
 
     def createOutputStep(self):
+        inCoordsPointer = self.getInCoords(isPointer=True)
         outSubtomos = SetOfSubTomograms.create(self._getPath(), template='submograms%s.sqlite')
         finalSRate = self.getInputTomograms().getSamplingRate()
         outSubtomos.setSamplingRate(finalSRate)
-        outSubtomos._coordsPointer = self.inputCoordinates
+        outSubtomos.setCoordinates3D(inCoordsPointer)
         if self.getInputTomograms().getFirstItem().getAcquisition():
             outSubtomos.setAcquisition(self.getInputTomograms().getFirstItem().getAcquisition())
         currentSubtomoFiles = sorted(glob.glob(self._getExtraPath('**', '*.mrc')))
@@ -205,15 +210,15 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
                   "extracted are the ones in which the picking was performed, or a binned version of them."
 
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: outSubtomos})
-        self._defineSourceRelation(self.inputCoordinates, outSubtomos)
+        self._defineSourceRelation(inCoordsPointer, outSubtomos)
 
     # --------------------------- DEFINE utils functions ----------------------
     def getInputTomograms(self):
         """ Return the tomogram associated to the 'SetOfCoordinates3D' or 'Other' tomograms. """
         if self.tomoSource.get() == SAME_AS_PICKING:
-            return self.inputCoordinates.get().getPrecedents()
+            return self.getInCoords().getPrecedents()
         else:
-            return self.inputTomograms.get()
+            return self.getInTomos()
 
     def writeMatlabCode(self):
         codeFilePath = self._getExtraPath("DynamoExtraction.m")
@@ -228,7 +233,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
             content += "angles = readmatrix('%s')\n" % self.anglesFileName
             content += "coords = coordsData(:,1:3)\n"
             content += "tags = coordsData(:,4)'\n"
-            content += "parfor(tag=unique(tags), %i)\n" % self.numberOfThreads.get()
+            content += "parfor(tag=unique(tags), %i)\n" % self.binThreads.get()
             content += "tomoCoords = coords(tags == tag, :)\n"
             content += "tomoAngles = angles(tags == tag, :)\n"
             content += "t = dynamo_table_blank(size(tomoCoords, 1), 'r', tomoCoords, 'angles', tomoAngles)\n"
@@ -268,7 +273,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
         methodsMsgs = []
         if self.getOutputsSize() >= 1:
             msg = ("A total of %i subtomograms of size %i were extracted"
-                   % (self.inputCoordinates.get().getSize(), self.boxSize.get()))
+                   % (self.getInCoords().getSize(), self.boxSize.get()))
             if self.tomoSource.get() == OTHER:
                 msg += (" from another set of tomograms: %s"
                         % self.getObjectTag('inputTomogram'))
@@ -282,7 +287,7 @@ class DynamoExtraction(EMProtocol, ProtTomoBase):
     def _summary(self):
         summary = []
         if self.isFinished():
-            inCoordsSize = self.inputCoordinates.get().getSize()
+            inCoordsSize = self.getInCoords().getSize()
             outCoordsSize = getattr(self, self._possibleOutputs.subtomograms.name).getSize()
             summary.append("Tomogram source: *%s*" % self.getEnumText("tomoSource"))
             if inCoordsSize > outCoordsSize:

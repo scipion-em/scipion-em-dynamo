@@ -23,20 +23,15 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
 import os
 import glob
 import numpy as np
-
-from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
-
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfCoordinates3D
 import tomo.constants as const
-
 from dynamo import Plugin
 from dynamo.convert import matrix2eulerAngles, readDynCoord
 
@@ -45,7 +40,6 @@ class DynamoSubBoxing(EMProtocol, ProtTomoBase):
     """SubBoxing using Dynamo"""
 
     _label = 'subBoxing'
-    _devStatus = BETA
     OUTPUT_PREFIX = ""
 
     def __init__(self, **kwargs):

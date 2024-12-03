@@ -24,17 +24,13 @@
 # *
 # **************************************************************************
 import numpy as np
-from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import Message
-
 from pwem.objects import Transform
-
 from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import Tomogram
 from tomo.protocols.protocol_base import ProtTomoImportAcquisition
 from .. import Plugin
-
 from ..convert import readDynCatalogue
 
 
@@ -44,7 +40,6 @@ class DynamoImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     binary MatLab object into an Structure which can be afterwards read by Python."""
 
     _label = 'import tomograms from Dynamo'
-    _devStatus = BETA
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):

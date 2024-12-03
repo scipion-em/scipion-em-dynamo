@@ -34,7 +34,7 @@ from pyworkflow.utils.path import createLink, makePath
 from pwem.emlib.image import ImageHandler
 from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import SubTomogram, SetOfSubTomograms, SetOfCoordinates3D
-from .protocol_base_dynamo import DynamoProtocolBase
+from .protocol_base_dynamo import DynamoProtocolBase, IN_TOMOS
 from ..convert import dynTableLine2Subtomo
 
 
@@ -60,31 +60,33 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         super()._defineImportParams(form)
-        form.addParam('tomoSet', PointerParam,
+        form.addParam(IN_TOMOS, PointerParam,
                       pointerClass='SetOfTomograms',
                       allowsNull=True,
                       label="Tomograms (opt.)",
                       help="If not provided, the subtomograms won't be referred to any tomogram. "
                            "If provided, the sampling rate value will be read from them.")
         form.addParam('samplingRate', FloatParam,
-                      condition='not tomoSet',
+                      condition='not %s' % IN_TOMOS,
                       allowsNull=True,
                       label='Sampling rate [Å/px] (opt.)')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self._initialize()
-        self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.importSubTomogramsStep)
+        self._insertFunctionStep(self.convertInputStep,
+                                 needsGPU=False)
+        self._insertFunctionStep(self.importSubTomogramsStep,
+                                 needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        tomograms = self.tomoSet.get()
+        tomograms = self.getInTomos()
         self.matchingTblFiles = self.getMatchFiles()
         # If tomograms provided, the sampling rate value will be read from them. If not, the user
         # will have to introduce it manually
         if tomograms:
-            self.tblTomoDict = {tblFile: tomo.clone() for tblFile, tomo in zip(self.matchingTblFiles, self.tomoSet.get())}
+            self.tblTomoDict = {tblFile: tomo.clone() for tblFile, tomo in zip(self.matchingTblFiles, tomograms)}
             self.sRate.set(tomograms.getSamplingRate())
         else:
             self.tblTomoDict = {tblFile: None for tblFile in self.matchingTblFiles}
@@ -123,7 +125,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
         subtomoSet.setSamplingRate(samplingRate)
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
-        tomograms = self.tomoSet.get()
+        tomograms = self.getInTomos()
         if tomograms:
             coordSet = SetOfCoordinates3D.create(self._getPath(), template='coordinates3d%s.sqlite')
             coordSet.setPrecedents(tomograms)
@@ -161,6 +163,6 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
                 errors.append(tblFilesNotFoundMsg)
         else:
             errors.append(tblFilesNotFoundMsg)
-        if not self.tomoSet.get() and not self.samplingRate.get():
+        if not self.getInTomos() and not self.samplingRate.get():
             errors.append('If tomograms are not provided, a sampling rate value is required.')
         return errors

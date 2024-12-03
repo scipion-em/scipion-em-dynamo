@@ -28,23 +28,20 @@ from enum import Enum
 from os.path import join
 from dynamo import Plugin
 from dynamo.convert import writeDynTable, writeSetOfVolumes
+from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.emlib.image import ImageHandler
-from pwem.protocols import EMProtocol
-from pyworkflow import BETA
 from pyworkflow.protocol import PointerParam, BooleanParam
 from pyworkflow.utils import Message, makePath
 from tomo.objects import AverageSubTomogram
-from tomo.protocols import ProtTomoBase
 
 
 class DynAvgOuts(Enum):
     average = AverageSubTomogram
 
 
-class DynamoProtAvgSubtomograms(EMProtocol, ProtTomoBase):
+class DynamoProtAvgSubtomograms(DynamoProtocolBase):
 
     _label = 'Average subtomograms'
-    _devStatus = BETA
     _possibleOutputs = DynAvgOuts
     tableName = 'initial.tbl'
     dataDirName = 'data'
@@ -62,14 +59,14 @@ class DynamoProtAvgSubtomograms(EMProtocol, ProtTomoBase):
                       label='Do implicit rotation masking? (opt.)',
                       help='If set to Yes, in the rotated particles, the material outside a spherical mask will not '
                            'be computed. The particles will de facto appear with a spherical mask.')
-        form.addParallelSection(threads=4, mpi=0)
+        self.insertBinThreads(form)
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.avgStep)
-        self._insertFunctionStep(self.convertOutputStep)
-        self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.convertInputStep, needsGPU=False)
+        self._insertFunctionStep(self.avgStep, needsGPU=False)
+        self._insertFunctionStep(self.convertOutputStep, needsGPU=False)
+        self._insertFunctionStep(self.createOutputStep, needsGPU=False)
 
     # --------------- STEPS functions -----------------------
     def convertInputStep(self):
@@ -121,7 +118,7 @@ class DynamoProtAvgSubtomograms(EMProtocol, ProtTomoBase):
         if self.impRotMasking.get():
             cmd += "'implicitRotationMasking', 1, "
         cmd += "'extension', 'mrc', "  # informs Dynamo that the data folder uses an ext different to the default .em
-        cmd += "'matlab_workers', %i, " % self.numberOfThreads.get()
+        cmd += "'matlab_workers', %i, " % self.binThreads.get()
         cmd += "'v', 1"  # Verbose
         cmd += ")"
         return cmd

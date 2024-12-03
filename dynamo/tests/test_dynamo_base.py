@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 from dynamo.protocols import DynamoBinTomograms, DynamoProtAvgSubtomograms
+from dynamo.protocols.protocol_base_dynamo import IN_COORDS, IN_TOMOS
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING, OTHER, DynamoExtraction
 from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr
@@ -81,13 +82,13 @@ class TestDynamoStaBase(TestBaseCentralizedLayer):
                                returnProtocol=False):
         print(magentaStr("\n==> Extracting the subtomograms:"))
         protLabel = 'Extraction - same as picking'
-        argsDict = {'inputCoordinates': inCoords,
+        argsDict = {IN_COORDS: inCoords,
                     'tomoSource': tomoSource,
                     'boxSize': boxSize,
                     'doInvert': True}
         if tomoSource != SAME_AS_PICKING:
             argsDict['tomoSource'] = OTHER
-            argsDict['inputTomograms'] = tomograms
+            argsDict[IN_TOMOS] = tomograms
             protLabel = 'Extraction - another tomo source'
 
         protTomoExtraction = cls.newProtocol(DynamoExtraction, **argsDict)

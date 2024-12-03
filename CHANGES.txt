@@ -1,11 +1,19 @@
+V3.3.0:
+ Users:
+  - Protocols paralellized: bin tomograms and model workflow.
+ Developers:
+  - Fix the transformation matrix in the convert (shifts conversion was not right).
+  - Code refactoring.
+  - Add needsgpu attribute in the generation of the steps.
+  - Add binThreads form param where needed.
+  - Tests update consequently.
+  - Fix some pointers to make them indirect pointers.
 V3.2.0:
-  - TODO: Default Dynamo version to be installed is now 1.1.546.
   - Fix a bug in the generation of the warning message in the protocol model workflow.
   - Protocol subtomograms alignment:
     * Generate the FSC curve.
     * Set the sampling rate correctly in the average/s header/s.
    - Steps more precise in GPU usage. Improved execution
-
 V3.1.22:
   - Binning tomograms protocol: fix bug.
   - MRA protocol: add sampling rate validations.
