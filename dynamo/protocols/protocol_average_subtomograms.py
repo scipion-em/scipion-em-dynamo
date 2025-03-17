@@ -60,7 +60,7 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
                       help='If set to Yes, in the rotated particles, the material outside a spherical mask will not '
                            'be computed. The particles will de facto appear with a spherical mask.')
         form.addParam('randomizeOrientation', BooleanParam,
-                      default=True,
+                      default=False,
                       label='Randomize the subtomos orientation?',
                       help='If set to Yes, the orientation of the picked subtomograms will be randimized. This ensures'
                            'to fill the missing wedge obtaining a ball in the average. If set to No, then the orientation'
