@@ -37,6 +37,7 @@ from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform, Volume
 from tomo.objects import Coordinate3D, TomoAcquisition
 import tomo.constants as const
+import random
 
 logger = logging.getLogger(__file__)
 
@@ -64,7 +65,7 @@ def writeSetOfVolumes(setOfVolumes, outputFnRoot, name):
             convertOrLinkVolume(volume, "%s%03d.mrc" % (outputFnRoot, int(ix + 1)))
 
 
-def writeDynTable(fhTable, setOfSubtomograms):
+def writeDynTable(fhTable, setOfSubtomograms, randomizeOrientation=False):
     for subtomo in setOfSubtomograms.iterSubtomos():
         # Get 3d coordinates or 0, 0, 0
         if subtomo.hasCoordinate3D():
@@ -72,20 +73,24 @@ def writeDynTable(fhTable, setOfSubtomograms):
             y = subtomo.getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER)
             z = subtomo.getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER)
         else:
-            x = 0
-            y = 0
-            z = 0
+            x = 0.0
+            y = 0.0
+            z = 0.0
 
         # Get alignment information
-        if subtomo.hasTransform():
-            tdrot, tilt, narot, shiftx, shifty, shiftz = matrix2eulerAngles(subtomo.getTransform().getMatrix())
+        if randomizeOrientation:
+            # This the sphere point picking
+            u = random.uniform(0, 1)
+            v = random.uniform(0, 1)
+            tilt = np.rad2deg(np.arccos(2*v-1))
+            narot = 360.0*u
+            tdrot = 360.0*random.uniform(0, 1)
+            shiftx = 0.0
+            shifty = 0.0
+            shiftz = 0.0
         else:
-            tilt = 0
-            narot = 0
-            tdrot = 0
-            shiftx = 0
-            shifty = 0
-            shiftz = 0
+            tdrot, tilt, narot, shiftx, shifty, shiftz = matrix2eulerAngles(subtomo.getTransform().getMatrix())
+
         if subtomo.hasAcquisition():
             anglemin = subtomo.getAcquisition().getAngleMin()
             anglemax = subtomo.getAcquisition().getAngleMax()

@@ -59,6 +59,12 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
                       label='Do implicit rotation masking? (opt.)',
                       help='If set to Yes, in the rotated particles, the material outside a spherical mask will not '
                            'be computed. The particles will de facto appear with a spherical mask.')
+        form.addParam('randomizeOrientation', BooleanParam,
+                      default=True,
+                      label='Randomize the subtomos orientation?',
+                      help='If set to Yes, the orientation of the picked subtomograms will be randimized. This ensures'
+                           'to fill the missing wedge obtaining a ball in the average. If set to No, then the orientation'
+                           'of the subtomos will be preserve in the average.')
         self.insertBinThreads(form)
 
     # --------------- INSERT steps functions ----------------
@@ -79,7 +85,7 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
         writeSetOfVolumes(inSubtomos, join(dataDir, 'particle_'), 'id')
         # Generate the Dynamo data table
         with open(tableName, 'w') as fhTable:
-            writeDynTable(fhTable, inSubtomos)
+            writeDynTable(fhTable, inSubtomos, randomizeOrientation=self.randomizeOrientation)
 
     def avgStep(self):
         codeFileName = self._getExtraPath('inCode.doc')
