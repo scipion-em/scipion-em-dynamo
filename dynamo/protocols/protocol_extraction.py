@@ -129,7 +129,7 @@ class DynamoExtraction(DynamoProtocolBase):
         inCoords = self.getInCoords()
         coordsPresentTomoIds = inCoords.getTSIds()
         tomosPresentTsIds = inTomos.getTSIds()
-        commonTomoIds = set(coordsPresentTomoIds).intersection(set(tomosPresentTsIds))
+        commonTomoIds = set(coordsPresentTomoIds) & set(tomosPresentTsIds)
         self.tomoTsIdDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos if tomo.getTsId() in commonTomoIds}
         self.coordsFileName = self._getExtraPath('coords.txt')
         self.anglesFileName = self._getExtraPath('angles.txt')
@@ -166,7 +166,7 @@ class DynamoExtraction(DynamoProtocolBase):
         if not self.coordList:
             raise Exception("All the coordinates were removed (This is because the box associated to those "
                             "coordinates partially or totally lay out of the corresponding tomogram. A good way to "
-                            "avoid this is to decreae the box size)")
+                            "avoid this is to decrease the box size)")
         if self.removedCoordsIndices:
             self.removedCoordsIndices.set(" ".join(map(str, removedCoordsIndices)))
             self._store(self.removedCoordsIndices)
