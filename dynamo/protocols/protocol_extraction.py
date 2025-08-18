@@ -214,8 +214,10 @@ class DynamoExtraction(DynamoProtocolBase):
                 sRate = tomo.getSamplingRate()
                 outSubtomos = self.getOutSetOfSubtomos()
                 currentSubtomoFiles = sorted(self._getSubtomoFileNames(tsId))
+                logger.info(cyanStr(f"tsId = {tsId} - currentSubtomoFiles [{len(currentSubtomoFiles)}] = {currentSubtomoFiles}"))
                 coordCounter = 0
                 for inCoord in self.getInCoords().iterCoordinates(tomo):
+                    logger.info(cyanStr(f"tsId = {tsId} - coordCounter = {coordCounter}"))
                     if self.isCoordOutOfTomo(inCoord, tomo):
                         continue
                     subtomogram = SubTomogram()
