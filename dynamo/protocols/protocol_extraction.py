@@ -108,6 +108,18 @@ class DynamoExtraction(DynamoProtocolBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
+        # JORGE
+        import os
+        fname = "/home/jjimenez/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        import time
+        time.sleep(10)
+        # JORGE_END
         self._initialize()
         closeSetStepDeps = []
         for tsId in self.tomoTsIdDict.keys():
@@ -214,10 +226,8 @@ class DynamoExtraction(DynamoProtocolBase):
                 sRate = tomo.getSamplingRate()
                 outSubtomos = self.getOutSetOfSubtomos()
                 currentSubtomoFiles = sorted(self._getSubtomoFileNames(tsId))
-                logger.info(cyanStr(f"tsId = {tsId} - currentSubtomoFiles [{len(currentSubtomoFiles)}] = {currentSubtomoFiles}"))
                 coordCounter = 0
                 for inCoord in self.getInCoords().iterCoordinates(tomo):
-                    logger.info(cyanStr(f"tsId = {tsId} - coordCounter = {coordCounter}"))
                     if self.isCoordOutOfTomo(inCoord, tomo):
                         continue
                     subtomogram = SubTomogram()
@@ -283,6 +293,7 @@ class DynamoExtraction(DynamoProtocolBase):
         and right, from the coordinate) the part of the box corresponding to the 5 voxels out of the tomogram would
         cut out of the tomogram and Dynamo would skip it. Coordinates are assumed to be at the same size scale as the
         tomograms from which they are going to be extracted"""
+        result = False
         x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
         y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
         z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
@@ -292,7 +303,13 @@ class DynamoExtraction(DynamoProtocolBase):
         outCheckList = [abs(x) + halfBoxSize > tomoWidth,
                         abs(y) + halfBoxSize > tomoHeight,
                         abs(z) + halfBoxSize > tomoThickness]
-        return True if any(outCheckList) else False
+        if any(outCheckList):
+            result = True
+            logger.info(cyanStr(f'coord removed:\n'
+                                f'abs(x) + halfBoxSize > tomoWidth -> {abs(x)} + {halfBoxSize} > {tomoWidth} OR\n'
+                                f'abs(y) + halfBoxSize > tomoHeight -> {abs(y)} + {halfBoxSize} > {tomoHeight} OR\n'
+                                f'abs(z) + halfBoxSize > tomoThickness -> {abs(z)} + {halfBoxSize} > {tomoThickness}'))
+        return result
 
     def _getTomoResultsDir(self, tsId: str) -> str:
         return self._getExtraPath(tsId)
