@@ -99,7 +99,7 @@ class DynamoExtraction(DynamoProtocolBase):
                            'introduced coordinates and the tomograms that will br used for the extraction.')
         form.addSection(label='Postprocess')
         form.addParam('doInvert', BooleanParam,
-                      default=False,
+                      default=True,
                       label='Invert contrast?',
                       help='Invert the contrast if your tomogram is black '
                            'over a white background.  Xmipp, Spider, Relion '
@@ -125,11 +125,6 @@ class DynamoExtraction(DynamoProtocolBase):
                                                tsId,
                                                prerequisites=pId,
                                                needsGPU=False)
-
-            # self._insertFunctionStep(self.createOutputStep,
-            #                          tsId,
-            #                          prerequisites=pId,
-            #                          needsGPU=False)
             closeSetStepDeps.append(pId)
         self._insertFunctionStep(self.createOutputStep,
                                  prerequisites=closeSetStepDeps,
