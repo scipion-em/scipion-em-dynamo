@@ -154,40 +154,43 @@ class DynamoExtraction(DynamoProtocolBase):
         self.scaleFactor = float(samplingRateCoord / samplingRateTomo)
 
     def extractStep(self, tsId: str):
-        coordList = self.writeSetOfCoordinates3D(tsId)
-        self.launchDynamoExtractStep(tsId)
-        if self.doInvert.get():
-            self.invertContrastStep(tsId)
-        self.createOutputStep(tsId, coordList)
+        try:
+            coordList = self.writeSetOfCoordinates3D(tsId)
+            self.launchDynamoExtractStep(tsId)
+            if self.doInvert.get():
+                self.invertContrastStep(tsId)
+            self.createOutputStep(tsId, coordList)
+        except Exception as e:
+            logger.error(redStr(f'tsId = {tsId} -> Dynamo extraction failed with the exception -> {e}'))
 
-    def writeSetOfCoordinates3D(self, tsId: str) -> List[Coordinate3D]:
+    def writeSetOfCoordinates3D(self, tsId: str) -> None:
         logger.info(cyanStr(f"tsId = {tsId} - Writing the coordinates of tomogram into Dynamo format..."))
 
         # try:
         makePath(self._getTomoResultsDir(tsId))
         tomoFile = self._getVllFileName(tsId)
         tomo = self.tomoTsIdDict[tsId]
-        coordList = []
-        removedCoordsCounter = 0
+        # coordList = []
+        # removedCoordsCounter = 0
         # Write the VLL file, the coords file and the angles file as expected by Dynamo
         with open(self._getCoordsFileName(tsId), "w") as outC, \
                 open(self._getAnglesFileName(tsId), 'w') as outA, \
                 open(tomoFile, 'w') as tomoFid:
             tomoFid.write(f'{abspath(tomo.getFileName())}\n')
             for coord in self.getInCoords().iterCoordinates(tomo):
-                if self.isCoordOutOfTomo(coord, tomo):
-                    removedCoordsCounter += 1
-                    continue
+                # if self.isCoordOutOfTomo(coord, tomo):
+                #     removedCoordsCounter += 1
+                #     continue
                 angles_coord = matrix2eulerAngles(coord.getMatrix())
                 x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
                 y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
                 z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
                 outC.write("%.2f\t%.2f\t%.2f\t1\n" % (x, y, z))
                 outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
-                coordList.append(coord.clone())
-        if removedCoordsCounter > 0:
-            logger.info(cyanStr(f'tsId = {tsId} - {removedCoordsCounter} coordinates were removed'))
-        return coordList
+                # coordList.append(coord.clone())
+        # if removedCoordsCounter > 0:
+        #     logger.info(cyanStr(f'tsId = {tsId} - {removedCoordsCounter} coordinates were removed'))
+        # return coordList
         # except Exception as e:
         #     self.failedItems.append(tsId)
         #     logger.error(redStr(f'tsId = {tsId} -> input conversion failed with the exception -> {e}'))
@@ -199,9 +202,9 @@ class DynamoExtraction(DynamoProtocolBase):
         codeFilePath = self.writeMatlabCode(tsId)
         args = ' %s' % codeFilePath
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
-            # except Exception as e:
-            #     self.failedItems.append(tsId)
-            #     logger.error(redStr(f'tsId = {tsId} -> Dynamo extraction failed with the exception -> {e}'))
+        # except Exception as e:
+        #     self.failedItems.append(tsId)
+        #     logger.error(redStr(f'tsId = {tsId} -> Dynamo extraction failed with the exception -> {e}'))
 
     def invertContrastStep(self, tsId: str):
         # logger.info(cyanStr(f"tsId = {tsId} - Inverting the contrast of the particles extracted..."))
@@ -212,7 +215,8 @@ class DynamoExtraction(DynamoProtocolBase):
             with mrcfile.mmap(subTomoFile, mode='r', permissive=True) as mrc:
                 invertedData = -1 * mrc.data
             # Write the result
-            with mrcfile.new_mmap(subTomoFile, overwrite=True, shape=invertedData.shape, mrc_mode=2) as mrc:  # Mode 2 is float32 (see new_mmap)
+            with mrcfile.new_mmap(subTomoFile, overwrite=True, shape=invertedData.shape,
+                                  mrc_mode=2) as mrc:  # Mode 2 is float32 (see new_mmap)
                 for i in range(len(invertedData)):
                     mrc.data[i, :, :] = invertedData[i, :, :]
                 mrc.update_header_from_data()
@@ -232,13 +236,14 @@ class DynamoExtraction(DynamoProtocolBase):
             sRate = tomo.getSamplingRate()
             outSubtomos = self.getOutSetOfSubtomos()
             currentSubtomoFiles = sorted(self._getSubtomoFileNames(tsId))
-            # coordCounter = 0
-            for i, inCoord in enumerate(coordList):
-                # if self.isCoordOutOfTomo(inCoord, tomo):
-                #     continue
+            excludedIndices = self._getDynamoExcludedPartInds()
+            coordCounter = 0
+            for i, inCoord in enumerate(self.getInCoords().iterCoordinates(volume=tomo)):
+                if i in excludedIndices:
+                    continue
                 subtomogram = SubTomogram()
                 transform = Transform()
-                subtomoFile = currentSubtomoFiles[i]
+                subtomoFile = currentSubtomoFiles[coordCounter]
                 subtomogram.setSamplingRate(sRate)
                 subtomogram.setFileName(subtomoFile)
                 subtomogram.setVolName(tomoFileName)
@@ -247,7 +252,7 @@ class DynamoExtraction(DynamoProtocolBase):
                 transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
                 subtomogram.setTransform(transform, convention=TR_DYNAMO)
                 outSubtomos.append(subtomogram)
-                # coordCounter += 1
+                coordCounter += 1
             outSubtomos.write()
             self._store(outSubtomos)
         # except Exception as e:
@@ -355,7 +360,20 @@ class DynamoExtraction(DynamoProtocolBase):
     def _getSubtomoFileNames(self, tsId: str) -> List[str]:
         return glob.glob(join(f'{self._getCroppedParticlesDir(tsId)}*', '*.mrc'))
 
+    def _getDynamoExcludedPartInds(self) -> List[int]:
+        indices = []
+        logFile = self._getLogsPath('run.stdout')
+        with open(logFile, 'r') as file:
+            for line in file:
+                if line.startswith("ATTENTION: cannot crop particle"):
+                    parts = line.strip().split()
+                    # The particle index is expected to be the last element in the line
+                    index = int(parts[-1])
+                    indices.append(index)
+        return indices
+
         # --------------------------- DEFINE info functions ----------------------
+
     def _methods(self):
         methodsMsgs = []
         if self.getOutputsSize() >= 1:
