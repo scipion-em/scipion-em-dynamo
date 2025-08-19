@@ -134,9 +134,6 @@ class DynamoExtraction(DynamoProtocolBase):
         self._insertFunctionStep(self.createOutputStep,
                                  prerequisites=closeSetStepDeps,
                                  needsGPU=False)
-        # self._insertFunctionStep(self.closeOutputSetsStep,
-        #                          prerequisites=closeSetStepDeps,
-        #                          needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
@@ -246,16 +243,6 @@ class DynamoExtraction(DynamoProtocolBase):
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: outSubtomos})
         self._defineSourceRelation(self.getInCoords(isPointer=True), outSubtomos)
 
-    # def closeOutputSetsStep(self):
-    #     super()._closeOutputSet()
-    #     outSubtomos = getattr(self, self._possibleOutputs.subtomograms.name, None)
-    #     if not outSubtomos or (outSubtomos and len(outSubtomos) == 0):
-    #         raise Exception('No output/s subtomograms were generated. Please check the '
-    #                         'Output Log > run.stdout and run.stderr')
-    #     if len(self.getInCoords()) != len(outSubtomos):
-    #         self.coordsRemoved.set(True)
-    #         self._store(self.coordsRemoved)
-
     # --------------------------- DEFINE utils functions ----------------------
     def getInputTomograms(self):
         """ Return the tomogram associated to the 'SetOfCoordinates3D' or 'Other' tomograms. """
@@ -286,31 +273,6 @@ class DynamoExtraction(DynamoProtocolBase):
             codeFid.write(content)
 
         return codeFilePath
-
-    # def isCoordOutOfTomo(self, coord: Coordinate3D, tomo: Tomogram) -> bool:
-    #     """Dynamo skips the particles whose box size or part of it is out of the tomogram. For example if a particle is
-    #     located 10 voxels from one of the tomogram edges and the box size introduced is 30 voxels (15 up and down, left
-    #     and right, from the coordinate) the part of the box corresponding to the 5 voxels out of the tomogram would
-    #     cut out of the tomogram and Dynamo would skip it. Coordinates are assumed to be at the same size scale as the
-    #     tomograms from which they are going to be extracted"""
-    #     result = False
-    #     x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
-    #     y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
-    #     z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
-    #     tomoDims = tomo.getDimensions()
-    #     boxSize = self.boxSize.get() / 2
-    #     # boxSize = self.boxSize.get()
-    #     tomoWidth, tomoHeight, tomoThickness = tomoDims[:]
-    #     outCheckList = [abs(x) + boxSize > tomoWidth,
-    #                     abs(y) + boxSize > tomoHeight,
-    #                     abs(z) + boxSize > tomoThickness]
-    #     if any(outCheckList):
-    #         result = True
-    #         logger.info(cyanStr(f'coord removed:\n'
-    #                             f'abs(x) + boxSize/2 > tomoWidth -> {abs(x)} + {boxSize} > {tomoWidth} OR\n'
-    #                             f'abs(y) + boxSize/2 > tomoHeight -> {abs(y)} + {boxSize} > {tomoHeight} OR\n'
-    #                             f'abs(z) + boxSize/2 > tomoThickness -> {abs(z)} + {boxSize} > {tomoThickness}'))
-    #     return result
 
     def _getTomoResultsDir(self, tsId: str) -> str:
         return self._getExtraPath(tsId)
