@@ -45,6 +45,7 @@ from tomo.utils import scaleTrMatrixShifts
 
 logger = logging.getLogger(__name__)
 CROP_DIR = 'Crop'
+LOG_FILE_NAME = 'log.txt'
 
 # Tomogram type constants for particle extraction
 SAME_AS_PICKING = 0
@@ -200,7 +201,7 @@ class DynamoExtraction(DynamoProtocolBase):
         # if tsId not in self.failedItems:
         #     try:
         codeFilePath = self.writeMatlabCode(tsId)
-        args = ' %s' % codeFilePath
+        args = ' %s > %s' % (codeFilePath, self._getLogFileName(tsId))
         self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
         # except Exception as e:
         #     self.failedItems.append(tsId)
@@ -236,9 +237,10 @@ class DynamoExtraction(DynamoProtocolBase):
             sRate = tomo.getSamplingRate()
             outSubtomos = self.getOutSetOfSubtomos()
             currentSubtomoFiles = sorted(self._getSubtomoFileNames(tsId))
-            excludedIndices = self._getDynamoExcludedPartInds()
+            excludedIndices = self._getDynamoExcludedPartInds(tsId)
             if excludedIndices:
-                logger.info(cyanStr(f"tsId = {tsId} - Excluded indices by Dynamo {excludedIndices}..."))
+                logger.info(cyanStr(f"tsId = {tsId} - Excluded indices [{len(excludedIndices)}] by "
+                                    f"Dynamo {excludedIndices}"))
             else:
                 logger.info(cyanStr(f"tsId = {tsId} - No indices were excluded by Dynamo..."))
             coordCounter = 0
@@ -345,6 +347,9 @@ class DynamoExtraction(DynamoProtocolBase):
     def _getCroppedParticlesDir(self, tsId: str) -> str:
         return join(self._getTomoResultsDir(tsId), CROP_DIR)
 
+    def _getLogFileName(self, tsId: str) -> str:
+        return join(self._getTomoResultsDir(tsId), LOG_FILE_NAME)
+
     def getOutSetOfSubtomos(self) -> SetOfSubTomograms:
         outSubtomos = getattr(self, self._possibleOutputs.subtomograms.name, None)
         if outSubtomos:
@@ -364,9 +369,9 @@ class DynamoExtraction(DynamoProtocolBase):
     def _getSubtomoFileNames(self, tsId: str) -> List[str]:
         return glob.glob(join(f'{self._getCroppedParticlesDir(tsId)}*', '*.mrc'))
 
-    def _getDynamoExcludedPartInds(self) -> List[int]:
+    def _getDynamoExcludedPartInds(self, tsId: str) -> List[int]:
         indices = []
-        logFile = self._getLogsPath('run.stdout')
+        logFile = self._getLogFileName(tsId)
         with open(logFile, 'r') as file:
             for line in file:
                 if line.startswith("ATTENTION: cannot crop particle"):
