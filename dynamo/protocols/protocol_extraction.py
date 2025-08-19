@@ -37,7 +37,7 @@ from pwem.objects import Transform
 from pyworkflow.object import Boolean
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam, STEPS_PARALLEL
 from pyworkflow.utils import removeExt, Message, makePath, cyanStr, redStr
-from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO, SCIPION
+from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
 from tomo.objects import SetOfSubTomograms, SubTomogram, Coordinate3D, Tomogram
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
@@ -300,11 +300,11 @@ class DynamoExtraction(DynamoProtocolBase):
         cut out of the tomogram and Dynamo would skip it. Coordinates are assumed to be at the same size scale as the
         tomograms from which they are going to be extracted"""
         result = False
-        x = self.scaleFactor * coord.getX(SCIPION)
-        y = self.scaleFactor * coord.getY(SCIPION)
-        z = self.scaleFactor * coord.getZ(SCIPION)
+        x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
+        y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
+        z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
         tomoDims = tomo.getDimensions()
-        boxSize = 1.1 * self.boxSize.get() / 2  # Margin of 10% extra
+        boxSize = self.boxSize.get() / 2
         # boxSize = self.boxSize.get()
         tomoWidth, tomoHeight, tomoThickness = tomoDims[:]
         outCheckList = [abs(x) + boxSize > tomoWidth,
@@ -313,9 +313,9 @@ class DynamoExtraction(DynamoProtocolBase):
         if any(outCheckList):
             result = True
             logger.info(cyanStr(f'coord removed:\n'
-                                f'abs(x) + boxSize + 1 > tomoWidth -> {abs(x)} + {boxSize} > {tomoWidth} OR\n'
-                                f'abs(y) + boxSize + 1 > tomoHeight -> {abs(y)} + {boxSize} > {tomoHeight} OR\n'
-                                f'abs(z) + boxSize + 1 > tomoThickness -> {abs(z)} + {boxSize} > {tomoThickness}'))
+                                f'abs(x) + boxSize/2 > tomoWidth -> {abs(x)} + {boxSize} > {tomoWidth} OR\n'
+                                f'abs(y) + boxSize/2 > tomoHeight -> {abs(y)} + {boxSize} > {tomoHeight} OR\n'
+                                f'abs(z) + boxSize/2 > tomoThickness -> {abs(z)} + {boxSize} > {tomoThickness}'))
         return result
 
     def _getTomoResultsDir(self, tsId: str) -> str:
