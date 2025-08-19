@@ -156,11 +156,11 @@ class DynamoExtraction(DynamoProtocolBase):
 
     def extractStep(self, tsId: str):
         try:
-            coordList = self.writeSetOfCoordinates3D(tsId)
+            self.writeSetOfCoordinates3D(tsId)
             self.launchDynamoExtractStep(tsId)
             if self.doInvert.get():
                 self.invertContrastStep(tsId)
-            self.createOutputStep(tsId, coordList)
+            self.createOutputStep(tsId)
         except Exception as e:
             logger.error(redStr(f'tsId = {tsId} -> Dynamo extraction failed with the exception -> {e}'))
 
@@ -226,7 +226,7 @@ class DynamoExtraction(DynamoProtocolBase):
             #     self.failedItems.append(tsId)
             #     logger.error(redStr(f'tsId = {tsId} -> Invert contrast failed with the exception -> {e}'))
 
-    def createOutputStep(self, tsId: str, coordList: List[Coordinate3D]):
+    def createOutputStep(self, tsId: str):
         logger.info(cyanStr(f"tsId = {tsId} - Registering the results..."))
         # if tsId in self.failedItems:
         #     return
