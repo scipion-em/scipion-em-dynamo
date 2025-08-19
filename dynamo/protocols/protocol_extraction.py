@@ -300,17 +300,18 @@ class DynamoExtraction(DynamoProtocolBase):
         y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
         z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
         tomoDims = tomo.getDimensions()
-        halfBoxSize = 1.1 * self.boxSize.get() / 2  # Margin of 10% extra
+        # halfBoxSize = 1.1 * self.boxSize.get() / 2  # Margin of 10% extra
+        boxSize = self.boxSize.get() + 1
         tomoWidth, tomoHeight, tomoThickness = tomoDims[:]
-        outCheckList = [abs(x) + halfBoxSize > tomoWidth,
-                        abs(y) + halfBoxSize > tomoHeight,
-                        abs(z) + halfBoxSize > tomoThickness]
+        outCheckList = [abs(x) + boxSize > tomoWidth,
+                        abs(y) + boxSize > tomoHeight,
+                        abs(z) + boxSize > tomoThickness]
         if any(outCheckList):
             result = True
             logger.info(cyanStr(f'coord removed:\n'
-                                f'abs(x) + halfBoxSize > tomoWidth -> {abs(x)} + {halfBoxSize} > {tomoWidth} OR\n'
-                                f'abs(y) + halfBoxSize > tomoHeight -> {abs(y)} + {halfBoxSize} > {tomoHeight} OR\n'
-                                f'abs(z) + halfBoxSize > tomoThickness -> {abs(z)} + {halfBoxSize} > {tomoThickness}'))
+                                f'abs(x) + boxSize + 1 > tomoWidth -> {abs(x)} + {boxSize} > {tomoWidth} OR\n'
+                                f'abs(y) + boxSize + 1 > tomoHeight -> {abs(y)} + {boxSize} > {tomoHeight} OR\n'
+                                f'abs(z) + boxSize + 1 > tomoThickness -> {abs(z)} + {boxSize} > {tomoThickness}'))
         return result
 
     def _getTomoResultsDir(self, tsId: str) -> str:
