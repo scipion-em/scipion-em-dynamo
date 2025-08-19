@@ -37,7 +37,7 @@ from pwem.objects import Transform
 from pyworkflow.object import Boolean
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam, STEPS_PARALLEL
 from pyworkflow.utils import removeExt, Message, makePath, cyanStr, redStr
-from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
+from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO, SCIPION
 from tomo.objects import SetOfSubTomograms, SubTomogram, Coordinate3D, Tomogram
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
@@ -168,6 +168,7 @@ class DynamoExtraction(DynamoProtocolBase):
         tomoFile = self._getVllFileName(tsId)
         tomo = self.tomoTsIdDict[tsId]
         coordList = []
+        removedCoordsCounter = 0
         # Write the VLL file, the coords file and the angles file as expected by Dynamo
         with open(self._getCoordsFileName(tsId), "w") as outC, \
                 open(self._getAnglesFileName(tsId), 'w') as outA, \
@@ -175,6 +176,7 @@ class DynamoExtraction(DynamoProtocolBase):
             tomoFid.write(f'{abspath(tomo.getFileName())}\n')
             for coord in self.getInCoords().iterCoordinates(tomo):
                 if self.isCoordOutOfTomo(coord, tomo):
+                    removedCoordsCounter += 1
                     continue
                 angles_coord = matrix2eulerAngles(coord.getMatrix())
                 x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
@@ -183,6 +185,8 @@ class DynamoExtraction(DynamoProtocolBase):
                 outC.write("%.2f\t%.2f\t%.2f\t1\n" % (x, y, z))
                 outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
                 coordList.append(coord.clone())
+        if removedCoordsCounter > 0:
+            logger.info(cyanStr(f'tsId = {tsId} - {removedCoordsCounter} coordinates were removed'))
         return coordList
         # except Exception as e:
         #     self.failedItems.append(tsId)
@@ -296,12 +300,12 @@ class DynamoExtraction(DynamoProtocolBase):
         cut out of the tomogram and Dynamo would skip it. Coordinates are assumed to be at the same size scale as the
         tomograms from which they are going to be extracted"""
         result = False
-        x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
-        y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
-        z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
+        x = self.scaleFactor * coord.getX(SCIPION)
+        y = self.scaleFactor * coord.getY(SCIPION)
+        z = self.scaleFactor * coord.getZ(SCIPION)
         tomoDims = tomo.getDimensions()
-        # halfBoxSize = 1.1 * self.boxSize.get() / 2  # Margin of 10% extra
-        boxSize = self.boxSize.get() + 1
+        boxSize = 1.1 * self.boxSize.get() / 2  # Margin of 10% extra
+        # boxSize = self.boxSize.get()
         tomoWidth, tomoHeight, tomoThickness = tomoDims[:]
         outCheckList = [abs(x) + boxSize > tomoWidth,
                         abs(y) + boxSize > tomoHeight,
