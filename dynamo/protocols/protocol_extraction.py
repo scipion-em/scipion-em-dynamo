@@ -140,7 +140,6 @@ class DynamoExtraction(DynamoProtocolBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        self.cropDirName = self._getExtraPath(CROP_DIR)
         # Get the intersection between the tomograms and coordinates provided (this covers possible subsets made)
         inTomos = self.getInputTomograms()
         inCoords = self.getInCoords()
@@ -164,13 +163,14 @@ class DynamoExtraction(DynamoProtocolBase):
                     open(self._getAnglesFileName(tsId), 'w') as outA, \
                     open(tomoFile, 'w') as tomoFid:
                 tomoFid.write(f'{abspath(tomo.getFileName())}\n')
-                for coord in self.getInCoords().iterCoordinates(tomo):
-                    angles_coord = matrix2eulerAngles(coord.getMatrix())
-                    x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
-                    y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
-                    z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
-                    outC.write("%.2f\t%.2f\t%.2f\t1\n" % (x, y, z))
-                    outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
+                with self._lock:
+                    for coord in self.getInCoords().iterCoordinates(tomo):
+                        angles_coord = matrix2eulerAngles(coord.getMatrix())
+                        x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
+                        y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
+                        z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
+                        outC.write("%.2f\t%.2f\t%.2f\t1\n" % (x, y, z))
+                        outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
         except Exception as e:
             self.failedItems.append(tsId)
             logger.error(redStr(f'tsId = {tsId} -> input conversion failed with the exception -> {e}'))
