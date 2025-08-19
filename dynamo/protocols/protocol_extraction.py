@@ -237,6 +237,10 @@ class DynamoExtraction(DynamoProtocolBase):
             outSubtomos = self.getOutSetOfSubtomos()
             currentSubtomoFiles = sorted(self._getSubtomoFileNames(tsId))
             excludedIndices = self._getDynamoExcludedPartInds()
+            if excludedIndices:
+                logger.info(cyanStr(f"tsId = {tsId} - Excluded indices by Dynamo {excludedIndices}..."))
+            else:
+                logger.info(cyanStr(f"tsId = {tsId} - No indices were excluded by Dynamo..."))
             coordCounter = 0
             for i, inCoord in enumerate(self.getInCoords().iterCoordinates(volume=tomo)):
                 if i in excludedIndices:
