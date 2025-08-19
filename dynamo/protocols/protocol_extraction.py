@@ -1,7 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    David Herreros Calero (dherreros@cnb.csic.es)
-# *             Scipion Team (scipion@cnb.csic.es)
+# * Authors:    Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
@@ -34,11 +33,11 @@ import mrcfile
 from dynamo.protocols.protocol_base_dynamo import IN_TOMOS, IN_COORDS, DynamoProtocolBase
 from dynamo.utils import getCatalogFile
 from pwem.objects import Transform
-from pyworkflow.object import Boolean, Set
+from pyworkflow.object import Boolean
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam, STEPS_PARALLEL
 from pyworkflow.utils import removeExt, Message, makePath, cyanStr, redStr
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
-from tomo.objects import SetOfSubTomograms, SubTomogram, Coordinate3D, Tomogram
+from tomo.objects import SetOfSubTomograms, SubTomogram
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
 from tomo.utils import scaleTrMatrixShifts
@@ -75,7 +74,7 @@ class DynamoExtraction(DynamoProtocolBase):
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_COORDS, PointerParam,
-                      label="Input Coordinates",
+                      label="Coordinates",
                       important=True,
                       pointerClass='SetOfCoordinates3D')
         form.addParam('tomoSource', EnumParam,
@@ -90,7 +89,7 @@ class DynamoExtraction(DynamoProtocolBase):
         form.addParam(IN_TOMOS, PointerParam,
                       pointerClass='SetOfTomograms',
                       condition='tomoSource != %s' % SAME_AS_PICKING,
-                      label='Input tomogram',
+                      label='Tomograms',
                       help='Select the tomogram from which to extract.')
         form.addParam('boxSize', IntParam,
                       label='Box size',
