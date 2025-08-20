@@ -123,9 +123,6 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
         cmd += "'o', '%s', " % self.getOutputFile()  # output file
         if self.impRotMasking.get():
             cmd += "'implicitRotationMasking', 1, "
-        # TODO: review this
-        cmd += "'fcompensate', 1, "
-        #########################################################################
         cmd += "'extension', 'mrc', "  # informs Dynamo that the data folder uses an ext different to the default .em
         cmd += "'matlab_workers', %i, " % self.binThreads.get()
         cmd += "'v', 1"  # Verbose
