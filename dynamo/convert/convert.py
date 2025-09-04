@@ -97,7 +97,7 @@ def writeDynTable(fhTable, setOfSubtomograms, randomizeOrientation=False):
         else:
             anglemin = 0
             anglemax = 0
-        fhTable.write('%d 1 1 %d %d %d %d %d %d 0 0 0 1 %d %d 0 0 0 0 0 0 1 0 %d %d %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
+        fhTable.write('%.3f 1 1 %.3f %.3f %.3f %.3f %.3f %.3f 0 0 0 1 %.3f %.3f 0 0 0 0 0 0 1 0 %.3f %.3f %.3f 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n'
                       % (subtomo.getObjId(), shiftx, shifty, shiftz, tdrot, tilt, narot, anglemin, anglemax, x, y, z))
 
 

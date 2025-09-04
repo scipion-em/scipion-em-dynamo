@@ -1,3 +1,8 @@
+V3.4.0:
+ Users:
+  - Protocol extract subtomograms parallelized.
+ Developers:
+  - Fix in the convert, some floats were wrongly written as integers when writing the .tbl files.
 V3.3.1:
  Users:
   - Protocol average subtomograms allows to randomize the initial orientations.

@@ -72,7 +72,7 @@ class TestDynamoImportSubTomograms(TestDynamoStaBase):
 
     @classmethod
     def _runImportDynSubTomograms(cls, tomos=None, sRate=None) -> SetOfSubTomograms:
-        tblFile = cls.extractProtocol._getExtraPath('Crop1', 'crop.tbl')
+        tblFile = cls.extractProtocol._getExtraPath('emd_10439', 'Crop1', 'crop.tbl')
         protImportSubtomos = cls.newProtocol(DynamoImportSubtomos,
                                              filesPath=tblFile,
                                              inputTomos=tomos,
