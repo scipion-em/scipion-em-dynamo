@@ -60,7 +60,7 @@ class DynamoDataViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [SetOfMeshes, SetOfCoordinates3D]
-    _name = 'Open with Dynamo'
+    _name = 'Dynamo'
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
