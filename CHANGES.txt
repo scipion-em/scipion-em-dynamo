@@ -1,6 +1,7 @@
 V3.4.0:
  Users:
   - Protocol extract subtomograms parallelized.
+  - The sampling rate is properly set in the binary files generated.
  Developers:
   - Fix in the convert, some floats were wrongly written as integers when writing the .tbl files.
 V3.3.1:

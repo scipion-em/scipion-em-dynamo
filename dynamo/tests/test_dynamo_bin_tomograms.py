@@ -26,26 +26,34 @@
 import numpy as np
 from dynamo.tests.test_dynamo_base import TestDynamoStaBase
 from pyworkflow.tests import DataSet
+from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto, TS_03, TS_54
 
 
 class TestDynamoBinTomograms(TestDynamoStaBase):
     tomoFiles = None
     binningFactor = 2
     origSize = np.array([1024, 1024, 512])
-    sRate = 5
-    bin2SRate = 10
-    importedTomos = None
+    bin4sRate = float(DataSetRe4STATuto.sRateBin4.value)
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        ds = DataSet.getDataSet('tomo-em')
-        cls.tomoFiles = ds.getFile('tomo1')
-        cls.importedTomos = super().runImportTomograms(tomoFiles=cls.tomoFiles, sRate=cls.sRate)
+        cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
+        cls.bin8SRate = cls.bin4sRate * cls.binningFactor
+        cls.testAcqDict, cls.testDimsDict = DataSetRe4STATuto.genTestTomoDicts(
+            tsIdList=(TS_03, TS_54),
+            binning=cls.binningFactor)
+        cls.importedTomos = super().runImportTomograms(
+            tomoFiles=cls.ds.getFile(DataSetRe4STATuto.tomosPath.value),
+            filesPattern="*.mrc",
+            sRate=cls.bin4sRate,
+            exclusionWords=str(DataSetRe4STATuto.exclusionWordsTs03ts54.value))
 
     def testBinTomograms(self):
         binnedTomograms = super().runBinTomograms(self.importedTomos, binning=self.binningFactor)
         # Check the results
-        self.assertSetSize(binnedTomograms, 1)
-        self.assertEqual(binnedTomograms.getSamplingRate(), self.bin2SRate)
-        self.assertTrue(np.array_equal(np.array(binnedTomograms.getDimensions()), self.origSize / self.binningFactor))
+        self.checkTomograms(binnedTomograms,
+                            expectedSetSize=2,
+                            expectedSRate=self.bin8SRate,
+                            expectedDimensions=self.testDimsDict,
+                            testAcqObj=self.testAcqDict)
