@@ -28,6 +28,7 @@ from enum import Enum
 from os.path import abspath
 
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase, IN_TOMOS
+from pwem.convert.headers import setMRCSamplingRate
 from pwem.emlib.image import ImageHandler
 from pyworkflow.object import Set
 from pyworkflow.protocol import params, GT, STEPS_PARALLEL
@@ -128,10 +129,12 @@ class DynamoBinTomograms(DynamoProtocolBase):
         with self._lock:
             outTomos = self.getOutputSetOfTomograms()
             inTomo = self.tomoDict[tsId]
+            outFn = self.getOutTsFn(tsId)
+            setMRCSamplingRate(outFn, self.sRate)  # Update the apix value in file header
             tomo = Tomogram()
             tomo.copyInfo(inTomo)
             tomo.setSamplingRate(self.sRate)
-            tomo.setFileName(self.getOutTsFn(tsId))
+            tomo.setFileName(outFn)
             outTomos.append(tomo)
             outTomos.update(tomo)
             outTomos.write()

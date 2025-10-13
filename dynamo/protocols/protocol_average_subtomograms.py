@@ -29,6 +29,7 @@ from os.path import join
 from dynamo import Plugin
 from dynamo.convert import writeDynTable, writeSetOfVolumes
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
+from pwem.convert.headers import setMRCSamplingRate
 from pwem.emlib.image import ImageHandler
 from pyworkflow.protocol import PointerParam, BooleanParam
 from pyworkflow.utils import Message, makePath
@@ -106,8 +107,11 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
     def createOutputStep(self):
         inSubtomos = self.inSubtomos.get()
         avg = AverageSubTomogram()
-        avg.setFileName(self.getOutputFile('mrc'))
-        avg.setSamplingRate(inSubtomos.getSamplingRate())
+        outFn = self.getOutputFile('mrc')
+        outSr = inSubtomos.getSamplingRate()
+        setMRCSamplingRate(outFn, outSr)  # Update the apix value in file header
+        avg.setFileName(outFn)
+        avg.setSamplingRate(outSr)
         self._defineOutputs(**{DynAvgOuts.average.name: avg})
         self._defineSourceRelation(inSubtomos, avg)
 

@@ -23,13 +23,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from typing import Optional
+
 from dynamo.protocols import DynamoBinTomograms, DynamoProtAvgSubtomograms
 from dynamo.protocols.protocol_base_dynamo import IN_COORDS, IN_TOMOS
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING, OTHER, DynamoExtraction
 from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr
+from tomo.objects import SetOfTomograms
 from tomo.protocols import ProtImportTomograms, ProtImportCoordinates3DFromScipion
 from tomo.protocols.protocol_import_coordinates_from_scipion import outputObjs
+from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 
 
@@ -40,15 +44,22 @@ class TestDynamoStaBase(TestBaseCentralizedLayer):
         setupTestProject(cls)
 
     @classmethod
-    def runImportTomograms(cls, tomoFiles=None, sRate=None):
+    def runImportTomograms(cls,
+                           tomoFiles: str,
+                           sRate: float,
+                           filesPattern: Optional[str] = None,
+                           exclusionWords: Optional[str] = None) -> SetOfTomograms:
         # Import tomograms
         print(magentaStr("\n==> Importing the tomograms:"))
         protImportTomogram = cls.newProtocol(ProtImportTomograms,
                                              filesPath=tomoFiles,
-                                             samplingRate=sRate)
+                                             filesPattern=filesPattern,
+                                             samplingRate=sRate,
+                                             exclusionWords=exclusionWords,
+                                             amplitudeContrast=0.07)
 
         cls.launchProtocol(protImportTomogram)
-        tomoImported = protImportTomogram.Tomograms
+        tomoImported = getattr(protImportTomogram, OUTPUT_NAME, None)
         cls.assertIsNotNone(tomoImported, "There was a problem while importing the tomograms")
         return tomoImported
 
