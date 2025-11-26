@@ -853,3 +853,11 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
                                     'the admitted values.')
                 break
         return validateMsgs
+
+    def _warnings(self):
+        msg = []
+        nelems = len(self.inputVolumes.get())
+        if nelems>1000:
+            msg.append('The number of subtomograms is large, this amount of '
+                       'data could not fit in the GPU, and therefore dynamo can fail.')
+        return msg
