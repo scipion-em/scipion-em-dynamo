@@ -115,6 +115,7 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
                        help="Add a list of GPU devices that can be used")
         form.addParam('inputVolumes', PointerParam,
                       pointerClass="SetOfSubTomograms",
+                      strict=True,
                       important=True,
                       label='Set of subtomograms',
                       help="Set of subtomograms to align with dynamo")

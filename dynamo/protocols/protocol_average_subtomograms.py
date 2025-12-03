@@ -53,6 +53,7 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam('inSubtomos', PointerParam,
                       pointerClass='SetOfSubTomograms',
+                      strict=True,
                       important=True,
                       label='Subtomograms')
         form.addParam('impRotMasking', BooleanParam,
