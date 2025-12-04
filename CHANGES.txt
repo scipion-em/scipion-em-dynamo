@@ -4,6 +4,7 @@ V3.4.0:
   - The sampling rate is properly set in the binary files generated.
  Developers:
   - Fix in the convert, some floats were wrongly written as integers when writing the .tbl files.
+  - Start using the new parameter for PointerParams in forms when needed.
 V3.3.1:
  Users:
   - Protocol average subtomograms allows to randomize the initial orientations.
