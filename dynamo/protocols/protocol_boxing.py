@@ -67,7 +67,8 @@ class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
     def _defineParams(self, form):
         ProtTomoPicking._defineParams(self, form)
 
-        form.addParam('boxSize', IntParam, label="Box Size")
+        form.addParam('boxSize', IntParam, expertLevel=LEVEL_ADVANCED,
+                      default=32, label="Box Size")
         form.addParam('deleteGenMFiles', BooleanParam,
                       default=True,
                       label='Remove the .m files generated after the execution?',
