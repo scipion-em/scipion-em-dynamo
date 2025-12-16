@@ -115,6 +115,7 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
                        help="Add a list of GPU devices that can be used")
         form.addParam('inputVolumes', PointerParam,
                       pointerClass="SetOfSubTomograms",
+                      strict=True,
                       important=True,
                       label='Set of subtomograms',
                       help="Set of subtomograms to align with dynamo")
@@ -853,3 +854,11 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
                                     'the admitted values.')
                 break
         return validateMsgs
+
+    def _warnings(self):
+        msg = []
+        nelems = len(self.inputVolumes.get())
+        if nelems>1000:
+            msg.append('The number of subtomograms is large, this amount of '
+                       'data could not fit in the GPU, and therefore dynamo can fail.')
+        return msg

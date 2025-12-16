@@ -1,7 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    David Herreros Calero (dherreros@cnb.csic.es)
-# *             Scipion Team (scipion@cnb.csic.es)
+# * Authors:    Scipion Team (scipion@cnb.csic.es)
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
@@ -26,25 +25,26 @@
 # **************************************************************************
 import copy
 import glob
+import logging
 from enum import Enum
-from os.path import abspath, join, dirname, basename
-
+from os.path import abspath, join
+from typing import List
+import mrcfile
 from dynamo.protocols.protocol_base_dynamo import IN_TOMOS, IN_COORDS, DynamoProtocolBase
 from dynamo.utils import getCatalogFile
 from pwem.objects import Transform
-from pwem.protocols import EMProtocol
-from pyworkflow.object import String
-from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam
-from pyworkflow.utils import removeExt, Message
+from pyworkflow.object import Boolean
+from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam, STEPS_PARALLEL
+from pyworkflow.utils import removeExt, Message, makePath, cyanStr, redStr
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
-from tomo.objects import SetOfSubTomograms, SubTomogram, Coordinate3D, Tomogram
+from tomo.objects import SetOfSubTomograms, SubTomogram
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
-from tomo.protocols import ProtTomoBase
 from tomo.utils import scaleTrMatrixShifts
 
-
+logger = logging.getLogger(__name__)
 CROP_DIR = 'Crop'
+LOG_FILE_NAME = 'log.txt'
 
 # Tomogram type constants for particle extraction
 SAME_AS_PICKING = 0
@@ -60,23 +60,21 @@ class DynamoExtraction(DynamoProtocolBase):
 
     _label = 'subtomogram extraction'
     _possibleOutputs = DynSubtomoExtractOuts
+    stepsExecutionMode = STEPS_PARALLEL
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.dynamoTomoIdDict = {}
         self.scaleFactor = None
         self.tomoTsIdDict = None
-        self.coordsFileName = None
-        self.anglesFileName = None
-        self.cropDirName = None
-        self.coordList = []
-        self.removedCoordsIndices = String()
+        self.coordsRemoved = Boolean()
+        self.failedItems = []
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_COORDS, PointerParam,
-                      label="Input Coordinates",
+                      label="Coordinates",
                       important=True,
                       pointerClass='SetOfCoordinates3D')
         form.addParam('tomoSource', EnumParam,
@@ -91,7 +89,7 @@ class DynamoExtraction(DynamoProtocolBase):
         form.addParam(IN_TOMOS, PointerParam,
                       pointerClass='SetOfTomograms',
                       condition='tomoSource != %s' % SAME_AS_PICKING,
-                      label='Input tomogram',
+                      label='Tomograms',
                       help='Select the tomogram from which to extract.')
         form.addParam('boxSize', IntParam,
                       label='Box size',
@@ -100,117 +98,144 @@ class DynamoExtraction(DynamoProtocolBase):
                            'introduced coordinates and the tomograms that will br used for the extraction.')
         form.addSection(label='Postprocess')
         form.addParam('doInvert', BooleanParam,
-                      default=False,
+                      default=True,
                       label='Invert contrast?',
                       help='Invert the contrast if your tomogram is black '
                            'over a white background.  Xmipp, Spider, Relion '
                            'and Eman require white particles over a black '
                            'background.')
-        self.insertBinThreads(form)
+        form.addParallelSection(threads=1, mpi=0, binThreads=3)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._initialize()
-        self._insertFunctionStep(self.writeSetOfCoordinates3D,
-                                 needsGPU=False)
-        self._insertFunctionStep(self.launchDynamoExtractStep,
-                                 needsGPU=False)
-        if self.doInvert.get():
-            self._insertFunctionStep(self.invertContrastStep,
-                                     needsGPU=False)
+        closeSetStepDeps = []
+        for tsId in self.tomoTsIdDict.keys():
+            pId = self._insertFunctionStep(self.writeSetOfCoordinates3D,
+                                           tsId,
+                                           prerequisites=[],
+                                           needsGPU=False)
+            pId = self._insertFunctionStep(self.launchDynamoExtractStep,
+                                           tsId,
+                                           prerequisites=pId,
+                                           needsGPU=False)
+            if self.doInvert.get():
+                pId = self._insertFunctionStep(self.invertContrastStep,
+                                               tsId,
+                                               prerequisites=pId,
+                                               needsGPU=False)
+            closeSetStepDeps.append(pId)
         self._insertFunctionStep(self.createOutputStep,
+                                 prerequisites=closeSetStepDeps,
                                  needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        self.cropDirName = self._getExtraPath(CROP_DIR)
         # Get the intersection between the tomograms and coordinates provided (this covers possible subsets made)
         inTomos = self.getInputTomograms()
         inCoords = self.getInCoords()
         coordsPresentTomoIds = inCoords.getTSIds()
         tomosPresentTsIds = inTomos.getTSIds()
-        commonTomoIds = set(coordsPresentTomoIds).intersection(set(tomosPresentTsIds))
+        commonTomoIds = set(coordsPresentTomoIds) & set(tomosPresentTsIds)
         self.tomoTsIdDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos if tomo.getTsId() in commonTomoIds}
-        self.coordsFileName = self._getExtraPath('coords.txt')
-        self.anglesFileName = self._getExtraPath('angles.txt')
         # Calculate the scale factor
         samplingRateCoord = inCoords.getSamplingRate()
         samplingRateTomo = inTomos.getFirstItem().getSamplingRate()
         self.scaleFactor = float(samplingRateCoord / samplingRateTomo)
 
-    def writeSetOfCoordinates3D(self):
-        # Write the VLL file, the coords file and the angles file as expected by Dynamo
-        listTomoFile = self._getExtraPath(VLL_FILE)
-        tomoDims = self.getInputTomograms().getDimensions()
-        removedCoordsIndices = []
-        with open(self.coordsFileName, "w") as outC, open(self.anglesFileName, 'w') as outA, \
-                open(listTomoFile, 'w') as tomoFid:
-            for idt, tomo in enumerate(self.tomoTsIdDict.values()):
-                self.dynamoTomoIdDict[idt + 1] = tomo.getFileName()
-                tomoPath = abspath(tomo.getFileName())
-                tomoFid.write(tomoPath + '\n')
-                for coord in self.getInCoords().iterCoordinates(tomo):
-                    angles_coord = matrix2eulerAngles(coord.getMatrix())
-                    x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
-                    y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
-                    z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
-                    if self.isParticleOutOfTomo((x, y, z), tomoDims):
-                        removedCoordsIndices.append(coord.getObjId())
-                        continue
-                    outC.write("%.2f\t%.2f\t%.2f\t%i\n" % (x, y, z, idt + 1))
-                    outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
-                    # Add the coordinates of each in-tomo particle to a list that will be used in the CreateOutputStep
-                    # to avoid index mismatching by preventing the particles out of the tomograms to be sent to be
-                    # processed by Dynamo
-                    self.coordList.append(coord.clone())
-        if not self.coordList:
-            raise Exception("All the coordinates were removed (This is because the box associated to those "
-                            "coordinates partially or totally lay out of the corresponding tomogram. A good way to "
-                            "avoid this is to decreae the box size)")
-        if self.removedCoordsIndices:
-            self.removedCoordsIndices.set(" ".join(map(str, removedCoordsIndices)))
-            self._store(self.removedCoordsIndices)
+    def writeSetOfCoordinates3D(self, tsId: str) -> None:
+        logger.info(cyanStr(f"tsId = {tsId} - Writing the coordinates of tomogram into Dynamo format..."))
+        try:
+            makePath(self._getTomoResultsDir(tsId))
+            tomoFile = self._getVllFileName(tsId)
+            tomo = self.tomoTsIdDict[tsId]
+            # Write the VLL file, the coords file and the angles file as expected by Dynamo
+            with open(self._getCoordsFileName(tsId), "w") as outC, \
+                    open(self._getAnglesFileName(tsId), 'w') as outA, \
+                    open(tomoFile, 'w') as tomoFid:
+                tomoFid.write(f'{abspath(tomo.getFileName())}\n')
+                with self._lock:
+                    for coord in self.getInCoords().iterCoordinates(tomo):
+                        angles_coord = matrix2eulerAngles(coord.getMatrix())
+                        x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
+                        y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
+                        z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
+                        outC.write("%.2f\t%.2f\t%.2f\t1\n" % (x, y, z))
+                        outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
+        except Exception as e:
+            self.failedItems.append(tsId)
+            logger.error(redStr(f'tsId = {tsId} -> input conversion failed with the exception -> {e}'))
 
-    def launchDynamoExtractStep(self):
-        codeFilePath = self.writeMatlabCode()
-        args = ' %s' % codeFilePath
-        self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+    def launchDynamoExtractStep(self, tsId: str):
+        logger.info(cyanStr(f"tsId = {tsId} - Extracting the particles from tomogram..."))
+        if tsId not in self.failedItems:
+            try:
+                codeFilePath = self.writeMatlabCode(tsId)
+                args = ' %s > %s' % (codeFilePath, self._getLogFileName(tsId))
+                self.runJob(Plugin.getDynamoProgram(), args, env=Plugin.getEnviron())
+            except Exception as e:
+                self.failedItems.append(tsId)
+                logger.error(redStr(f'tsId = {tsId} -> Dynamo extraction failed with the exception -> {e}'))
 
-    def invertContrastStep(self):
-        import xmipp3
-        program = 'xmipp_image_operate'
-        for subTomoFile in glob.glob(join(self.cropDirName + '*/**.mrc')):
-            args = "-i %s --mult -1" % subTomoFile
-            self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
+    def invertContrastStep(self, tsId: str):
+        logger.info(cyanStr(f"tsId = {tsId} - Inverting the contrast of the particles extracted..."))
+        if tsId not in self.failedItems:
+            try:
+                for subTomoFile in self._getSubtomoFileNames(tsId):
+                    # Read the subtomo file
+                    with mrcfile.mmap(subTomoFile, mode='r', permissive=True) as mrc:
+                        invertedData = -1 * mrc.data
+                    # Write the result
+                    with mrcfile.new_mmap(subTomoFile, overwrite=True, shape=invertedData.shape,
+                                          mrc_mode=2) as mrc:  # Mode 2 is float32 (see new_mmap)
+                        for i in range(len(invertedData)):
+                            mrc.data[i, :, :] = invertedData[i, :, :]
+                        mrc.update_header_from_data()
+                        mrc.voxel_size = self.getInputTomograms().getSamplingRate()
+            except Exception as e:
+                self.failedItems.append(tsId)
+                logger.error(redStr(f'tsId = {tsId} -> Invert contrast failed with the exception -> {e}'))
 
     def createOutputStep(self):
-        inCoordsPointer = self.getInCoords(isPointer=True)
-        outSubtomos = SetOfSubTomograms.create(self._getPath(), template='submograms%s.sqlite')
-        finalSRate = self.getInputTomograms().getSamplingRate()
-        outSubtomos.setSamplingRate(finalSRate)
-        outSubtomos.setCoordinates3D(inCoordsPointer)
-        if self.getInputTomograms().getFirstItem().getAcquisition():
-            outSubtomos.setAcquisition(self.getInputTomograms().getFirstItem().getAcquisition())
-        currentSubtomoFiles = sorted(glob.glob(self._getExtraPath('**', '*.mrc')))
-        for currentCoord, subtomoFile in zip(self.coordList, currentSubtomoFiles):
-            subtomogram = SubTomogram()
-            transform = Transform()
-            subtomogram.setSamplingRate(finalSRate)
-            subtomogram.setFileName(subtomoFile)
-            subtomogram.setVolName(self.getTomogramFileFromSubtomoFile(subtomoFile))
-            subtomogram.setCoordinate3D(currentCoord)
-            trMatrix = copy.copy(currentCoord.getMatrix())
-            transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
-            subtomogram.setTransform(transform, convention=TR_DYNAMO)
-            outSubtomos.append(subtomogram)
-
-        if len(outSubtomos) == 0:
-            raise "No particles were generated. Please check if Crop directories exist in this protocol's extra " \
-                  "folder. If it's the case, check that the tomograms from were the particles are desired to be " \
-                  "extracted are the ones in which the picking was performed, or a binned version of them."
-
+        logger.info(cyanStr("Registering the results..."))
+        outSubtomos = self.getOutSetOfSubtomos()
+        for tsId in self.tomoTsIdDict.keys():
+            if tsId in self.failedItems:
+                continue
+            try:
+                tomo = self.tomoTsIdDict[tsId]
+                tomoFileName = tomo.getFileName()
+                sRate = tomo.getSamplingRate()
+                currentSubtomoFiles = sorted(self._getSubtomoFileNames(tsId))
+                excludedIndices = self._getDynamoExcludedPartInds(tsId)
+                if excludedIndices:
+                    logger.info(cyanStr(f"===> tsId = {tsId} - Excluded indices [{len(excludedIndices)}] by "
+                                        f"Dynamo {excludedIndices}"))
+                else:
+                    logger.info(cyanStr(f"tsId = {tsId} - No indices were excluded by Dynamo..."))
+                coordCounter = 0
+                for i, inCoord in enumerate(self.getInCoords().iterCoordinates(volume=tomo)):
+                    if i in excludedIndices:
+                        continue
+                    subtomogram = SubTomogram()
+                    transform = Transform()
+                    subtomoFile = currentSubtomoFiles[coordCounter]
+                    subtomogram.setSamplingRate(sRate)
+                    subtomogram.setFileName(subtomoFile)
+                    subtomogram.setVolName(tomoFileName)
+                    subtomogram.setCoordinate3D(inCoord)
+                    trMatrix = copy.copy(inCoord.getMatrix())
+                    transform.setMatrix(scaleTrMatrixShifts(trMatrix, self.scaleFactor))
+                    subtomogram.setTransform(transform, convention=TR_DYNAMO)
+                    outSubtomos.append(subtomogram)
+                    outSubtomos.update(subtomogram)
+                    coordCounter += 1
+            except Exception as e:
+                logger.error(redStr(f'tsId = {tsId} -> Unable to register the output with '
+                                    f'exception {e}. Skipping... '))
+                continue
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: outSubtomos})
-        self._defineSourceRelation(inCoordsPointer, outSubtomos)
+        self._defineSourceRelation(self.getInCoords(isPointer=True), outSubtomos)
 
     # --------------------------- DEFINE utils functions ----------------------
     def getInputTomograms(self):
@@ -220,17 +245,17 @@ class DynamoExtraction(DynamoProtocolBase):
         else:
             return self.getInTomos()
 
-    def writeMatlabCode(self):
-        codeFilePath = self._getExtraPath("DynamoExtraction.m")
+    def writeMatlabCode(self, tsId: str) -> str:
+        codeFilePath = self._getMatlabFileCode(tsId)
         # Write code to Matlab code file
         with open(codeFilePath, 'w') as codeFid:
-            catalogue = getCatalogFile(self._getExtraPath())
-            content = "savePath = '%s'\n" % self.cropDirName
+            catalogue = getCatalogFile(self._getTomoResultsDir(tsId))
+            content = "savePath = '%s'\n" % self._getCroppedParticlesDir(tsId)
             content += "box = %i\n" % self.boxSize.get()
-            content += "dcm -create '%s' -fromvll '%s'\n" % (removeExt(catalogue), self._getExtraPath(VLL_FILE))
+            content += "dcm -create '%s' -fromvll '%s'\n" % (removeExt(catalogue), self._getVllFileName(tsId))
             content += "c = dread('%s')\n" % catalogue
-            content += "coordsData = readmatrix('%s')\n" % self.coordsFileName
-            content += "angles = readmatrix('%s')\n" % self.anglesFileName
+            content += "coordsData = readmatrix('%s')\n" % self._getCoordsFileName(tsId)
+            content += "angles = readmatrix('%s')\n" % self._getAnglesFileName(tsId)
             content += "coords = coordsData(:,1:3)\n"
             content += "tags = coordsData(:,4)'\n"
             content += "parfor(tag=unique(tags), %i)\n" % self.binThreads.get()
@@ -243,32 +268,54 @@ class DynamoExtraction(DynamoProtocolBase):
 
         return codeFilePath
 
-    def isParticleOutOfTomo(self, scaledXYZ: tuple, tomoDims: tuple) -> bool:
-        """Dynamo skips the particles whose box size or part of it is out of the tomogram. For example if a particle is
-        located 10 voxels from one of the tomogram edges and the box size introduced is 30 voxels (15 up and down, left
-        and right, from the coordinate) the part of the box corresponding to the 5 voxels out of the tomogram would
-        cut out of the tomogram and Dynamo would skip it. Coordinates are assumed to be at the same size scale as the
-        tomograms from which they are going to be extracted
+    def _getTomoResultsDir(self, tsId: str) -> str:
+        return self._getExtraPath(tsId)
 
-        :param scaledXYZ: a tuple containing the properly scaled x, y, and z coordinates of a coordinate.
-        :param tomoDims: a tuple with the width, height and thickness of the tomograms from which the particles will be
-        extracted."""
-        halfBoxSize = self.boxSize.get() / 2
-        coordX, coordY, coordZ = scaledXYZ[:]
-        tomoWidth, tomoHeight, tomoThickness = tomoDims[:]
-        outCheckList = [abs(coordX) + halfBoxSize > tomoWidth,
-                        abs(coordY) + halfBoxSize > tomoHeight,
-                        abs(coordZ) + halfBoxSize > tomoThickness]
-        return True if any(outCheckList) else False
+    def _getCoordsFileName(self, tsId: str) -> str:
+        return join(self._getTomoResultsDir(tsId), 'coords.txt')
 
-    def getTomogramFileFromSubtomoFile(self, subtomoFile):
-        """Dynamo generates, for each tomogram, a directory named CropN, where N is the number of the tomogram (stored
-         by Scipion as keys in self.dynamoTomoIdDict). This method gets N from the directory name in which the given
-         subtomogram filename is stored and uses it to get the tomgram value corresponding to that key from the
-         mentioned dictionary."""
-        return self.dynamoTomoIdDict[int(basename(dirname(subtomoFile)).replace(CROP_DIR, ''))]
+    def _getAnglesFileName(self, tsId: str) -> str:
+        return join(self._getTomoResultsDir(tsId), 'angles.txt')
 
-    # --------------------------- DEFINE info functions ----------------------
+    def _getVllFileName(self, tsId: str) -> str:
+        return join(self._getTomoResultsDir(tsId), VLL_FILE)
+
+    def _getMatlabFileCode(self, tsId: str) -> str:
+        return join(self._getTomoResultsDir(tsId), 'DynamoExtraction.m')
+
+    def _getCroppedParticlesDir(self, tsId: str) -> str:
+        return join(self._getTomoResultsDir(tsId), CROP_DIR)
+
+    def _getLogFileName(self, tsId: str) -> str:
+        return join(self._getTomoResultsDir(tsId), LOG_FILE_NAME)
+
+    def getOutSetOfSubtomos(self) -> SetOfSubTomograms:
+        outSubtomos = SetOfSubTomograms.create(self._getPath(), template='submograms%s.sqlite')
+        inTomos = self.getInputTomograms()
+        finalSRate = inTomos.getSamplingRate()
+        outSubtomos.setSamplingRate(finalSRate)
+        outSubtomos.setCoordinates3D(self.getInCoords())
+        inTomosAcq = inTomos.getAcquisition()
+        if inTomosAcq:
+            outSubtomos.setAcquisition(inTomosAcq)
+        return outSubtomos
+
+    def _getSubtomoFileNames(self, tsId: str) -> List[str]:
+        return glob.glob(join(f'{self._getCroppedParticlesDir(tsId)}*', '*.mrc'))
+
+    def _getDynamoExcludedPartInds(self, tsId: str) -> List[int]:
+        indices = []
+        logFile = self._getLogFileName(tsId)
+        with open(logFile, 'r') as file:
+            for line in file:
+                if line.startswith("ATTENTION: cannot crop particle"):
+                    parts = line.strip().split()
+                    # The particle index is expected to be the last element in the line
+                    index = int(parts[-1])
+                    indices.append(index)
+        return indices
+
+        # --------------------------- DEFINE info functions ----------------------
     def _methods(self):
         methodsMsgs = []
         if self.getOutputsSize() >= 1:
@@ -287,14 +334,11 @@ class DynamoExtraction(DynamoProtocolBase):
     def _summary(self):
         summary = []
         if self.isFinished():
-            inCoordsSize = self.getInCoords().getSize()
-            outCoordsSize = getattr(self, self._possibleOutputs.subtomograms.name).getSize()
             summary.append("Tomogram source: *%s*" % self.getEnumText("tomoSource"))
-            if inCoordsSize > outCoordsSize:
-                summary.append('*%i coordinates were removed* (This is because the box associated to those '
+            if self.coordsRemoved.get():
+                summary.append('*Some coordinates were removed* (This is because the box associated to those '
                                'coordinates partially or totally lay out of the corresponding tomogram. A good way to '
-                               'avoid this is to decreae the box size).\nRemoved coordinates ids: %s.' %
-                               (inCoordsSize - outCoordsSize, self.removedCoordsIndices.get()))
+                               'avoid this is to decrease the box size).')
 
             if self.doInvert:
                 summary.append('*Contrast was inverted.*')
