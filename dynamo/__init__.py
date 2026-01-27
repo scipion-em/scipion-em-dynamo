@@ -29,9 +29,10 @@ import subprocess
 import pwem
 import pyworkflow
 import pyworkflow.utils as pwutils
+from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.4.0'
+__version__ = '3.4.1'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -39,6 +40,7 @@ _references = ['CASTANODIEZ2012139']
 class Plugin(pwem.Plugin):
     _homeVar = DYNAMO_HOME
     _pathVars = [DYNAMO_HOME]
+    _processingField = [TOMO]
 
     @classmethod
     def _defineVariables(cls):
