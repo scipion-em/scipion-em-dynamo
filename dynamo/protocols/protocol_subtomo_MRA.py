@@ -29,7 +29,7 @@ import os
 from enum import Enum
 from os.path import join, abspath
 import numpy as np
-
+from dynamo.convert.emFileHandler import em_to_mrc
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.objects.data import SetOfVolumes, FSC, SetOfFSCs
 from pyworkflow.object import Set, String
@@ -528,8 +528,9 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
             outSubtomos.copyItems(inputSet, updateItemCallback=self._updateItem)
             # Fill the resulting average object
             sRate = inputSet.getSamplingRate()
-            avgFile = join(self.getLastIterAvgsDir(), 'average_symmetrized_ref_001_ite_%04d.em' % niters)
-            avgMrcFile = self.convertToMrc(avgFile)
+            avgEmFile = join(self.getLastIterAvgsDir(), 'average_symmetrized_ref_001_ite_%04d.em' % niters)
+            avgMrcFile = avgEmFile.replace('.em', '.mrc')
+            em_to_mrc(avgEmFile, avgMrcFile)
             averageSubTomogram.setFileName(avgMrcFile)
             averageSubTomogram.setSamplingRate(sRate)
             averageSubTomogram.fixMRCVolume(setSamplingRate=sRate)  # Update sampling rate in file header
@@ -545,8 +546,8 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
             self._defineSourceRelation(inputSetPointer, fscs)
 
     def genFSCs(self, nIters, sRate):
-        dimVals = self.dim.getListFromValues()
-        boxSize = dimVals[-1]  # The final box size will be the box size specified for the last round
+        # dimVals = self.dim.getListFromValues()
+        # boxSize = dimVals[-1]  # The final box size will be the box size specified for the last round
         # sRateDotBoxSize = sRate * boxSize / 2
         fscSet = self._createSetOfFSCs()
         fscFile = join(self.getLastIterAvgsDir(), 'eo_fsc_ref_001_ite_%04d.fsc' % nIters)
@@ -734,16 +735,6 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
 
     def getLastIterAvgsDir(self):
         return join(self.getLastIterResultsDir(), 'averages')
-
-    def convertToMrc(self, inFileName):
-        import xmipp3
-        program = 'xmipp_image_convert'
-        outFName = inFileName.replace('.em', '.mrc')
-        args = '-i %s ' % inFileName
-        args += '-o %s ' % outFName
-        args += '-t vol'
-        self.runJob(program, args, env=xmipp3.Plugin.getEnviron())
-        return outFName
 
     def sizesOk(self, inVolume, checkLE=True):
         """Method to check the size conditions from Dynamo:
