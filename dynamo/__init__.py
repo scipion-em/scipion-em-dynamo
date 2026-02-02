@@ -32,7 +32,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.4.2'
+__version__ = '3.4.3'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -109,11 +109,15 @@ class Plugin(pwem.Plugin):
             useGpu = False
 
         # Dynamo 1.1.532
-        commands = "./dynamo_setup_linux.sh "  # OpenMP commands
+        commands = "bash ./dynamo_setup_linux.sh "  # OpenMP commands
         if useGpu:
             # Cuda commands
-            commands += (f"&& cd cuda && ./config.sh {dirname(pwem.Config.CUDA_LIB)} && make clean && make motors && "
-                         f"make extended && touch cuda_compiled")
+            commands += (f"&& cd cuda "
+                         f"&& bash ./config.sh {dirname(pwem.Config.CUDA_LIB)} "
+                         f"&& make clean "
+                         f"&& make motors "
+                         f"&& make extended "
+                         f"&& touch cuda_compiled")
         commands = [(commands, 'cuda/cuda_compiled')]
         env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_532,
                        tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
