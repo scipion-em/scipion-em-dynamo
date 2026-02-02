@@ -27,7 +27,6 @@
 import glob
 from enum import Enum
 from os.path import basename, dirname, join, normpath
-import xmipp3
 from pyworkflow.object import Float
 from pyworkflow.protocol.params import PointerParam, FloatParam
 from pyworkflow.utils.path import createLink, makePath
@@ -36,6 +35,7 @@ from tomo.protocols.protocol_base import ProtTomoImportFiles
 from tomo.objects import SubTomogram, SetOfSubTomograms, SetOfCoordinates3D
 from .protocol_base_dynamo import DynamoProtocolBase, IN_TOMOS
 from ..convert import dynTableLine2Subtomo
+from ..convert.emFileHandler import em_to_mrc
 
 
 class DynImportSubtomosOuts(Enum):
@@ -112,8 +112,7 @@ class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
                 # Convert the files
                 for subtomoFile in subtomoFiles:
                     mrcTomoFile = join(dirBaseName, basename(subtomoFile) + '.mrc')
-                    args = '-i %s -o %s -t vol ' % (subtomoFile, mrcTomoFile)
-                    xmipp3.Plugin.runXmippProgram('xmipp_image_convert', args)
+                    em_to_mrc(subtomoFile, mrcTomoFile)
                     files2store.append(mrcTomoFile)
             self.tblSubtomoFilesDict[tblFile] = files2store
 

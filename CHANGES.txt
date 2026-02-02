@@ -1,3 +1,4 @@
+V3.4.2: em file conversion is carried out by emFileHandler inside this plugins instead of with xmipp.
 V3.4.1: deploy test.
 V3.4.0:
  Users:
