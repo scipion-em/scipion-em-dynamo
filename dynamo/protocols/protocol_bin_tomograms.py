@@ -26,13 +26,12 @@
 # **************************************************************************
 from enum import Enum
 from os.path import abspath
-
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase, IN_TOMOS
 from pwem.convert.headers import setMRCSamplingRate
 from pwem.emlib.image import ImageHandler
 from pyworkflow.object import Set
 from pyworkflow.protocol import params, GT, STEPS_PARALLEL
-from pyworkflow.utils import getExt, Message
+from pyworkflow.utils import getExt, Message, createLink
 from tomo.objects import Tomogram, SetOfTomograms
 from dynamo import Plugin
 
@@ -114,11 +113,13 @@ class DynamoBinTomograms(DynamoProtocolBase):
         self.sRate = inTomos.getSamplingRate() * self.getBinningFactor(fromDynamo=False)
 
     def convertInputStep(self, tsId: str):
+        tomo = self.tomoDict[tsId]
+        origName = tomo.getFileName()
+        finalName = self.getConvertedOrLinkedTsFn(tsId)
         if self.doConvertFiles:
-            tomo = self.tomoDict[tsId]
-            origName = tomo.getFileName()
-            finalName = self.getConvertedOrLinkedTsFn(tsId)
             self.ih.convert(origName, finalName)
+        else:
+            createLink(origName, finalName)
 
     def binTomosStep(self, tsId: str):
         mFile = self.createMCodeFile(tsId)
@@ -145,7 +146,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
         """Compatible with MRC and em (MRC with that extension)"""
         compatibleExts = ['.em', '.mrc']
         return True if (getExt(self.getInTomos().getFirstItem().getFileName())
-                        not in compatibleExts) else False
+                        in compatibleExts) else False
 
     def getConvertedOrLinkedTsFn(self, tsId: str):
         return self._getExtraPath(f'in_{tsId}.mrc')

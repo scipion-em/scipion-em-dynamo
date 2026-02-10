@@ -24,14 +24,11 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from xmipp3.constants import MASK3D_CYLINDER
-from xmipp3.protocols import XmippProtCreateMask3D
-from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
-
 from dynamo.protocols import DynamoSubTomoMRA
 from dynamo.protocols.protocol_extraction import SAME_AS_PICKING
 from dynamo.protocols.protocol_subtomo_MRA import FROM_PREVIOUS_ESTIMATION, NO_THRESHOLD
 from dynamo.tests.test_dynamo_base import TestDynamoStaBase
+from pwem.protocols import ProtImportMask
 from pyworkflow.tests import DataSet
 from pyworkflow.utils import magentaStr
 from tomo.constants import TR_DYNAMO
@@ -107,18 +104,11 @@ class TestDynamoAlignSubtomograms(TestDynamoStaBase):
     def test_alignSubtomos_oneRound_With_AlignMask(self):
         print(magentaStr("\n==> aligning the subtomograms with alignment mask, 1 round:"))
         # Generate the mask
-        protMask3D = self.newProtocol(XmippProtCreateMask3D,
-                                      source=SOURCE_GEOMETRY,
-                                      samplingRate=self.bin2SRate,
-                                      size=self.bin2BoxSize,
-                                      geo=MASK3D_CYLINDER,
-                                      radius=15,
-                                      shiftCenter=True,
-                                      centerZ=6,
-                                      height=20,
-                                      doSmooth=True)
-        self.launchProtocol(protMask3D)
-        alignMask = getattr(protMask3D, 'outputMask', None)
+        protImportMask3D = self.newProtocol(ProtImportMask,
+                                            maskPath=DataSetEmd10439.generatedMask.value,
+                                            samplingRate=self.bin2SRate)
+        self.launchProtocol(protImportMask3D)
+        alignMask = getattr(protImportMask3D, 'outputMask', None)
         # Align the subtomograms
         subtomos, avg = self.runAlignSubtomos(protLabel='Subtomo align, 1 round', alignMask=alignMask)
         self.checkResults(avg, subtomos)
