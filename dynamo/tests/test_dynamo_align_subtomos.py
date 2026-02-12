@@ -105,7 +105,7 @@ class TestDynamoAlignSubtomograms(TestDynamoStaBase):
         print(magentaStr("\n==> aligning the subtomograms with alignment mask, 1 round:"))
         # Generate the mask
         protImportMask3D = self.newProtocol(ProtImportMask,
-                                            maskPath=DataSetEmd10439.generatedMask.value,
+                                            maskPath=self.ds.getFile(DataSetEmd10439.generatedMask.value),
                                             samplingRate=self.bin2SRate)
         self.launchProtocol(protImportMask3D)
         alignMask = getattr(protImportMask3D, 'outputMask', None)

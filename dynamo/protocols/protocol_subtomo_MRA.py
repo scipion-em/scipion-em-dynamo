@@ -29,8 +29,8 @@ import os
 from enum import Enum
 from os.path import join, abspath
 import numpy as np
-from dynamo.convert.emFileHandler import em_to_mrc
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
+from pwem.emlib.image.image_readers import EmImageReader
 from pwem.objects.data import SetOfVolumes, FSC, SetOfFSCs
 from pyworkflow.object import Set, String
 from pyworkflow.protocol import GPU_LIST, USE_GPU
@@ -530,7 +530,8 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
             sRate = inputSet.getSamplingRate()
             avgEmFile = join(self.getLastIterAvgsDir(), 'average_symmetrized_ref_001_ite_%04d.em' % niters)
             avgMrcFile = avgEmFile.replace('.em', '.mrc')
-            em_to_mrc(avgEmFile, avgMrcFile)
+            emFileHeaders = EmImageReader()
+            emFileHeaders.emToMrc(avgEmFile, avgMrcFile)
             averageSubTomogram.setFileName(avgMrcFile)
             averageSubTomogram.setSamplingRate(sRate)
             averageSubTomogram.fixMRCVolume(setSamplingRate=sRate)  # Update sampling rate in file header

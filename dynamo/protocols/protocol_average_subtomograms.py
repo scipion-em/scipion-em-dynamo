@@ -30,7 +30,7 @@ from dynamo import Plugin
 from dynamo.convert import writeDynTable, writeSetOfVolumes
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase
 from pwem.convert.headers import setMRCSamplingRate
-from pwem.emlib.image import ImageHandler
+from pwem.emlib.image.image_readers import EmImageReader
 from pyworkflow.protocol import PointerParam, BooleanParam
 from pyworkflow.utils import Message, makePath
 from tomo.objects import AverageSubTomogram
@@ -100,10 +100,10 @@ class DynamoProtAvgSubtomograms(DynamoProtocolBase):
     def convertOutputStep(self):
         # Replacing directly the .em to .mrc generates headers with non-valid dimensions (1 x 1 x boxSize),
         # So the average is converted explicitly using the Image Handler
-        ih = ImageHandler()
+        emFileHandler = EmImageReader()
         genFile = self.getOutputFile()
         outputFile = self.getOutputFile('mrc')
-        ih.convert(genFile, outputFile)
+        emFileHandler.emToMrc(genFile, outputFile)
 
     def createOutputStep(self):
         inSubtomos = self.inSubtomos.get()

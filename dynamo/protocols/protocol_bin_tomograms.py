@@ -113,13 +113,11 @@ class DynamoBinTomograms(DynamoProtocolBase):
         self.sRate = inTomos.getSamplingRate() * self.getBinningFactor(fromDynamo=False)
 
     def convertInputStep(self, tsId: str):
-        tomo = self.tomoDict[tsId]
-        origName = tomo.getFileName()
-        finalName = self.getConvertedOrLinkedTsFn(tsId)
         if self.doConvertFiles:
+            tomo = self.tomoDict[tsId]
+            origName = tomo.getFileName()
+            finalName = self.getConvertedOrLinkedTsFn(tsId)
             self.ih.convert(origName, finalName)
-        else:
-            createLink(origName, finalName)
 
     def binTomosStep(self, tsId: str):
         mFile = self.createMCodeFile(tsId)
@@ -164,7 +162,8 @@ class DynamoBinTomograms(DynamoProtocolBase):
         # p.addParamValue('maximumMegaBytes',[]);
         # p.addParamValue('showStatistics',false,'short','sst');
         # ______________________________________________________________________________________________
-        origName = abspath(self.getConvertedOrLinkedTsFn(tsId))
+        tomo = self.tomoDict[tsId]
+        origName = abspath(tomo.getFileName())
         finalName = abspath(self.getOutTsFn(tsId))
         mFile = self._getExtraPath('binTomograms.m')
         with open(mFile, 'w') as codeFile:
