@@ -26,13 +26,12 @@
 # **************************************************************************
 from enum import Enum
 from os.path import abspath
-
 from dynamo.protocols.protocol_base_dynamo import DynamoProtocolBase, IN_TOMOS
 from pwem.convert.headers import setMRCSamplingRate
 from pwem.emlib.image import ImageHandler
 from pyworkflow.object import Set
 from pyworkflow.protocol import params, GT, STEPS_PARALLEL
-from pyworkflow.utils import getExt, Message
+from pyworkflow.utils import getExt, Message, createLink
 from tomo.objects import Tomogram, SetOfTomograms
 from dynamo import Plugin
 
@@ -145,7 +144,7 @@ class DynamoBinTomograms(DynamoProtocolBase):
         """Compatible with MRC and em (MRC with that extension)"""
         compatibleExts = ['.em', '.mrc']
         return True if (getExt(self.getInTomos().getFirstItem().getFileName())
-                        not in compatibleExts) else False
+                        in compatibleExts) else False
 
     def getConvertedOrLinkedTsFn(self, tsId: str):
         return self._getExtraPath(f'in_{tsId}.mrc')
@@ -163,7 +162,8 @@ class DynamoBinTomograms(DynamoProtocolBase):
         # p.addParamValue('maximumMegaBytes',[]);
         # p.addParamValue('showStatistics',false,'short','sst');
         # ______________________________________________________________________________________________
-        origName = abspath(self.getConvertedOrLinkedTsFn(tsId))
+        tomo = self.tomoDict[tsId]
+        origName = abspath(tomo.getFileName())
         finalName = abspath(self.getOutTsFn(tsId))
         mFile = self._getExtraPath('binTomograms.m')
         with open(mFile, 'w') as codeFile:
