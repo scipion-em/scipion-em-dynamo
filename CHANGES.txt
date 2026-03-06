@@ -1,3 +1,4 @@
+V3.5.0: remove the dependency on Xmipp.
 V3.4.3: the installation calls explicitly the bash for robustness.
 V3.4.2: em file conversion is carried out by emFileHandler inside this plugins instead of with xmipp.
 V3.4.1: deploy test.
