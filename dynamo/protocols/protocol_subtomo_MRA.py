@@ -85,8 +85,220 @@ class DynRefineOuts(Enum):
 
 
 class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
-    """This protocol will align subtomograms using Dynamo"""  # MRA Subtomogram Averaging"""
+    """
+    This protocol performs subtomogram alignment and averaging using the
+    Dynamo framework for cryo-electron tomography data analysis. Its
+    purpose is to iteratively align subtomograms into a common reference
+    frame in order to improve structural signal, generate refined average
+    densities, and evaluate the consistency of the reconstruction through
+    resolution estimation and correlation analysis.
 
+    AI Generated:
+
+    Dynamo Subtomogram Alignment (DynamoSubTomoMRA) - User Manual
+        Overview
+
+        The Dynamo Subtomogram Alignment protocol is designed to align and
+        average subtomograms extracted from cryo-electron tomography data.
+        In biological workflows, subtomogram averaging is used to improve
+        the signal-to-noise ratio of repeated molecular structures embedded
+        within tomograms, enabling the visualization of macromolecular
+        assemblies in their native cellular context.
+
+        The protocol iteratively refines the orientation and position of
+        each subtomogram relative to a reference template. Through repeated
+        rounds of alignment and averaging, structurally conserved features
+        become enhanced while noise and random variations are progressively
+        suppressed. This process is particularly important for studying
+        membrane complexes, cytoskeletal assemblies, ribosomes, viral
+        particles, and other macromolecular systems observed in situ.
+
+        Inputs and General Workflow
+
+        The protocol requires a set of subtomograms and a reference
+        template volume. The subtomograms represent individual particles
+        extracted from tomographic reconstructions, while the template
+        defines the initial structural model used for alignment. In most
+        biological workflows, the template may come from a previous average,
+        an external reconstruction, or an experimentally derived low
+        resolution map.
+
+        The workflow begins by preparing the particle dataset and importing
+        it into a Dynamo alignment project. The protocol then performs
+        iterative alignment rounds in which each subtomogram is rotationally
+        and translationally searched against the reference. After each
+        iteration, aligned particles contribute to a new average density
+        that becomes the reference for the next refinement cycle.
+
+        Multiple refinement rounds can be configured with different particle
+        dimensions and angular search parameters. This strategy is commonly
+        used to begin with coarse searches at reduced particle size and
+        progressively transition toward finer refinements at higher
+        resolution. Such multiscale refinement approaches are widely used in
+        cryo-ET workflows because they improve stability and computational
+        efficiency.
+
+        Angular Search and Orientation Refinement
+
+        A major component of the protocol is the angular search strategy.
+        The alignment process explores possible orientations of the
+        subtomograms relative to the template through cone-based and
+        azimuthal rotational searches. These searches determine how broadly
+        the protocol explores orientation space during refinement.
+
+        Wide angular ranges are useful when the initial orientations are
+        uncertain, such as during early exploratory refinements or when
+        particles originate from heterogeneous tomographic environments.
+        Narrow angular ranges are more appropriate when particles are
+        already approximately aligned and only local refinement is required.
+
+        The protocol also supports refinement iterations that progressively
+        reduce the angular sampling interval. This allows the alignment to
+        converge toward increasingly precise orientations while maintaining
+        computational feasibility.
+
+        For elongated or directionally ambiguous particles, optional angular
+        flip modes can be enabled. These options are biologically useful for
+        assemblies where head-tail orientation may not be reliably known,
+        such as filament decorations or asymmetric tubular structures.
+
+        Shift Restrictions and Spatial Constraints
+
+        Translational refinement is controlled through configurable shift
+        limits. These parameters determine how far subtomograms are allowed
+        to move during alignment relative to their previous positions.
+
+        Restricting translational searches is biologically important because
+        unconstrained alignment may cause particles to drift toward noise or
+        neighboring densities. Conservative shift limits are generally
+        recommended when particle coordinates are already reliable, while
+        broader searches may be needed during exploratory stages.
+
+        The protocol also supports particle separation constraints within
+        tomograms. This feature prevents overlapping or duplicated particles
+        from simultaneously contributing to the final average. In crowded
+        cellular environments, this can significantly improve the biological
+        consistency of the reconstruction.
+
+        Masking and Focused Alignment
+
+        Several mask types can be applied during refinement to focus the
+        alignment on biologically relevant regions of the structure. The
+        alignment mask is particularly important because it determines which
+        regions contribute to local correlation calculations during the
+        orientation search.
+
+        In practical biological applications, masking is often essential for
+        flexible or multi-domain assemblies. By focusing the alignment on a
+        stable structural core, the protocol can avoid instability caused by
+        highly mobile regions or surrounding solvent noise.
+
+        Additional Fourier and smoothing masks can also be provided for
+        specialized workflows involving adaptive filtering or resolution
+        estimation. These options are especially relevant in advanced
+        subtomogram averaging strategies aimed at maximizing structural
+        interpretability.
+
+        Thresholding and Particle Selection
+
+        The protocol includes several thresholding strategies that determine
+        which particles contribute to the average after each iteration.
+        These strategies are based on cross-correlation values between the
+        particles and the reference.
+
+        In biological datasets, some particles may represent damaged
+        complexes, contaminants, incorrect picks, or structurally divergent
+        conformations. Thresholding helps reduce the influence of these
+        problematic particles by selecting only the most consistent
+        alignments for averaging.
+
+        Different thresholding modes allow selection based on absolute
+        correlation values, statistical criteria, or fractions of the best
+        particles. Conservative thresholding often improves map quality but
+        may reduce the number of contributing particles, whereas permissive
+        thresholds preserve particle count at the expense of structural
+        homogeneity.
+
+        Filtering and Symmetry
+
+        The protocol supports high-pass and low-pass Fourier filtering
+        during refinement. These filters help suppress noise and limit the
+        frequency range used for alignment. In most biological applications,
+        low-resolution information dominates early refinement stages, while
+        higher frequencies become increasingly important as alignment
+        converges.
+
+        Symmetry operators can also be applied to the reference during
+        averaging. Rotational, helical, and polyhedral symmetries are
+        supported. Symmetry can substantially improve the quality of the
+        final reconstruction when biologically justified, but incorrect
+        symmetry assignment may introduce severe structural artifacts.
+
+        Biological users should therefore apply symmetry only when strong
+        experimental evidence supports its presence in the target assembly.
+
+        GPU Acceleration and Computational Resources
+
+        The protocol supports both CPU and GPU execution modes. GPU
+        acceleration is particularly advantageous for large subtomogram
+        datasets because angular searches and cross-correlation operations
+        are computationally intensive.
+
+        In practice, large-scale subtomogram averaging projects involving
+        thousands of particles benefit substantially from GPU execution.
+        However, memory limitations should be considered carefully,
+        especially when using large particle boxes or high-resolution
+        searches.
+
+        Outputs and Biological Interpretation
+
+        The protocol produces aligned subtomograms, refined average volumes,
+        and Fourier Shell Correlation curves that estimate the resolution of
+        the reconstruction. The aligned subtomograms preserve their original
+        identities while incorporating updated orientation and shift
+        parameters derived from the refinement.
+
+        The final average volume represents the consensus structure obtained
+        from the selected particle population. Biologically, this average
+        highlights conserved structural features and suppresses random noise.
+        However, users should remember that averaging heterogeneous
+        conformations may obscure biologically meaningful variability.
+
+        The FSC curves provide an estimate of reconstruction consistency and
+        effective resolution. These measurements are commonly used to assess
+        map quality and refinement convergence in cryo-ET workflows.
+
+        Practical Recommendations
+
+        For most biological studies, it is advisable to begin with moderate
+        angular sampling and conservative shift limits. Early refinement
+        rounds should prioritize robustness over precision, while later
+        rounds can progressively tighten angular and translational searches.
+
+        Proper masking is often the single most important factor for
+        achieving stable refinements, especially in flexible or partially
+        occupied complexes. Users should carefully design masks that include
+        structurally conserved regions while excluding noisy surroundings.
+
+        Thresholding strategies should also be tuned cautiously. Aggressive
+        particle exclusion may artificially improve apparent resolution
+        while discarding biologically relevant variability. Conversely,
+        overly permissive thresholds may blur the final reconstruction.
+
+        Final Perspective
+
+        Subtomogram averaging is fundamentally a biological interpretation
+        process rather than only a computational optimization task. The
+        quality of the final reconstruction depends strongly on thoughtful
+        parameter selection, biologically meaningful masking, careful
+        control of heterogeneity, and realistic interpretation of the
+        resulting averages.
+
+        When applied carefully, the protocol enables the structural analysis
+        of macromolecular assemblies directly within their native cellular
+        environment, providing insights that are often inaccessible through
+        conventional single-particle approaches.
+    """
     _label = 'Subtomogram alignment'
     _possibleOutputs = DynRefineOuts
 
