@@ -41,7 +41,160 @@ class DynamoBinOuts(Enum):
 
 
 class DynamoBinTomograms(DynamoProtocolBase):
-    """Reduce the size of a SetOfTomograms by a binning factor"""
+    """
+    Reduces the size of tomographic datasets through controlled binning in
+    order to decrease computational cost, simplify visualization, and prepare
+    tomograms for downstream subtomogram averaging or particle picking tasks.
+
+    AI Generated:
+
+    Bin Tomograms (DynamoBinTomograms) - User Manual
+        Overview
+
+        The Bin Tomograms protocol performs spatial downsampling of a set of
+        tomograms using Dynamo-based processing tools. In cryo-electron
+        tomography workflows, binning is commonly used to reduce the size of
+        volumetric datasets while preserving the overall structural content
+        required for intermediate processing steps. This operation is
+        especially important when working with large tomograms that would
+        otherwise require excessive computational resources for visualization,
+        alignment, segmentation, or particle extraction.
+
+        From a biological perspective, tomogram binning is not intended to
+        improve resolution or structural detail. Instead, it creates smaller
+        and computationally lighter representations of the original data,
+        enabling faster exploratory analyses and more efficient iterative
+        processing. Researchers frequently apply binning during the early
+        stages of tomographic workflows and later return to the original
+        unbinned data for high-resolution refinement.
+
+        Inputs and Dataset Preparation
+
+        The protocol requires a set of tomograms as input. These tomograms are
+        typically reconstructed volumes originating from cryo-electron
+        tomography experiments and may contain cellular environments,
+        macromolecular assemblies, membrane systems, or viral particles.
+
+        Before processing, the protocol ensures that the tomograms are
+        prepared in a format suitable for Dynamo-based operations. This
+        preparation stage guarantees compatibility across different datasets
+        and helps standardize the processing workflow. The resulting binned
+        tomograms preserve the geometric identity and metadata of the original
+        acquisitions while generating new volumes with reduced dimensions.
+
+        Biological Role of Binning
+
+        In practical cryo-ET workflows, binning serves several important
+        biological and computational purposes. Large tomograms often contain
+        substantial noise and extremely large voxel grids, making direct
+        analysis computationally expensive. By reducing the sampling density,
+        users can rapidly inspect cellular organization, identify regions of
+        interest, and test processing strategies before committing to
+        computationally demanding refinements.
+
+        Binning is also commonly used during template matching and particle
+        localization. Lower-resolution tomograms can accelerate the detection
+        of candidate particles, after which the corresponding coordinates can
+        later be refined against higher-resolution datasets. Similarly,
+        subtomogram averaging pipelines often begin with heavily binned data
+        to establish initial orientations and coarse structural organization.
+
+        Choosing the Binning Factor
+
+        The most important parameter in the protocol is the binning factor,
+        which determines the degree of downsampling applied to the tomograms.
+        Smaller binning values preserve more structural information but
+        require more memory and processing time. Larger binning values produce
+        significantly smaller datasets that are easier to manipulate but may
+        remove fine structural features.
+
+        In biological practice, moderate binning is frequently sufficient for
+        visualization, manual inspection, or low-resolution alignment tasks.
+        Strong binning should be applied carefully because excessive
+        downsampling may obscure membranes, flexible domains, filamentous
+        assemblies, or small macromolecular complexes that are biologically
+        important.
+
+        Users should also consider the final biological objective when
+        selecting the binning level. For exploratory analyses or coordinate
+        generation, aggressive binning may be acceptable. For quantitative
+        interpretation or structural comparison, preserving adequate sampling
+        becomes much more important.
+
+        Memory Management and Large Tomograms
+
+        Cryo-electron tomography datasets can be extremely large, especially
+        when imaging thick cellular specimens or high-resolution tilt series.
+        The protocol therefore supports memory-aware processing strategies
+        that divide tomograms into manageable regions during execution.
+
+        This approach is particularly valuable for facilities or laboratories
+        handling large numbers of tomograms on shared computational resources.
+        Users working with limited RAM can process large datasets more safely
+        by adjusting memory-related execution parameters. Proper balancing
+        between memory usage and processing speed is often essential for
+        stable execution on workstation-class hardware.
+
+        Parallel Processing Considerations
+
+        The protocol supports multi-threaded execution in order to accelerate
+        tomogram processing. Parallel execution can significantly reduce total
+        runtime when multiple tomograms are processed simultaneously or when
+        large tomograms are subdivided internally during computation.
+
+        However, increased parallelization also increases memory consumption.
+        In practical workflows, users should ensure that the available system
+        memory is sufficient to support the chosen level of parallel
+        execution. Excessive parallelization on memory-limited systems may
+        lead to unstable execution or reduced overall performance.
+
+        Outputs and Their Interpretation
+
+        The protocol produces a new set of tomograms with reduced voxel
+        dimensions and updated sampling information. These output tomograms
+        maintain the structural organization of the original datasets while
+        occupying less disk space and requiring fewer computational
+        resources.
+
+        The updated sampling rate is biologically important because all
+        downstream processing steps must interpret the voxel size correctly.
+        Proper sampling metadata ensures consistency during segmentation,
+        coordinate assignment, subtomogram extraction, and averaging.
+
+        The resulting tomograms are typically used as intermediate datasets
+        for visualization, particle picking, classification, or subtomogram
+        averaging workflows. They can also facilitate rapid quality control
+        and exploratory analyses before returning to higher-resolution data.
+
+        Practical Recommendations
+
+        In most biological workflows, moderate binning provides the best
+        balance between computational efficiency and preservation of
+        structural context. Early exploratory processing often benefits from
+        stronger binning, while later refinement stages generally require
+        less aggressive downsampling or direct use of unbinned tomograms.
+
+        Users working with crowded cellular environments should evaluate the
+        impact of binning carefully because excessive reduction may merge
+        neighboring densities or blur thin membrane structures. Visual
+        inspection of representative outputs is strongly recommended before
+        committing to large-scale downstream analyses.
+
+        When processing many tomograms simultaneously, conservative memory
+        settings and moderate parallelization usually provide the most stable
+        execution environment. This is especially relevant for institutional
+        clusters and shared tomography facilities.
+
+        Final Perspective
+
+        Tomogram binning is a foundational preprocessing step in many
+        cryo-electron tomography pipelines. Although computational in nature,
+        it strongly influences the speed, accessibility, and practicality of
+        downstream structural analysis. Selecting an appropriate binning
+        strategy allows researchers to efficiently explore complex biological
+        datasets while preserving the structural information necessary for
+        meaningful interpretation.
+    """
 
     _label = 'bin tomograms'
     _possibleOutputs = DynamoBinOuts
