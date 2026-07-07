@@ -32,7 +32,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.5.2'
+__version__ = '3.5.3'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -79,55 +79,21 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        # For GPU, we need to compile the CUDA binaries to ensure full compatibility
-        # First, we check if CUDA is installed in the system
-        preMsgs = []
-        cudaMsgs = []
-
-        if cls._hasGpu():
-            preMsgs.append("CUDA support found")
-            msg = "Dynamo installed with CUDA SUPPORT."
-            cudaMsgs.append(msg)
-            useGpu = True
-        else:
-            preMsgs.append("CUDA will NOT be USED. (not found)")
-            msg = ("Dynamo installed without GPU. Just CPU computations "
-                   "enabled (slow computations). To enable CUDA, "
-                   "set CUDA=True in 'scipion.conf' file")
-            cudaMsgs.append(msg)
-            useGpu = False
-
         # Dynamo 1.1.532
         commands = "bash ./dynamo_setup_linux.sh "  # OpenMP commands
-        if useGpu:
-            # Cuda commands
-            commands += (f"&& cd cuda "
-                         f"&& bash ./config.sh {dirname(pwem.Config.CUDA_LIB)} "
-                         f"&& make clean "
-                         f"&& make motors "
-                         f"&& make extended "
-                         f"&& touch cuda_compiled")
+        # Cuda commands
+        commands += (f"&& cd cuda "
+                     f"&& bash ./config.sh "
+                     f"&& make clean "
+                     f"&& make motors "
+                     f"&& make extended "
+                     f"&& touch cuda_compiled")
         commands = [(commands, 'cuda/cuda_compiled')]
         env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_532,
                        tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
                        createBuildDir=True,
                        commands=commands,
                        default=True)
-
-    @staticmethod
-    def _hasGpu() -> bool:
-        # 1. Check NVIDIA (the NVIDIA Container Toolkit mounts these files).
-        # /dev/nvidia0 is the first GPU. /dev/nvidiactl is the general control device.
-        if os.path.exists('/dev/nvidia0') or os.path.exists('/dev/nvidiactl'):
-            return True
-
-        # 2. Although it is uncommon for /dev files to be missing when the GPU is exposed,
-        # we can use nvidia-smi as a safe fallback method.
-        try:
-            subprocess.check_output(["nvidia-smi"], stderr=subprocess.STDOUT)
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
 
     @classmethod
     def checkDynamoVersion(cls):
