@@ -1,3 +1,4 @@
+V3.5.3: fix the installation, now always expecting gpu. Compilation via nvcc location.
 V3.5.2: update the cuda checking for the installation.
 V3.5.1: fix bug in importing coordinates from .tbl and when reading the groupId. Thanks to M. Harastani!
 V3.5.0: remove the dependency on Xmipp.
