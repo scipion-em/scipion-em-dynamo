@@ -32,7 +32,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.5.1'
+__version__ = '3.5.2'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -83,20 +83,9 @@ class Plugin(pwem.Plugin):
         # First, we check if CUDA is installed in the system
         preMsgs = []
         cudaMsgs = []
-        nvidiaDriverVer = None
-        if os.environ.get('CUDA', 'True') == 'True':
-            try:
-                nvidiaDriverVer = subprocess.Popen(["nvidia-smi",
-                                                    "--query-gpu=driver_version",
-                                                    "--format=csv,noheader"],
-                                                   env=cls.getEnviron(),
-                                                   stdout=subprocess.PIPE
-                                                   ).stdout.read().decode('utf-8').split(".")[0]
-            except Exception as e:
-                preMsgs.append(str(e))
 
-        if nvidiaDriverVer is not None:
-            preMsgs.append("CUDA support find. Driver version: %s" % nvidiaDriverVer)
+        if cls._hasGpu():
+            preMsgs.append("CUDA support found")
             msg = "Dynamo installed with CUDA SUPPORT."
             cudaMsgs.append(msg)
             useGpu = True
@@ -124,6 +113,21 @@ class Plugin(pwem.Plugin):
                        createBuildDir=True,
                        commands=commands,
                        default=True)
+
+    @staticmethod
+    def _hasGpu() -> bool:
+        # 1. Check NVIDIA (the NVIDIA Container Toolkit mounts these files).
+        # /dev/nvidia0 is the first GPU. /dev/nvidiactl is the general control device.
+        if os.path.exists('/dev/nvidia0') or os.path.exists('/dev/nvidiactl'):
+            return True
+
+        # 2. Although it is uncommon for /dev files to be missing when the GPU is exposed,
+        # we can use nvidia-smi as a safe fallback method.
+        try:
+            subprocess.check_output(["nvidia-smi"], stderr=subprocess.STDOUT)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
 
     @classmethod
     def checkDynamoVersion(cls):
