@@ -104,6 +104,7 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
     # --------------------------- DEFINE param functions ------------------------
 
     def _defineParams(self, form: Form):
+        form.addParallelSection(threads=16, mpi=0)
         form.addSection(label=Message.LABEL_INPUT)
         form.addHidden(USE_GPU, BooleanParam,
                        default=True,
@@ -370,8 +371,6 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
                            "computations can be kept for reuse.However, trying to keep all the particles in memory can "
                            "lead to saturate it,blocking the CPU. Additionally, a small batch allows to divide the "
                            "matrix in more blocks. This might be useful in parallel computations.")
-        self.insertBinThreads(form)
-
         # form.addParam('pca', BooleanParam,
         #               label='Perform PCA',
         #               default=False,
@@ -697,16 +696,16 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
         command += self.getRoundParams('high', self.high)
 
         # --- Processing software + hardware resources ---
-        command += self.get_dvput('mwa', self.binThreads.get())  # Cores used to calculate the average in each iter
+        command += self.get_dvput('mwa', self.numberOfThreads.get())  # Cores used to calculate the average in each iter
         if self.useGpu.get():
             # Param 'cores' is used to specify the number of CPUs involved in the alignment. If GPU is used, Dynamo
             # only works well setting it to 1.
             command += self.get_dvput('cores', 1)  # Not working with more than 1 CPU when using GPU
             command += self.get_dvput('destination', 'standalone_gpu')
             command += self.get_dvput('gpu_motor', 'spp')
-            # command += self.get_dvput('gpu_identifier_set', self.getGpuList()[0])
+            command += self.get_dvput('gpu_identifier_set', self.getGpuList()[0])
         else:
-            command += self.get_dvput('cores', self.binThreads.get())
+            command += self.get_dvput('cores', self.numberOfThreads.get())
             command += self.get_dvput('destination', 'standalone')
 
         return command
