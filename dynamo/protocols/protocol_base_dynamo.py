@@ -41,7 +41,7 @@ class DynamoProtocolBase(EMProtocol, ProtTomoBase):
     def insertBinThreads(form, helpMsg=BIN_THREADS_MSG):
         form.addParam('binThreads', IntParam,
                       label='Dynamo threads',
-                      default=3,
+                      default=8,
                       help=helpMsg)
 
     def getBinningFactor(self, fromDynamo: bool = True) -> int:
