@@ -32,7 +32,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.5.0'
+__version__ = '3.5.1'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
