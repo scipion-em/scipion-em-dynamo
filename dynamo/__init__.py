@@ -32,7 +32,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.5.3'
+__version__ = '3.5.4'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -79,15 +79,45 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
+        # For GPU, we need to compile the CUDA binaries to ensure full compatibility
+        # First, we check if CUDA is installed in the system
+        preMsgs = []
+        cudaMsgs = []
+        nvidiaDriverVer = None
+        if os.environ.get('CUDA', 'True') == 'True':
+            try:
+                nvidiaDriverVer = subprocess.Popen(["nvidia-smi",
+                                                    "--query-gpu=driver_version",
+                                                    "--format=csv,noheader"],
+                                                   env=cls.getEnviron(),
+                                                   stdout=subprocess.PIPE
+                                                   ).stdout.read().decode('utf-8').split(".")[0]
+            except Exception as e:
+                preMsgs.append(str(e))
+
+        if nvidiaDriverVer is not None:
+            preMsgs.append("CUDA support find. Driver version: %s" % nvidiaDriverVer)
+            msg = "Dynamo installed with CUDA SUPPORT."
+            cudaMsgs.append(msg)
+            useGpu = True
+        else:
+            preMsgs.append("CUDA will NOT be USED. (not found)")
+            msg = ("Dynamo installed without GPU. Just CPU computations "
+                   "enabled (slow computations). To enable CUDA, "
+                   "set CUDA=True in 'scipion.conf' file")
+            cudaMsgs.append(msg)
+            useGpu = False
+
         # Dynamo 1.1.532
         commands = "bash ./dynamo_setup_linux.sh "  # OpenMP commands
-        # Cuda commands
-        commands += (f"&& cd cuda "
-                     f"&& bash ./config.sh "
-                     f"&& make clean "
-                     f"&& make motors "
-                     f"&& make extended "
-                     f"&& touch cuda_compiled")
+        if useGpu:
+            # Cuda commands
+            commands += (f"&& cd cuda "
+                         f"&& bash ./config.sh {dirname(pwem.Config.CUDA_LIB)} "
+                         f"&& make clean "
+                         f"&& make motors "
+                         f"&& make extended "
+                         f"&& touch cuda_compiled")
         commands = [(commands, 'cuda/cuda_compiled')]
         env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_532,
                        tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',

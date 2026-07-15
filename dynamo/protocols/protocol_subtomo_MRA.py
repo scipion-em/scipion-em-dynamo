@@ -657,7 +657,11 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
         """ Returns the dynamo commands related to the angular search, threashold, GPu, ..."""
         command = self.getRoundParams("dim", self.dimRounds)
         command += self.get_dvput("apix", self.inputVolumes.get().getSamplingRate())
-        command += self.getRoundParams('sym', self.sym, caster=str)
+
+        symType = self.sym.get()
+        if symType =='I' or symType =='i':
+            symType = 'icos'
+        command += self.getRoundParams('sym', symType, caster=str)
         command += self.getRoundParams("ite", self.numberOfIters)
         # command += self.get_dvput('mra', int(self.doMra))
         # command += self.get_dvput('pcas', int(self.pca.get()))
