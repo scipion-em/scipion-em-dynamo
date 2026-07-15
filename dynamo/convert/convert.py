@@ -160,7 +160,7 @@ def readDynCoord(tableFile, coord3DSet, tomo, scaleFactor=1):
             x = nline[23]
             y = nline[24]
             z = nline[25]
-            groupId = nline[21]
+            groupId = nline[20]
             coordinate3d.setVolume(tomo)
             coordinate3d.setX(float(x) * scaleFactor, const.BOTTOM_LEFT_CORNER)
             coordinate3d.setY(float(y) * scaleFactor, const.BOTTOM_LEFT_CORNER)
@@ -199,6 +199,7 @@ def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
     tilt = np.deg2rad(float(tilt))
     R = transformations.euler_matrix(tdrot, tilt, narot, axes='szxz')
     R = R[:3, :3]
+    R = np.linalg.inv(R)
     Sscipion = - np.dot(R, Sdynamo)
     M[:3, :3] = R
     M[:3, 3] = Sscipion
