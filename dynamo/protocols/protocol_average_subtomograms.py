@@ -41,6 +41,142 @@ class DynAvgOuts(Enum):
 
 
 class DynamoProtAvgSubtomograms(DynamoProtocolBase):
+    """
+    Generates an averaged 3D subtomogram map from a collection of aligned
+    subtomograms. The protocol combines multiple tomographic particles into a
+    consensus reconstruction that enhances common structural features while
+    reducing noise and missing information.
+
+    AI Generated:
+
+    Average Subtomograms (DynamoProtAvgSubtomograms) - User Manual
+        Overview
+
+        The Average Subtomograms protocol computes a consensus 3D average from
+        a collection of subtomograms using Dynamo subtomogram averaging tools.
+        Its main objective is to improve the signal-to-noise ratio of cryo-electron
+        tomography data by reinforcing structural information shared across many
+        particles. This type of averaging is one of the central steps in
+        subtomogram analysis workflows because individual subtomograms are often
+        extremely noisy and affected by incomplete angular sampling.
+
+        In biological practice, subtomogram averaging is commonly used to study
+        macromolecular complexes directly inside cells or native environments.
+        Typical applications include membrane protein analysis, ribosome
+        organization, viral assembly studies, and in situ structural biology.
+        By combining many particles representing the same biological structure,
+        the protocol produces a clearer and more interpretable density map that
+        can later be refined, classified, or compared with known atomic models.
+
+        Inputs and Data Preparation
+
+        The protocol requires a set of subtomograms that already contain
+        positional and orientational information. These particles are interpreted
+        as multiple observations of the same biological object and are merged into
+        a common structural reference frame before averaging.
+
+        From a practical perspective, the quality of the final average strongly
+        depends on the consistency of the input particles. Accurate particle
+        picking, reliable alignment, and homogeneous biological content are
+        essential for obtaining meaningful results. Mixing particles from
+        different conformational states or different assemblies may reduce the
+        interpretability of the final reconstruction by blurring structural
+        details.
+
+        Orientation Handling and Missing Wedge Compensation
+
+        One of the most important biological considerations in cryo-electron
+        tomography is the missing wedge effect, which arises from the limited
+        angular range accessible during tomographic acquisition. This effect
+        introduces anisotropic resolution and directional artifacts in the final
+        averages.
+
+        The protocol provides an option to randomize subtomogram orientations
+        before averaging. This strategy is particularly useful when particles are
+        distributed with preferred orientations because randomization helps
+        compensate for directional bias and produces a more isotropic average.
+        In many experimental datasets, especially membrane-associated systems,
+        this approach can significantly improve the visual appearance and overall
+        interpretability of the reconstruction.
+
+        When orientation randomization is disabled, the original particle
+        orientations are preserved. This is generally preferable when the
+        orientations already reflect biologically meaningful alignment results or
+        when directional organization within the sample must remain intact.
+
+        Implicit Rotation Masking
+
+        The protocol also supports implicit rotation masking during averaging.
+        This option restricts the effective contribution of each subtomogram to a
+        spherical region, reducing the influence of undefined regions generated
+        during rotational transformations.
+
+        Biologically, implicit masking is often beneficial because it suppresses
+        edge artifacts and minimizes the propagation of empty regions into the
+        final average. This is particularly important for particles extracted from
+        crowded cellular environments or for datasets where particles occupy only
+        a limited fraction of the extraction box.
+
+        In many routine subtomogram averaging workflows, enabling implicit
+        masking improves average stability and leads to cleaner density maps.
+        However, users should remain aware that aggressive masking may also
+        suppress peripheral structural features if the extraction region is too
+        small.
+
+        Averaging Workflow
+
+        During execution, the protocol prepares the subtomograms in Dynamo
+        format, organizes the associated metadata, and launches the averaging
+        process using the Dynamo computational framework. The averaging combines
+        all particles into a single consensus volume representing the common
+        structural information across the dataset.
+
+        The procedure is designed to integrate naturally into iterative
+        subtomogram refinement workflows. Users often alternate averaging with
+        alignment refinement, classification, or particle cleaning in order to
+        progressively improve structural resolution and biological homogeneity.
+
+        Outputs and Interpretation
+
+        The protocol produces an averaged subtomogram volume that can be directly
+        visualized in standard cryo-EM software packages. The resulting map
+        preserves the sampling information of the original subtomograms and is
+        suitable for downstream processing steps such as refinement, focused
+        classification, segmentation, or atomic fitting.
+
+        From a biological perspective, the averaged map should be interpreted as
+        a consensus representation of the input population. Well-defined regions
+        generally correspond to structurally conserved features, whereas blurred
+        or weak regions may indicate conformational variability, compositional
+        heterogeneity, flexibility, or insufficient alignment accuracy.
+
+        Practical Recommendations
+
+        In routine subtomogram averaging workflows, it is generally advisable to
+        begin with carefully curated particles and verify alignment quality before
+        averaging large datasets. Orientation randomization is often useful for
+        strongly preferred orientations, while preserving orientations is more
+        appropriate for biologically ordered assemblies.
+
+        Implicit rotation masking is commonly recommended because it improves the
+        robustness of the averaging process and reduces rotational artifacts.
+        Nevertheless, users should visually inspect the final averages to ensure
+        that masking does not remove biologically relevant peripheral densities.
+
+        For highly heterogeneous datasets, performing classification before
+        averaging usually leads to more interpretable reconstructions. Averaging
+        structurally mixed populations may artificially smooth important
+        conformational differences and reduce the achievable resolution.
+
+        Final Perspective
+
+        Subtomogram averaging is one of the foundational methodologies in
+        cryo-electron tomography because it transforms noisy individual particles
+        into biologically meaningful 3D reconstructions. Careful particle
+        selection, thoughtful handling of orientation distributions, and proper
+        masking strategies are critical for obtaining reliable structural
+        information from complex cellular environments.
+    """
 
     _label = 'Average subtomograms'
     _possibleOutputs = DynAvgOuts

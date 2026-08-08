@@ -35,9 +35,152 @@ from ..convert import readDynCatalogue
 
 
 class DynamoImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
-    """This protocols imports a series of Tomogram stored in a Dynamo catalogue into Scipion.
-    In order to avoid handling a MatLab binary, the script relies on MatLab itself to turn a
-    binary MatLab object into an Structure which can be afterwards read by Python."""
+    """
+    Imports tomographic volumes stored in Dynamo catalogues into Scipion
+    while preserving acquisition metadata, spatial calibration, and
+    tomogram origin information required for downstream cryo-electron
+    tomography workflows.
+
+    AI Generated:
+
+    Dynamo Import Tomograms (DynamoImportTomograms) - User Manual
+        Overview
+
+        The Dynamo Import Tomograms protocol transfers tomographic volumes
+        stored within Dynamo catalogues into the Scipion environment. Its
+        main purpose is to convert externally organized tomography datasets
+        into a standardized representation suitable for visualization,
+        particle picking, subtomogram extraction, averaging, and structural
+        interpretation within integrated cryo-electron tomography workflows.
+
+        In practical biological research, tomograms are often generated and
+        organized outside Scipion using Dynamo-based pipelines. This protocol
+        provides the bridge between those environments by importing the
+        tomographic data together with its associated acquisition and spatial
+        information. The result is a collection of tomograms that can be
+        processed consistently alongside the rest of the Scipion ecosystem.
+
+        Biological Context and Intended Usage
+
+        Tomograms represent three-dimensional reconstructions of biological
+        specimens such as cells, organelles, vesicles, viral particles, or
+        macromolecular assemblies preserved in near-native conditions. These
+        reconstructions form the basis for many cryo-electron tomography
+        studies because they preserve the spatial organization of biological
+        systems within their native environment.
+
+        The protocol is intended for users who already possess reconstructed
+        tomograms organized through Dynamo catalogues and want to continue
+        processing them in Scipion. Typical downstream applications include
+        manual or automated particle picking, membrane analysis,
+        subtomogram averaging, segmentation, and structural interpretation.
+
+        Since tomography workflows frequently involve multiple software
+        environments, reliable import of geometric and acquisition metadata
+        is essential for maintaining biological consistency throughout the
+        analysis pipeline.
+
+        Sampling Rate and Spatial Calibration
+
+        One of the most important parameters during tomogram import is the
+        sampling rate, which defines the physical size represented by each
+        voxel. Accurate sampling calibration is critical because all
+        downstream biological measurements depend on it, including particle
+        dimensions, membrane curvature estimation, inter-particle distances,
+        and structural fitting procedures.
+
+        Incorrect sampling values can propagate systematic scaling errors
+        throughout the workflow and compromise biological interpretation.
+        Users should therefore ensure that the sampling rate matches the
+        reconstruction parameters used during tomogram generation.
+
+        In comparative studies involving multiple tomograms, maintaining
+        consistent spatial calibration becomes especially important for
+        quantitative biological analyses.
+
+        Origin of Coordinates
+
+        The protocol allows the user to define or preserve the spatial origin
+        of the tomograms. In cryo-electron tomography, the coordinate origin
+        determines how structures are positioned in three-dimensional space
+        and influences alignment, visualization, symmetry operations, and
+        coordinate interpretation.
+
+        By default, tomograms are typically centered geometrically, which is
+        appropriate for many standard workflows. However, some biological or
+        computational procedures require a specific origin definition,
+        particularly when symmetry constraints or coordinate-dependent
+        transformations are involved.
+
+        Users may optionally assign explicit origin coordinates in physical
+        units. This flexibility becomes important when integrating tomograms
+        with external structural models, segmented annotations, or geometric
+        analyses that rely on a consistent spatial reference system.
+
+        From a biological perspective, preserving correct coordinate systems
+        is essential when comparing structures across tomograms or combining
+        information from multiple processing platforms.
+
+        Acquisition Metadata Integration
+
+        In addition to importing tomographic volumes themselves, the protocol
+        also incorporates acquisition-related information associated with the
+        dataset. This metadata may include imaging conditions and other
+        parameters relevant to downstream processing and interpretation.
+
+        Maintaining acquisition consistency is particularly important in
+        large cryo-ET projects where tomograms originate from different
+        imaging sessions, microscopes, or reconstruction strategies.
+        Accurate metadata tracking improves reproducibility and facilitates
+        comparative biological studies.
+
+        Integration with Scipion Workflows
+
+        Once imported, the tomograms become fully integrated Scipion objects
+        that can participate in broader tomography workflows. Biological
+        users can immediately use the imported data for particle annotation,
+        coordinate generation, subtomogram extraction, classification,
+        averaging, or visualization.
+
+        This interoperability is especially valuable in facility-scale or
+        collaborative projects where reconstruction may occur in Dynamo while
+        downstream structural analysis is performed in Scipion.
+
+        Practical Recommendations
+
+        Before importing tomograms, users should verify that the catalogue
+        correctly references the reconstructed volume files and that the
+        sampling rate corresponds to the actual voxel size used during
+        reconstruction.
+
+        When processing tomograms intended for subtomogram averaging, it is
+        advisable to maintain consistent origin conventions across all
+        datasets. This reduces ambiguity during coordinate interpretation and
+        alignment stages.
+
+        For biological systems involving symmetry or spatial organization,
+        careful consideration of coordinate origins is particularly important
+        because incorrect positioning may affect downstream structural
+        interpretation.
+
+        Users should also visually inspect imported tomograms after import to
+        confirm that dimensions, scaling, and orientations are biologically
+        reasonable before initiating computationally intensive analyses.
+
+        Final Perspective
+
+        The Dynamo Import Tomograms protocol serves as a foundational bridge
+        between Dynamo-managed tomographic datasets and the broader Scipion
+        cryo-electron tomography environment. By preserving spatial
+        calibration, acquisition metadata, and coordinate consistency, it
+        enables biologically meaningful continuation of tomography workflows
+        across software ecosystems.
+
+        For most cryo-ET projects, reliable tomogram import is not merely a
+        technical preparation step but a critical stage that establishes the
+        spatial and biological framework for all downstream structural
+        analyses.
+    """
 
     _label = 'import tomograms from Dynamo'
 

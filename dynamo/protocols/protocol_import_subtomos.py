@@ -45,8 +45,141 @@ class DynImportSubtomosOuts(Enum):
 
 
 class DynamoImportSubtomos(ProtTomoImportFiles, DynamoProtocolBase):
-    """ This protocol imports subtomograms with metadata generated from Dynamo tables.
-    The subtomograms files are generated in the same directory as the .tbl file, one for each tomogram."""
+    """
+    Imports subtomograms and their associated metadata from Dynamo table files
+    into a Scipion tomography workflow environment. The protocol is intended to
+    organize particle-centered subtomographic datasets generated during Dynamo
+    processing and transform them into structured objects that can be directly
+    used for downstream subtomogram averaging, classification, alignment, or
+    visualization tasks.
+
+    AI Generated:
+
+    Import Subtomograms From Dynamo Tables (DynamoImportSubtomos) — User Manual
+        Overview
+
+        The Import Subtomograms From Dynamo Tables protocol is designed to
+        incorporate subtomogram datasets generated in Dynamo into Scipion while
+        preserving their spatial and experimental context. In subtomogram
+        averaging workflows, particles are often extracted from tomograms and
+        stored together with metadata describing their coordinates, orientations,
+        and relationships to the parent tomograms. This protocol provides a
+        bridge between Dynamo-based particle extraction workflows and Scipion-
+        based processing pipelines.
+
+        From a biological perspective, this import step is essential because it
+        preserves the correspondence between each subtomogram and the original
+        cellular or structural environment from which it was extracted. This
+        contextual information becomes especially important in studies involving
+        membrane-associated complexes, viral assemblies, cytoskeletal networks,
+        ribosomes in situ, or any heterogeneous macromolecular population
+        distributed throughout a tomographic volume.
+
+        Inputs and Dataset Organization
+
+        The protocol expects Dynamo table files together with the associated
+        subtomogram volumes generated during particle extraction. Each table
+        typically represents the metadata associated with a tomogram and contains
+        the positional and orientational information required to reconstruct the
+        relationship between extracted particles and their parent volume.
+
+        Optionally, users may provide the original tomograms used during
+        extraction. When these tomograms are available, the protocol establishes
+        explicit spatial relationships between the imported subtomograms and
+        their source tomograms. This improves interoperability with downstream
+        Scipion tools that rely on coordinate information, visualization of
+        particle distributions, or contextual biological interpretation.
+
+        If tomograms are not available, the protocol can still import the
+        subtomograms independently as long as an appropriate sampling rate is
+        provided. This mode is useful when working with archived particle
+        datasets, collaborative exchanges, or partial processing workflows where
+        the original tomograms are unavailable.
+
+        Sampling Rate and Physical Interpretation
+
+        Correct sampling rate assignment is biologically critical because it
+        defines the physical scale of the imported subtomograms. Accurate voxel
+        size information ensures that structural dimensions, alignment searches,
+        masking procedures, and resolution estimations remain physically
+        meaningful throughout downstream processing.
+
+        When tomograms are supplied, the sampling information is inherited
+        automatically, reducing the risk of inconsistencies between extracted
+        particles and their parent volumes. When importing standalone
+        subtomograms, users should carefully verify the voxel size used during
+        extraction to avoid scaling errors that could compromise alignment,
+        averaging, or interpretation.
+
+        Coordinate Preservation and Tomographic Context
+
+        One of the major advantages of this protocol is the preservation of
+        three-dimensional particle coordinates. Maintaining this information
+        allows researchers to revisit the spatial organization of macromolecular
+        complexes inside the native cellular environment after subtomogram
+        processing has been completed.
+
+        In biological studies, coordinate preservation enables analyses such as
+        mapping ribosome distributions, studying membrane curvature dependencies,
+        identifying lattice organization in viral capsids, or correlating
+        molecular states with local ultrastructural environments. This spatial
+        continuity is particularly important in cryo-electron tomography because
+        biological interpretation often depends not only on particle structure
+        but also on particle localization within the cell or specimen.
+
+        File Conversion and Compatibility
+
+        The protocol supports heterogeneous subtomogram file formats and prepares
+        them for standardized processing within Scipion. This compatibility layer
+        simplifies integration of datasets generated across different Dynamo
+        workflows or legacy processing environments.
+
+        From a practical perspective, this flexibility is useful when combining
+        datasets originating from different laboratories, microscope facilities,
+        or historical projects. Standardized import reduces downstream
+        compatibility issues and facilitates reproducible processing pipelines.
+
+        Outputs and Their Interpretation
+
+        After execution, the protocol generates a structured set of imported
+        subtomograms together with their associated metadata. When tomograms are
+        provided, an additional set of three-dimensional coordinates is produced,
+        linking every particle to its original location in the tomographic
+        volume.
+
+        The resulting dataset can be directly used for subtomogram alignment,
+        classification, averaging, focused refinement, or visualization. Because
+        particle identities and spatial relationships are preserved, downstream
+        analyses remain biologically interpretable and traceable to the original
+        tomographic experiment.
+
+        Practical Recommendations
+
+        In routine cryo-electron tomography workflows, it is highly recommended
+        to import subtomograms together with their parent tomograms whenever
+        possible. This preserves the complete experimental context and maximizes
+        compatibility with downstream protocols requiring coordinate information.
+
+        Users should verify that all subtomograms belonging to a dataset share a
+        consistent voxel size and extraction convention before import. Mixing
+        particles generated under incompatible extraction parameters may lead to
+        unreliable alignments or biologically inconsistent averages.
+
+        When working with collaborative datasets or archived material, careful
+        validation of metadata consistency is especially important. Incorrect
+        coordinate systems, mismatched sampling rates, or incomplete metadata can
+        significantly affect downstream structural interpretation.
+
+        Final Perspective
+
+        Importing subtomograms is more than a technical conversion step. It is
+        the process that reconnects extracted particle data with the biological
+        specimen from which it originated. Proper preservation of spatial
+        metadata, voxel size information, and tomographic relationships is
+        essential for reliable subtomogram averaging and for meaningful
+        interpretation of molecular organization inside native cellular
+        environments.
+    """
 
     _label = 'import subtomograms from tbl files'
     _possibleOutputs = DynImportSubtomosOuts

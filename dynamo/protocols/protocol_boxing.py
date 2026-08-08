@@ -47,13 +47,169 @@ class DynPickingOuts(Enum):
 
 
 class DynamoBoxing(ProtTomoPicking, DynamoProtocolBase):
-    """Manual vectorial picker from Dynamo. After choosing the Tomogram to be picked, the tomo slicer from Dynamo will
-     be direclty loaded with all the models previously saved in the disk (if any).
-     This picking will save the "user points" defined in a set of models and generate a set of meshes with them. In case
-     the user carries out the workflow model for each of the models from the Dynamo GUI, a set of coordinates will be
-     also created, containing all the interpolated coordinates, and the calculated orientation. It is possible to
-     create several models at once in a given tomogram. Once the coordinates are defined, the models are automatically
-     saved in the catalogue and registered."""
+    """
+    Provides an interactive environment for manual vectorial picking of
+    structures inside tomograms using Dynamo visualization and annotation
+    tools. The protocol enables users to define trajectories, surfaces, or
+    particle distributions directly within tomographic volumes and transform
+    these annotations into biologically meaningful coordinate datasets.
+
+    AI Generated:
+
+    Vectorial Picking (DynamoBoxing) - User Manual
+        Overview
+
+        The Vectorial Picking protocol enables interactive manual annotation
+        of tomographic data using the Dynamo graphical environment. Its main
+        purpose is to assist users in identifying biological structures,
+        defining trajectories, and generating coordinate information directly
+        from cryo-electron tomography datasets. This workflow is especially
+        useful when studying elongated assemblies, membrane-associated
+        complexes, cytoskeletal filaments, or curved biological surfaces that
+        cannot be easily described through isolated particle picking alone.
+
+        In practical cryo-ET studies, many biological structures follow
+        continuous spatial organizations rather than appearing as discrete
+        independent particles. Examples include actin filaments,
+        microtubules, membrane tubules, viral lattices, or repeating
+        macromolecular assemblies distributed along curved geometries. This
+        protocol allows researchers to manually define these spatial patterns
+        and transform them into coordinate systems suitable for downstream
+        subtomogram extraction and averaging workflows.
+
+        Interactive Picking Workflow
+
+        The protocol operates through an interactive Dynamo visualization
+        session in which users manually inspect tomograms and define models
+        directly within the volumetric data. Previously created annotations
+        can be reloaded automatically, allowing iterative refinement over
+        multiple sessions and facilitating long-term curation of complex
+        biological datasets.
+
+        During the annotation process, users can generate one or more models
+        for each tomogram. These models may represent biological trajectories,
+        surfaces, tubular arrangements, filament traces, or other geometric
+        organizations relevant to the experiment. The workflow is highly
+        flexible and supports exploratory interpretation of crowded cellular
+        environments where automated picking may be unreliable.
+
+        Biological Importance of Vectorial Picking
+
+        Manual vectorial picking is particularly important in situations where
+        structural organization follows continuous or spatially constrained
+        patterns. Standard particle picking approaches are often insufficient
+        for describing filamentous systems, membrane-bound assemblies, or
+        repeating structures distributed along curved cellular geometries.
+
+        By defining biological trajectories directly within tomograms,
+        researchers can preserve contextual information about spatial
+        organization, curvature, polarity, and relative orientation. This
+        information becomes especially valuable in studies involving cellular
+        ultrastructure, cytoskeletal dynamics, membrane remodeling, or
+        supramolecular assemblies embedded within native environments.
+
+        In many biological workflows, vectorial picking serves as the bridge
+        between visual interpretation and quantitative structural analysis.
+        The resulting coordinates can later support subtomogram averaging,
+        classification, alignment, or geometric measurements.
+
+        Meshes and Coordinate Generation
+
+        The protocol produces geometric representations derived from the user
+        annotations together with coordinate datasets suitable for downstream
+        processing. These outputs preserve the biological organization
+        identified during manual inspection and provide structured spatial
+        information that can be reused throughout the tomography workflow.
+
+        Depending on the annotation strategy, the generated coordinates may
+        represent interpolated particle positions distributed along curves,
+        surfaces, or trajectories. This is particularly useful for elongated
+        assemblies where biological particles follow repeating arrangements
+        rather than isolated spatial positions.
+
+        The resulting meshes can also assist in visualization and contextual
+        interpretation of the tomographic scene. In cellular cryo-ET studies,
+        these geometric outputs frequently help researchers understand spatial
+        organization within crowded intracellular environments.
+
+        Particle Size and Sampling Considerations
+
+        The protocol allows users to define an approximate particle size
+        associated with the generated coordinates. This parameter influences
+        how extracted regions are interpreted during downstream subtomogram
+        processing and should reflect the expected dimensions of the
+        biological target.
+
+        Choosing an appropriate particle size is biologically important
+        because values that are too small may truncate relevant structural
+        features, while excessively large values may include neighboring
+        densities or unrelated cellular material. For filamentous or
+        membrane-associated systems, the selected size should adequately cover
+        the repeating structural motif of interest.
+
+        Iterative Annotation and Curation
+
+        One of the strengths of the protocol is its support for iterative
+        annotation workflows. Researchers can reopen datasets, refine
+        trajectories, correct annotations, and progressively improve the
+        biological interpretation of difficult tomograms. This iterative
+        strategy is especially valuable in challenging cellular datasets where
+        structural identification evolves during analysis.
+
+        In collaborative environments, the ability to preserve and revisit
+        annotation models also facilitates quality control and reproducibility.
+        Expert users may curate biologically meaningful trajectories while
+        less experienced users contribute preliminary annotations for later
+        refinement.
+
+        Outputs and Their Interpretation
+
+        The protocol produces annotated geometric models together with
+        coordinate datasets representing biologically relevant positions
+        inside the tomograms. These outputs are designed to integrate
+        naturally with downstream subtomogram extraction and averaging
+        workflows.
+
+        The coordinate outputs preserve both spatial organization and
+        orientation information derived from the manual annotations. This is
+        particularly important for studies involving directional assemblies,
+        filament polarity, membrane curvature, or ordered macromolecular
+        arrays.
+
+        The generated meshes additionally provide a convenient visual summary
+        of the annotated biological structures and may support interpretation,
+        presentation, or further geometric analysis.
+
+        Practical Recommendations
+
+        In routine cryo-ET workflows, it is generally advisable to begin with
+        exploratory annotation sessions in order to understand the structural
+        organization of the tomograms before attempting large-scale particle
+        extraction. Careful visual inspection often reveals biological
+        heterogeneity, curvature, or spatial constraints that automated
+        methods may overlook.
+
+        Users working with filamentous systems should maintain smooth and
+        biologically consistent trajectories during annotation. For membrane
+        systems or curved assemblies, preserving continuity and contextual
+        interpretation is often more important than maximizing coordinate
+        density.
+
+        Iterative refinement of annotations is strongly recommended,
+        particularly in noisy tomograms or crowded cellular environments.
+        Revisiting annotations after preliminary averaging or classification
+        can substantially improve biological accuracy.
+
+        Final Perspective
+
+        Manual vectorial picking remains one of the most biologically
+        informative annotation strategies in cryo-electron tomography because
+        it combines expert structural interpretation with quantitative spatial
+        analysis. By enabling researchers to define trajectories, surfaces,
+        and ordered spatial arrangements directly inside tomograms, the
+        protocol supports biologically meaningful extraction of structural
+        information from highly complex cellular datasets.
+    """
 
     _label = 'vectorial picking'
     _possibleOutputs = DynPickingOuts

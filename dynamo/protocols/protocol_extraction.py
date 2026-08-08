@@ -56,7 +56,172 @@ class DynSubtomoExtractOuts(Enum):
 
 
 class DynamoExtraction(DynamoProtocolBase):
-    """Extraction of subtomograms using Dynamo"""
+    """
+    Extracts subtomograms from tomographic datasets using coordinate
+    information and Dynamo-based particle cropping workflows. The protocol
+    generates individual 3D particles that can later be used for alignment,
+    classification, averaging, or structural interpretation in subtomogram
+    averaging pipelines.
+
+    AI Generated:
+
+    Subtomogram Extraction (DynamoExtraction) — User Manual
+        Overview
+
+        The Subtomogram Extraction protocol is designed to isolate local
+        three-dimensional regions from tomograms using previously defined
+        particle coordinates. In cryo-electron tomography workflows, this
+        operation represents one of the central transitions between particle
+        detection and downstream structural analysis. The extracted
+        subtomograms become the working units for alignment, averaging,
+        classification, and refinement.
+
+        From a biological perspective, the protocol allows users to recover
+        molecular complexes directly from crowded cellular environments or
+        from purified in situ preparations. Each extracted subtomogram
+        preserves the structural context and orientation associated with its
+        original tomographic location, making this step essential for
+        studying macromolecular organization inside native environments.
+
+        Inputs and Coordinate Interpretation
+
+        The protocol requires a set of three-dimensional coordinates that
+        identify the positions of the particles of interest. These
+        coordinates are typically generated during manual or automated
+        particle picking workflows and are associated with one or more
+        tomograms.
+
+        By default, the extraction is performed from the same tomograms used
+        during the coordinate generation stage. This is generally the safest
+        and most biologically consistent option because it guarantees that
+        coordinates and tomograms share the same spatial reference system.
+        However, the protocol also supports extraction from alternative
+        tomograms when users wish to use differently processed datasets,
+        such as denoised tomograms, reconstructed versions with different
+        filtering strategies, or tomograms generated at another binning
+        level.
+
+        When alternative tomograms are used, users should verify that the
+        spatial correspondence between coordinates and tomograms remains
+        accurate. Small mismatches in sampling rate, alignment, or geometry
+        can produce incorrect particle localization and compromise the
+        biological validity of the extracted subtomograms.
+
+        Box Size and Biological Context
+
+        One of the most important parameters is the extraction box size.
+        This parameter determines the cubic region surrounding each particle
+        that will be isolated from the tomogram. The chosen size should be
+        large enough to fully contain the macromolecular complex and a small
+        amount of surrounding contextual density, but not so large that it
+        introduces excessive background noise or neighboring structures.
+
+        In practical cryo-ET workflows, selecting an appropriate box size
+        depends on the biological target. Small soluble proteins may require
+        relatively compact boxes, whereas membrane-associated assemblies,
+        ribosomes, viral particles, or large molecular machines may need
+        substantially larger regions. If the extraction region extends
+        beyond the tomogram boundaries, some particles may become invalid
+        and excluded from the final output.
+
+        Biological users should therefore inspect particle positions near
+        tomogram edges carefully. Excessively large boxes can reduce the
+        number of valid particles and increase storage and computational
+        costs during downstream averaging procedures.
+
+        Preservation of Orientations
+
+        The protocol preserves the spatial orientation associated with each
+        coordinate. This is especially important for workflows involving
+        vectorial picking, membrane geometry estimation, or template-guided
+        localization strategies where particle orientation carries
+        biologically meaningful information.
+
+        Maintaining consistent orientation metadata enables subsequent
+        subtomogram alignment procedures to converge more efficiently and
+        allows users to perform analyses related to membrane topology,
+        filament directionality, or molecular organization inside cells.
+
+        Contrast Inversion
+
+        The protocol optionally supports contrast inversion after particle
+        extraction. This option is important because different tomography
+        reconstruction pipelines may represent particles either as dark
+        densities on bright backgrounds or the opposite.
+
+        Many downstream subtomogram averaging and single-particle software
+        packages assume that biological densities appear bright over a dark
+        background. Inverting the contrast ensures compatibility with these
+        conventions and can improve visualization and interpretation during
+        later processing stages.
+
+        From a biological interpretation standpoint, contrast inversion does
+        not alter structural information. It simply standardizes the density
+        representation expected by subsequent software environments.
+
+        Parallel Processing and Large Datasets
+
+        Modern cryo-electron tomography projects frequently involve hundreds
+        or thousands of particles distributed across many tomograms. The
+        protocol is therefore designed to process multiple tomograms
+        efficiently using parallel execution strategies.
+
+        This capability becomes especially important in cellular tomography
+        studies where large datasets are common and extraction can otherwise
+        become computationally demanding. Efficient parallelization reduces
+        processing time while maintaining reproducibility across all
+        tomograms in the experiment.
+
+        Outputs and Their Interpretation
+
+        The primary output is a set of extracted subtomograms associated
+        with the original particle coordinates and tomographic references.
+        Each subtomogram preserves the spatial metadata needed for further
+        alignment and averaging procedures.
+
+        Biologically, the extracted particles should be interpreted as local
+        volumetric observations of the targeted molecular complexes. Their
+        quality depends strongly on the original tomogram reconstruction,
+        coordinate precision, box size selection, and local structural
+        heterogeneity.
+
+        In some cases, particles located near tomogram boundaries or inside
+        damaged regions may be excluded automatically. This behavior is
+        generally beneficial because incomplete particles can negatively
+        affect downstream averaging quality and introduce structural
+        artifacts.
+
+        Practical Recommendations
+
+        In routine biological workflows, users should begin by selecting a
+        conservative box size that comfortably contains the particle while
+        minimizing surrounding clutter. Visual inspection of several
+        extracted subtomograms is strongly recommended before proceeding to
+        large-scale averaging or classification.
+
+        When using coordinates derived from one tomogram set together with
+        another tomogram source, users should carefully verify sampling rate
+        consistency and spatial registration. Small geometric mismatches may
+        not be immediately obvious but can significantly degrade alignment
+        quality later in the workflow.
+
+        Contrast inversion should only be enabled when necessary for
+        compatibility with downstream software or visualization conventions.
+        If uncertainty exists, inspecting a subset of extracted particles
+        before large-scale processing is advisable.
+
+        Final Perspective
+
+        Subtomogram extraction is a foundational step in cryo-electron
+        tomography because it transforms coordinate-based particle
+        localization into analyzable structural data. The biological quality
+        of all downstream subtomogram averaging results depends strongly on
+        the accuracy and consistency achieved during this stage. Careful
+        selection of extraction parameters, validation of coordinate
+        integrity, and thoughtful interpretation of particle context are
+        essential for obtaining reliable structural information from
+        tomographic datasets.
+    """
 
     _label = 'subtomogram extraction'
     _possibleOutputs = DynSubtomoExtractOuts
