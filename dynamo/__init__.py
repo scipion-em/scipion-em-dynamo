@@ -44,7 +44,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(DYNAMO_HOME, 'dynamo-{}'.format(DEFAULT_VERSION))
+        cls._defineEmVar(DYNAMO_HOME, f'dynamo-{DEFAULT_VERSION}')
 
     @classmethod
     def getEnviron(cls, gpuId=0):
