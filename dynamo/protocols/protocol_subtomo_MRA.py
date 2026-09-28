@@ -658,9 +658,9 @@ class DynamoSubTomoMRA(DynamoProtocolBase, ProtTomoSubtomogramAveraging):
         command = self.getRoundParams("dim", self.dimRounds)
         command += self.get_dvput("apix", self.inputVolumes.get().getSamplingRate())
 
-        symType = self.sym.get()
-        if symType =='I' or symType =='i':
-            symType = 'icos'
+        symType = self.sym
+        if symType.get() =='I' or symType.get() =='i':
+            symType = String('icos')
         command += self.getRoundParams('sym', symType, caster=str)
         command += self.getRoundParams("ite", self.numberOfIters)
         # command += self.get_dvput('mra', int(self.doMra))
