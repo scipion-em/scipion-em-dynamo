@@ -26,6 +26,9 @@
 import os.path
 from os.path import join, dirname
 import subprocess
+
+from scipion.install.funcs import VOID_TGZ
+
 import pwem
 import pyworkflow
 import pyworkflow.utils as pwutils
@@ -108,7 +111,6 @@ class Plugin(pwem.Plugin):
             cudaMsgs.append(msg)
             useGpu = False
 
-        # Dynamo 1.1.532
         commands = "bash ./dynamo_setup_linux.sh "  # OpenMP commands
         if useGpu:
             # Cuda commands
@@ -119,9 +121,10 @@ class Plugin(pwem.Plugin):
                          f"&& make extended "
                          f"&& touch cuda_compiled")
         commands = [(commands, 'cuda/cuda_compiled')]
-        env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_532,
-                       tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
-                       createBuildDir=True,
+        env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_591,
+                       tar=VOID_TGZ,
+                       # tar='dynamo-v-1.1.591_MCR-26.1.0_GLNXA64_withMCR',
+                       createBuildDir=False,
                        commands=commands,
                        default=True)
 
