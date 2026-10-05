@@ -35,7 +35,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.5.4'
+__version__ = '3.6.0'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -122,15 +122,14 @@ class Plugin(pwem.Plugin):
                          f"&& touch cuda_compiled")
         commands = [(commands, 'cuda/cuda_compiled')]
         env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_591,
-                       tar=VOID_TGZ,
-                       # tar='dynamo-v-1.1.591_MCR-26.1.0_GLNXA64_withMCR',
-                       createBuildDir=False,
+                       tar='dynamo-v-1.1.591_MCR-26.1.0_GLNXA64_withMCR.tar',
+                       createBuildDir=True,
                        commands=commands,
                        default=True)
 
     @classmethod
     def checkDynamoVersion(cls):
-        """Admitted versions must be higher or equal than version 1.1.532. The version number is extracted
+        """Admitted versions must be higher or equal than version 1.1.591. The version number is extracted
         from the home variable, splitting by '-' and removing a possible 'v' for version. Finally the points are
         removed and the final numeric string is cast to an integer."""
         msg = []
@@ -140,7 +139,7 @@ class Plugin(pwem.Plugin):
             msg = ['The Dynamo version pointed by variable %s '
                    '(%s) is not supported --> %s.\n\n'
                    'Please, update the variable value or comment it in %s' %
-                   (DYNAMO_HOME, dynamoVer, DYNAMO_VERSION_1_1_532,
+                   (DYNAMO_HOME, dynamoVer, DYNAMO_VERSION_1_1_591,
                     pyworkflow.Config.SCIPION_CONFIG)]
         return msg
 
