@@ -32,7 +32,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.5.4'
+__version__ = '3.6.0'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -44,19 +44,26 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(DYNAMO_HOME, 'dynamo-{}'.format(DEFAULT_VERSION))
+        cls._defineEmVar(DYNAMO_HOME, f'dynamo-{DEFAULT_VERSION}')
 
     @classmethod
     def getEnviron(cls, gpuId=0):
         """ Create the needed environment for Dynamo programs. """
         environ = pwutils.Environ(os.environ)
         dyn_home = cls.getHome()
+        mcrOsLibs = dyn_home + '/MCRLinux/sys/os/glnxa64'
+        # The MCR bundles a libstdc++ that may be older than the one required by the
+        # CUDA binaries compiled on this system (e.g. GLIBCXX_3.4.32 not found). In
+        # that case, the system libraries must be found before the MCR ones
+        sysStdcppDir = cls._getNewerSystemStdcppDir(mcrOsLibs)
         # For GPU, we need to add to LD_LIBRARY_PATH the path to Cuda/lib
-        paths = (dyn_home + '/MCRLinux/runtime/glnxa64',
+        paths = [dyn_home + '/MCRLinux/runtime/glnxa64',
                  dyn_home + '/MCRLinux/bin/glnxa64',
-                 dyn_home + '/MCRLinux/sys/os/glnxa64',
+                 mcrOsLibs,
                  dyn_home + '/MCRLinux/sys/opengl/lib/glnxa64',
-                 pwem.Config.CUDA_LIB)
+                 pwem.Config.CUDA_LIB]
+        if sysStdcppDir:
+            paths.insert(paths.index(mcrOsLibs), sysStdcppDir)
 
         environ.update({
             'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
@@ -65,6 +72,31 @@ class Plugin(pwem.Plugin):
             'CUDA_VISIBLE_DEVICES': str(gpuId)
         }, position=pwutils.Environ.BEGIN)
         return environ
+
+    @staticmethod
+    def _getStdcppVersion(libDir):
+        """Returns the version of libstdc++.so.6 in the given directory as a tuple of
+        integers (e.g. (6, 0, 33)), or None if it is not found."""
+        lib = join(libDir, 'libstdc++.so.6')
+        if not os.path.exists(lib):
+            return None
+        try:
+            return tuple(int(n) for n in os.path.realpath(lib).split('.so.')[-1].split('.'))
+        except ValueError:
+            return None
+
+    @classmethod
+    def _getNewerSystemStdcppDir(cls, mcrOsLibs):
+        """Returns the system directory containing a libstdc++.so.6 newer than the one
+        bundled with the MCR, or None if the bundled one is not older."""
+        mcrVersion = cls._getStdcppVersion(mcrOsLibs)
+        if mcrVersion is None:
+            return None
+        for libDir in ('/usr/lib/x86_64-linux-gnu', '/lib/x86_64-linux-gnu', '/usr/lib64', '/lib64'):
+            sysVersion = cls._getStdcppVersion(libDir)
+            if sysVersion is not None:
+                return libDir if sysVersion > mcrVersion else None
+        return None
 
     @classmethod
     def getDynamoProgram(cls):
@@ -108,7 +140,6 @@ class Plugin(pwem.Plugin):
             cudaMsgs.append(msg)
             useGpu = False
 
-        # Dynamo 1.1.532
         commands = "bash ./dynamo_setup_linux.sh "  # OpenMP commands
         if useGpu:
             # Cuda commands
@@ -119,15 +150,15 @@ class Plugin(pwem.Plugin):
                          f"&& make extended "
                          f"&& touch cuda_compiled")
         commands = [(commands, 'cuda/cuda_compiled')]
-        env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_532,
-                       tar='dynamo-v-1.1.532_MCR-9.9.0_GLNXA64_withMCR.tar',
+        env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_591,
+                       tar='dynamo-v-1.1.591_MCR-26.1.0_GLNXA64_withMCR.tar',
                        createBuildDir=True,
                        commands=commands,
                        default=True)
 
     @classmethod
     def checkDynamoVersion(cls):
-        """Admitted versions must be higher or equal than version 1.1.532. The version number is extracted
+        """Admitted versions must be higher or equal than version 1.1.591. The version number is extracted
         from the home variable, splitting by '-' and removing a possible 'v' for version. Finally the points are
         removed and the final numeric string is cast to an integer."""
         msg = []
@@ -137,7 +168,7 @@ class Plugin(pwem.Plugin):
             msg = ['The Dynamo version pointed by variable %s '
                    '(%s) is not supported --> %s.\n\n'
                    'Please, update the variable value or comment it in %s' %
-                   (DYNAMO_HOME, dynamoVer, DYNAMO_VERSION_1_1_532,
+                   (DYNAMO_HOME, dynamoVer, DYNAMO_VERSION_1_1_591,
                     pyworkflow.Config.SCIPION_CONFIG)]
         return msg
 

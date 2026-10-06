@@ -29,8 +29,9 @@ This file contains constants related to scipion-em-dynamo protocols
 DYNAMO_PROGRAM = 'dynamo'
 DYNAMO_HOME = 'DYNAMO_HOME'
 DYNAMO_VERSION_1_1_532 = '1.1.532'
-DEFAULT_VERSION = DYNAMO_VERSION_1_1_532
-MINIMUM_VERSION_NUM = int(DYNAMO_VERSION_1_1_532.replace('.', ''))
+DYNAMO_VERSION_1_1_591 = '1.1.591'
+DEFAULT_VERSION = DYNAMO_VERSION_1_1_591
+MINIMUM_VERSION_NUM = int(DYNAMO_VERSION_1_1_591.replace('.', ''))
 DYNAMO_SHIPPED_MCR = 'dynamo_activate_linux_shipped_MCR.sh'
 
 # Dynamo files and dirs
