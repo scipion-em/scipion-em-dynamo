@@ -26,9 +26,6 @@
 import os.path
 from os.path import join, dirname
 import subprocess
-
-from scipion.install.funcs import VOID_TGZ
-
 import pwem
 import pyworkflow
 import pyworkflow.utils as pwutils
@@ -54,12 +51,19 @@ class Plugin(pwem.Plugin):
         """ Create the needed environment for Dynamo programs. """
         environ = pwutils.Environ(os.environ)
         dyn_home = cls.getHome()
+        mcrOsLibs = dyn_home + '/MCRLinux/sys/os/glnxa64'
+        # The MCR bundles a libstdc++ that may be older than the one required by the
+        # CUDA binaries compiled on this system (e.g. GLIBCXX_3.4.32 not found). In
+        # that case, the system libraries must be found before the MCR ones
+        sysStdcppDir = cls._getNewerSystemStdcppDir(mcrOsLibs)
         # For GPU, we need to add to LD_LIBRARY_PATH the path to Cuda/lib
-        paths = (dyn_home + '/MCRLinux/runtime/glnxa64',
+        paths = [dyn_home + '/MCRLinux/runtime/glnxa64',
                  dyn_home + '/MCRLinux/bin/glnxa64',
-                 dyn_home + '/MCRLinux/sys/os/glnxa64',
+                 mcrOsLibs,
                  dyn_home + '/MCRLinux/sys/opengl/lib/glnxa64',
-                 pwem.Config.CUDA_LIB)
+                 pwem.Config.CUDA_LIB]
+        if sysStdcppDir:
+            paths.insert(paths.index(mcrOsLibs), sysStdcppDir)
 
         environ.update({
             'PATH': dyn_home + '/matlab/bin:' + dyn_home + '/matlab/src:' + dyn_home + '/cuda/bin:' + dyn_home + '/mpi',
@@ -68,6 +72,31 @@ class Plugin(pwem.Plugin):
             'CUDA_VISIBLE_DEVICES': str(gpuId)
         }, position=pwutils.Environ.BEGIN)
         return environ
+
+    @staticmethod
+    def _getStdcppVersion(libDir):
+        """Returns the version of libstdc++.so.6 in the given directory as a tuple of
+        integers (e.g. (6, 0, 33)), or None if it is not found."""
+        lib = join(libDir, 'libstdc++.so.6')
+        if not os.path.exists(lib):
+            return None
+        try:
+            return tuple(int(n) for n in os.path.realpath(lib).split('.so.')[-1].split('.'))
+        except ValueError:
+            return None
+
+    @classmethod
+    def _getNewerSystemStdcppDir(cls, mcrOsLibs):
+        """Returns the system directory containing a libstdc++.so.6 newer than the one
+        bundled with the MCR, or None if the bundled one is not older."""
+        mcrVersion = cls._getStdcppVersion(mcrOsLibs)
+        if mcrVersion is None:
+            return None
+        for libDir in ('/usr/lib/x86_64-linux-gnu', '/lib/x86_64-linux-gnu', '/usr/lib64', '/lib64'):
+            sysVersion = cls._getStdcppVersion(libDir)
+            if sysVersion is not None:
+                return libDir if sysVersion > mcrVersion else None
+        return None
 
     @classmethod
     def getDynamoProgram(cls):
