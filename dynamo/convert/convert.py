@@ -199,7 +199,6 @@ def eulerAngles2matrix(tdrot, tilt, narot, shiftx, shifty, shiftz):
     tilt = np.deg2rad(float(tilt))
     R = transformations.euler_matrix(tdrot, tilt, narot, axes='szxz')
     R = R[:3, :3]
-    R = np.linalg.inv(R)
     Sscipion = - np.dot(R, Sdynamo)
     M[:3, :3] = R
     M[:3, 3] = Sscipion
