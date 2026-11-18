@@ -32,6 +32,7 @@ from dynamo import CATALOG_FILENAME, CATALOG_BASENAME, SUFFIX_COUNT, Plugin, \
 from dynamo.convert import eulerAngles2matrix
 from pyworkflow.object import String
 from tomo.constants import BOTTOM_LEFT_CORNER
+from dynamo.constants import DYNAMO_POSITION_OFFSET
 from tomo.objects import SetOfCoordinates3D, Coordinate3D, SetOfMeshes
 
 
@@ -169,7 +170,8 @@ def dynamoCroppingResults2Scipion(outCoords, croppedFile, tomoFileDict):
             tomo = tomoFileDict[tomoFile]
             coord.setVolume(tomo)
             coord.setTomoId(tomo.getTsId())
-            coordinates = float(values[0]), float(values[1]), float(values[2])
+            # 1-based Dynamo position -> 0-based Scipion position
+            coordinates = [float(v) - DYNAMO_POSITION_OFFSET for v in values[0:3]]
             angles = float(values[3]), float(values[4]), float(values[5])
             coord.setPosition(*coordinates, BOTTOM_LEFT_CORNER)
             matrix = eulerAngles2matrix(*angles, 0, 0, 0)  # There are no shifts at this point
@@ -217,7 +219,9 @@ def createBoxingOutputObjects(prot, precedentsPointer, boxSize=20, savePicked=Tr
                     tomo = tomoFileDict[tomoFile]
                     coord.setVolume(tomo)
                     coord.setTomoId(tomo.getTsId())
-                    coord.setPosition(float(values[0]), float(values[1]), float(values[2]), BOTTOM_LEFT_CORNER)
+                    # 1-based Dynamo position -> 0-based Scipion position
+                    coord.setPosition(*[float(v) - DYNAMO_POSITION_OFFSET for v in values[0:3]],
+                                      BOTTOM_LEFT_CORNER)
                     coord.setGroupId(int(values[3]))
                     # Extended attributes
                     coord._dynModelName = String(values[4])

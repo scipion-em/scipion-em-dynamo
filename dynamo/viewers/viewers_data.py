@@ -25,10 +25,8 @@
 # *
 # **************************************************************************
 import datetime
-import glob
-from os import remove
 from os.path import join, abspath, exists
-from dynamo.utils import createBoxingOutputObjects, getNewestModelModDate, getDynamoModels
+from dynamo.utils import createBoxingOutputObjects
 from dynamo.viewers.DynamoTomoProvider import DynamoTomogramProvider
 from pwem.viewers import ObjectView
 import pyworkflow.viewer as pwviewer
@@ -36,6 +34,7 @@ from pyworkflow.gui.dialog import askYesNo
 from pyworkflow.utils import makePath, removeBaseExt
 from pyworkflow.utils.properties import Message
 from tomo.constants import BOTTOM_LEFT_CORNER
+from dynamo.constants import DYNAMO_POSITION_OFFSET
 from tomo.objects import SetOfCoordinates3D, SetOfMeshes
 from dynamo.viewers.views_tkinter_tree import DynamoTomoDialog
 from dynamo import VLL_FILE, MB_BY_LEVELS, MB_ELLIPSOIDAL, MB_VESICLE, MB_ELLIPSOIDAL_MARKED, MB_GENERAL, \
@@ -87,7 +86,8 @@ class DynamoDataViewer(pwviewer.Viewer):
                 tomoId = tomo.getTsId()
                 with open(join(path, removeBaseExt(tomo.getFileName()) + '.txt'), 'w') as fid:
                     for coord in outputCoords.iterCoordinates(tomo):
-                        coords = list(coord.getPosition(BOTTOM_LEFT_CORNER))
+                        # 0-based Scipion position -> 1-based Dynamo position
+                        coords = [p + DYNAMO_POSITION_OFFSET for p in coord.getPosition(BOTTOM_LEFT_CORNER)]
                         modelType = self._getModelType(coord)
                         # angles = list(matrix2eulerAngles(coord.getMatrix()))[:3]  # Keep the angles, not the shifts (Dynamo boxing GUI is not expecting them at this point)
                         fid.write(",".join(map(str, coords + [coord.getGroupId(), modelType])) + "\n")

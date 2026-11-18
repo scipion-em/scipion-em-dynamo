@@ -106,3 +106,9 @@ M_ELLIPSOIDAL_VESICLE_DES = "Basic container for vesicle-like models of ellipsoi
 M_MARKED_ELLIP_VESICLE_DES = "A vesicle marker with a single 3d point.\n\n" \
                              "\tSpecific property: exclusion radius around marker, used to exclude whatever is close " \
                              "to the marker."
+
+# Dynamo positions (tables, models, picked and cropped points) are 1-based MATLAB voxel
+# indices: dynamo_crop centres the box of a particle at position p on the voxels
+# p-L/2..p+L/2-1. Scipion's coordinates referred to the BOTTOM_LEFT_CORNER are 0-based, so
+# this offset is subtracted when reading Dynamo positions and added when writing them.
+DYNAMO_POSITION_OFFSET = 1

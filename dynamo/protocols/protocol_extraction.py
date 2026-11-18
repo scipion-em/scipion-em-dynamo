@@ -37,6 +37,7 @@ from pyworkflow.object import Boolean
 from pyworkflow.protocol import PointerParam, EnumParam, IntParam, BooleanParam, STEPS_PARALLEL
 from pyworkflow.utils import removeExt, Message, makePath, cyanStr, redStr
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_DYNAMO
+from dynamo.constants import DYNAMO_POSITION_OFFSET
 from tomo.objects import SetOfSubTomograms, SubTomogram
 from dynamo import Plugin, VLL_FILE
 from dynamo.convert import matrix2eulerAngles
@@ -157,9 +158,10 @@ class DynamoExtraction(DynamoProtocolBase):
                 with self._lock:
                     for coord in self.getInCoords().iterCoordinates(tomo):
                         angles_coord = matrix2eulerAngles(coord.getMatrix())
-                        x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER)
-                        y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER)
-                        z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER)
+                        # Scaled 0-based Scipion position -> 1-based Dynamo position
+                        x = self.scaleFactor * coord.getX(BOTTOM_LEFT_CORNER) + DYNAMO_POSITION_OFFSET
+                        y = self.scaleFactor * coord.getY(BOTTOM_LEFT_CORNER) + DYNAMO_POSITION_OFFSET
+                        z = self.scaleFactor * coord.getZ(BOTTOM_LEFT_CORNER) + DYNAMO_POSITION_OFFSET
                         outC.write("%.2f\t%.2f\t%.2f\t1\n" % (x, y, z))
                         outA.write("%.2f\t%.2f\t%.2f\n" % (angles_coord[0], angles_coord[1], angles_coord[2]))
         except Exception as e:

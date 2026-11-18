@@ -37,6 +37,7 @@ from pwem.emlib.image.image_handler import ImageHandler
 from pwem.objects.data import Transform, Volume
 from tomo.objects import Coordinate3D, TomoAcquisition
 import tomo.constants as const
+from dynamo.constants import DYNAMO_POSITION_OFFSET
 import random
 
 logger = logging.getLogger(__file__)
@@ -69,9 +70,10 @@ def writeDynTable(fhTable, setOfSubtomograms, randomizeOrientation=False):
     for subtomo in setOfSubtomograms.iterSubtomos():
         # Get 3d coordinates or 0, 0, 0
         if subtomo.hasCoordinate3D():
-            x = subtomo.getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER)
-            y = subtomo.getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER)
-            z = subtomo.getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER)
+            # 0-based Scipion position -> 1-based Dynamo position
+            x = subtomo.getCoordinate3D().getX(const.BOTTOM_LEFT_CORNER) + DYNAMO_POSITION_OFFSET
+            y = subtomo.getCoordinate3D().getY(const.BOTTOM_LEFT_CORNER) + DYNAMO_POSITION_OFFSET
+            z = subtomo.getCoordinate3D().getZ(const.BOTTOM_LEFT_CORNER) + DYNAMO_POSITION_OFFSET
         else:
             x = 0.0
             y = 0.0
@@ -136,9 +138,10 @@ def dynTableLine2Subtomo(inLine, subtomo, subtomoSet=None, tomo=None, coordSet=N
         x = inLine[23]
         y = inLine[24]
         z = inLine[25]
-        coordinate3d.setX(float(x), const.BOTTOM_LEFT_CORNER)
-        coordinate3d.setY(float(y), const.BOTTOM_LEFT_CORNER)
-        coordinate3d.setZ(float(z), const.BOTTOM_LEFT_CORNER)
+        # 1-based Dynamo position -> 0-based Scipion position
+        coordinate3d.setX(float(x) - DYNAMO_POSITION_OFFSET, const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setY(float(y) - DYNAMO_POSITION_OFFSET, const.BOTTOM_LEFT_CORNER)
+        coordinate3d.setZ(float(z) - DYNAMO_POSITION_OFFSET, const.BOTTOM_LEFT_CORNER)
         subtomo.setCoordinate3D(coordinate3d)
         coordSet.append(coordinate3d)
     if subtomoSet is not None:
@@ -162,9 +165,10 @@ def readDynCoord(tableFile, coord3DSet, tomo, scaleFactor=1):
             z = nline[25]
             groupId = nline[20]
             coordinate3d.setVolume(tomo)
-            coordinate3d.setX(float(x) * scaleFactor, const.BOTTOM_LEFT_CORNER)
-            coordinate3d.setY(float(y) * scaleFactor, const.BOTTOM_LEFT_CORNER)
-            coordinate3d.setZ(float(z) * scaleFactor, const.BOTTOM_LEFT_CORNER)
+            # 1-based Dynamo position -> 0-based Scipion position, then scaled
+            coordinate3d.setX((float(x) - DYNAMO_POSITION_OFFSET) * scaleFactor, const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setY((float(y) - DYNAMO_POSITION_OFFSET) * scaleFactor, const.BOTTOM_LEFT_CORNER)
+            coordinate3d.setZ((float(z) - DYNAMO_POSITION_OFFSET) * scaleFactor, const.BOTTOM_LEFT_CORNER)
             coordinate3d.setGroupId(int(groupId))
             coordinate3d.setMatrix(A)
             coord3DSet.append(coordinate3d)
