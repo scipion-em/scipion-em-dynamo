@@ -1,3 +1,4 @@
+V3.6.1: Improve the installer for newer CUDAs
 V3.6.0:
  Users:
   - Binary updated to dynamo 1.1.591.
