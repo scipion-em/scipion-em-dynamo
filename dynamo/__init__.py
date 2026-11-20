@@ -32,7 +32,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow import TOMO
 from .constants import *
 
-__version__ = '3.6.0'
+__version__ = '3.6.1'
 _logo = "icon.png"
 _references = ['CASTANODIEZ2012139']
 
@@ -142,12 +142,21 @@ class Plugin(pwem.Plugin):
 
         commands = "bash ./dynamo_setup_linux.sh "  # OpenMP commands
         if useGpu:
-            # Cuda commands
+            # Cuda commands. The variables are passed on the make command line so they
+            # override the values hardcoded in the shipped makefile (e.g. CUDA_LIB).
+            # -U_GNU_SOURCE: glibc >= 2.41 declares rsqrt/rsqrtf, which clashes with the
+            # declarations in the CUDA math headers ("exception specification is
+            # incompatible with that of previous function rsqrt").
+            cudaLib = pwem.Config.CUDA_LIB
+            cudaRoot = dirname(cudaLib)
+            makeVars = (f"CUDA_ROOT={cudaRoot} CUDA_LIB={cudaLib} "
+                        f"NVCC='{cudaRoot}/bin/nvcc -Xcompiler -U_GNU_SOURCE'")
+            # infoGPU (built by 'make extended') is only a diagnostic utility and does
+            # not compile with CUDA >= 13 (cuCtxCreate API change), so it is not fatal
             commands += (f"&& cd cuda "
-                         f"&& bash ./config.sh {dirname(pwem.Config.CUDA_LIB)} "
                          f"&& make clean "
-                         f"&& make motors "
-                         f"&& make extended "
+                         f"&& make motors {makeVars} "
+                         f"&& (make extended {makeVars} || echo 'WARNING: infoGPU utility could not be compiled') "
                          f"&& touch cuda_compiled")
         commands = [(commands, 'cuda/cuda_compiled')]
         env.addPackage(DYNAMO_PROGRAM, version=DYNAMO_VERSION_1_1_591,
